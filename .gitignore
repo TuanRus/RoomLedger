@@ -1,0 +1,30 @@
+# Tài liệu chỉ lưu trên máy, không push lên GitHub
+docs/
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+
+# Angular / Node
+node_modules/
+dist/
+.angular/
+
+# AWS CDK
+cdk.out/
+
+# Bí mật và cấu hình máy
+.env
+.env.*
+appsettings.Development.json
+*.pem
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

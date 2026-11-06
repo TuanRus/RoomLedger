@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Không phụ thuộc AWS hay EF Core -->
+</Project>

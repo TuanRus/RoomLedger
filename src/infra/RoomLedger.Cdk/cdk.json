@@ -1,0 +1,6 @@
+{
+  "app": "dotnet run --project RoomLedger.Cdk.csproj",
+  "context": {
+    "region": "ap-southeast-1"
+  }
+}

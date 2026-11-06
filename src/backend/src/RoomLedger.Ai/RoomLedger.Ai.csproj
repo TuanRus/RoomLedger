@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\RoomLedger.Core\RoomLedger.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.BedrockRuntime" Version="3.7.404" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Prompts\*.md" />
+    <EmbeddedResource Include="Schemas\*.json" />
+  </ItemGroup>
+</Project>

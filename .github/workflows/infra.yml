@@ -1,0 +1,29 @@
+name: infra
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths: ["src/infra/**"]
+  push:
+    branches: [develop, main]
+    paths: ["src/infra/**"]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g aws-cdk
+      - run: cdk synth -c stage=dev
+        working-directory: src/infra/RoomLedger.Cdk
+      # Deploy: thêm bước aws-actions/configure-aws-credentials (OIDC) khi SecurityStack có role

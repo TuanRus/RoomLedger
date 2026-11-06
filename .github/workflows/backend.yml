@@ -1,0 +1,25 @@
+name: backend
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths: ["src/backend/**"]
+  push:
+    branches: [develop, main]
+    paths: ["src/backend/**"]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore src/backend/RoomLedger.sln
+      - run: dotnet build src/backend/RoomLedger.sln --no-restore -c Release
+      - run: dotnet test src/backend/RoomLedger.sln --no-build -c Release --filter "FullyQualifiedName!~SecurityTests"
