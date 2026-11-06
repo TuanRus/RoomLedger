@@ -6,14 +6,13 @@
 
 ```
 RoomLedger/
-├── .github/            # CI (backend, frontend, infra) và mẫu PR
-├── src/
-│   ├── backend/        # .NET 8: Api, Core, Infrastructure, Ai, Functions, tests
-│   ├── infra/          # AWS CDK (C#), 9 stack
-│   ├── frontend/       # Angular
-│   ├── contracts/      # openapi.yaml
-│   └── evaluation/     # đo AI và thời gian
-└── docs/               # tài liệu, chỉ lưu trên máy (.gitignore bỏ qua)
+├─ .github/            # CI (backend, frontend, infra) và mẫu PR
+└── src/
+   ├── backend/        # .NET 8: Api, Core, Infrastructure, Ai, Functions, tests
+   ├── infra/          # AWS CDK (C#), 9 stack
+   ├── frontend/       # Angular
+   ├── contracts/      # openapi.yaml
+   └── evaluation/     # đo AI và thời gian
 ```
 
 ## Công nghệ
