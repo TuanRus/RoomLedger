@@ -36,9 +36,12 @@ jobs:
       - run: dotnet build src/backend/RoomLedger.sln --no-restore -c Release
       - run: dotnet test src/backend/RoomLedger.sln --no-build -c Release --filter "FullyQualifiedName!~SecurityTests"
       - name: Migration script (idempotent)
+        # --no-transactions: Lambda migrate tự mở một transaction cho cả script và GrantSql.
+        # Nếu script có COMMIT riêng, transaction của Lambda kết thúc sớm và GrantSql lỗi
+        # (xem tests/RoomLedger.Functions.Tests/Migrate/MigrateFunctionTests.cs).
         run: |
           dotnet tool install --global dotnet-ef --version 8.0.10
-          dotnet ef migrations script --idempotent \
+          dotnet ef migrations script --idempotent --no-transactions \
             --project src/backend/src/RoomLedger.Infrastructure \
             --startup-project src/backend/src/RoomLedger.Infrastructure \
             -o migrate.sql
