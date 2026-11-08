@@ -31,4 +31,6 @@ public static class AuditEventTypes
     public const string PhotoDeleteDenied = "PHOTO_DELETE_DENIED";
     public const string InspectionConfirmed = "INSPECTION_CONFIRMED";
     public const string InspectionLocked = "INSPECTION_LOCKED";
+    public const string EvidenceSealed = "EVIDENCE_SEALED";
+    public const string EvidenceHashMismatch = "EVIDENCE_HASH_MISMATCH";
 }

@@ -42,6 +42,20 @@ public class S3ObjectStore(IAmazonS3 s3, IOptions<StorageOptions> options) : IOb
     public Task DeleteAsync(StorageBucket bucket, string key, CancellationToken ct) =>
         s3.DeleteObjectAsync(BucketName(bucket), key, ct);
 
+    /** CopyObject (≤ 5 GB, ảnh ≤ 25 MB); retention Object Lock lấy theo mặc định của bucket đích. */
+    public async Task<string?> CopyAsync(StorageBucket from, string fromKey, StorageBucket to, string toKey, CancellationToken ct)
+    {
+        var response = await s3.CopyObjectAsync(new CopyObjectRequest
+        {
+            SourceBucket = BucketName(from),
+            SourceKey = fromKey,
+            DestinationBucket = BucketName(to),
+            DestinationKey = toKey,
+            ChecksumAlgorithm = ChecksumAlgorithm.SHA256,
+        }, ct);
+        return response.VersionId;
+    }
+
     private string BucketName(StorageBucket bucket) => bucket switch
     {
         StorageBucket.Incoming => _options.IncomingBucket,

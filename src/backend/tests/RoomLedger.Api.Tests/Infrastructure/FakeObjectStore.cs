@@ -29,4 +29,10 @@ public sealed class FakeObjectStore : IObjectStore
         Objects.TryRemove((bucket, key), out _);   // S3 xóa object không tồn tại cũng không lỗi
         return Task.CompletedTask;
     }
+
+    public Task<string?> CopyAsync(StorageBucket from, string fromKey, StorageBucket to, string toKey, CancellationToken ct)
+    {
+        Objects[(to, toKey)] = Objects[(from, fromKey)];
+        return Task.FromResult<string?>(Guid.NewGuid().ToString("N"));
+    }
 }
