@@ -270,6 +270,26 @@ paths:
         "200": { $ref: "#/components/responses/Invoice" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /tenancies/{tenancyId}/inspections/move-in:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    post:
+      tags: [MD-04]
+      summary: Mở biên bản nhận phòng, lưu bản sao khu vực của phòng; đã có thì trả 200 với biên bản đó (MD-04-FE-01, BR-15)
+      description: Chủ nhà hoặc người thuê của hợp đồng. Mỗi hợp đồng chỉ có một biên bản nhận phòng, kể cả khi hai bên bấm cùng lúc.
+      responses:
+        "201": { $ref: "#/components/responses/Inspection" }
+        "200": { $ref: "#/components/responses/Inspection" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: INVALID_STATE (hợp đồng đã quyết toán), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /inspections/{inspectionId}:
+    parameters: [{ $ref: "#/components/parameters/InspectionId" }]
+    get:
+      tags: [MD-04]
+      summary: Xem biên bản; khu vực theo bản sao lúc mở, kèm số ảnh đã gửi mỗi khu vực
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "404": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     cognito:
@@ -283,6 +303,7 @@ components:
     RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
     TenancyId: { name: tenancyId, in: path, required: true, schema: { type: string, format: uuid } }
     InvoiceId: { name: invoiceId, in: path, required: true, schema: { type: string, format: uuid } }
+    InspectionId: { name: inspectionId, in: path, required: true, schema: { type: string, format: uuid } }
     VersionNumber: { name: v, in: path, required: true, description: "Số thứ tự phiên bản (1, 2, ...)", schema: { type: integer, minimum: 1 } }
     InviteToken: { name: token, in: path, required: true, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
@@ -314,6 +335,7 @@ components:
     InvoicePage: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/InvoiceResponse" } }, nextCursor: { type: string, nullable: true } } } } }] } } } }
     InvoiceDetail: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvoiceDetailResponse" } } }] } } } }
     Dispute: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/DisputeResponse" } } }] } } } }
+    Inspection: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InspectionResponse" } } }] } } } }
 
   schemas:
     Envelope:
@@ -712,3 +734,21 @@ components:
         response: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         resolvedAt: { type: string, format: date-time, nullable: true }
+    InspectionAreaResponse:
+      type: object
+      properties:
+        areaId: { type: string, format: uuid }
+        name: { type: string }
+        minPhotos: { type: integer }
+        sortOrder: { type: integer }
+        photoCount: { type: integer, description: Số ảnh đã gửi cho khu vực này }
+    InspectionResponse:
+      type: object
+      properties:
+        inspectionId: { type: string, format: uuid }
+        tenancyId: { type: string, format: uuid }
+        type: { type: string, enum: [MOVE_IN, MOVE_OUT] }
+        status: { type: string, enum: [OPEN, AWAITING_CONFIRM, LOCKED, COMPARING, REVIEWING, SETTLED] }
+        landlordConfirmedAt: { type: string, format: date-time, nullable: true }
+        tenantConfirmedAt: { type: string, format: date-time, nullable: true }
+        areas: { type: array, description: Bản sao khu vực lúc mở biên bản (BR-15 R2), items: { $ref: "#/components/schemas/InspectionAreaResponse" } }
