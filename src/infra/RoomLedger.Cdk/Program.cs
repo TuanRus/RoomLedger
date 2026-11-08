@@ -24,7 +24,7 @@ if (!File.Exists(functionsAsset) && !Directory.Exists(functionsAsset))
 
 var network = new NetworkStack(app, Id("network"), new NetworkStackProps { Env = env, Stage = stage });
 new SecurityStack(app, Id("security"), P());
-new DataStack(app, Id("data"), new DataStackProps
+var data = new DataStack(app, Id("data"), new DataStackProps
 {
     Env = env,
     Stage = stage,
@@ -35,7 +35,19 @@ new DataStack(app, Id("data"), new DataStackProps
 new StorageStack(app, Id("storage"), P());
 new AuthStack(app, Id("auth"), P());
 new ApiStack(app, Id("api"), P());
-new WorkflowStack(app, Id("workflow"), P());
+// Tên bucket theo quy ước roomledger-{stage}-{tên}; StorageStack (Phát) phải dùng đúng tên này và bật
+// EventBridge notifications cho bucket incoming. Ghi đè bằng -c incomingBucket=... -c derivedBucket=...
+new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
+{
+    Env = env,
+    Stage = stage,
+    Vpc = network.Vpc,
+    LambdaSg = network.LambdaSg,
+    Db = data.Db,
+    FunctionsAssetPath = functionsAsset,
+    IncomingBucketName = (string?)app.Node.TryGetContext("incomingBucket") ?? $"roomledger-{stage}-incoming",
+    DerivedBucketName = (string?)app.Node.TryGetContext("derivedBucket") ?? $"roomledger-{stage}-derived",
+});
 // WAF cho CloudFront phải ở us-east-1, nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi. Cần cả nhóm quyết định.
 new EdgeStack(app, Id("edge"), new StackProps { Env = new Amazon.CDK.Environment { Region = "us-east-1" } });
 new ObservabilityStack(app, Id("observability"), P());
