@@ -17,6 +17,7 @@ public class WorkflowStackTests
 {
     private const string Ingest = "roomledger-dev-photo-ingest";
     private const string Derive = "roomledger-dev-photo-derive";
+    private const string SealFn = "roomledger-dev-evidence-seal";
 
     private static readonly Lazy<Template> DevTemplate = new(Build);
 
@@ -44,6 +45,7 @@ public class WorkflowStackTests
             FunctionsAssetPath = asset,
             IncomingBucketName = "roomledger-dev-incoming",
             DerivedBucketName = "roomledger-dev-derived",
+            EvidenceBucketName = "roomledger-dev-evidence",
         });
         return Template.FromStack(workflow);
     }
@@ -67,6 +69,7 @@ public class WorkflowStackTests
     [Theory]
     [InlineData(Ingest, "RoomLedger.Functions::RoomLedger.Functions.PhotoIngest.Function::HandleAsync")]
     [InlineData(Derive, "RoomLedger.Functions::RoomLedger.Functions.PhotoDerive.Function::HandleAsync")]
+    [InlineData(SealFn, "RoomLedger.Functions::RoomLedger.Functions.EvidenceSeal.Function::HandleAsync")]
     public void Functions_RunDotnet8_WithTheRightHandler_InsideTheVpc(string name, string handler)
     {
         var fn = Fn(name).Props;
@@ -159,6 +162,40 @@ public class WorkflowStackTests
         Assert.Contains("roomledger-dev-derived/*", policy);
         Assert.DoesNotContain("events:PutEvents", policy);
         Assert.DoesNotContain("s3:DeleteObject", policy);
+    }
+
+    [Fact]
+    public void InspectionLockedFromTheApi_TriggersEvidenceSeal()
+        => Synth().HasResourceProperties("AWS::Events::Rule", new Dictionary<string, object>
+        {
+            ["EventPattern"] = Match.ObjectLike(new Dictionary<string, object>
+            {
+                ["source"] = new[] { "roomledger.api" },
+                ["detail-type"] = new[] { "InspectionLocked" },
+            }),
+            ["Targets"] = Match.ArrayWith([Match.ObjectLike(new Dictionary<string, object>
+            {
+                ["Arn"] = Match.ObjectLike(new Dictionary<string, object>
+                {
+                    ["Fn::GetAtt"] = Match.ArrayWith([Fn(SealFn).LogicalId]),
+                }),
+            })]),
+        });
+
+    [Fact]
+    public void Seal_ReadsIncoming_WritesAndReadsEvidence_CannotDeleteOrChangeRetention()
+    {
+        var policy = PolicyOf(Fn(SealFn).LogicalId);
+        Assert.Contains("roomledger-dev-incoming/*", policy);
+        Assert.Contains("roomledger-dev-evidence/*", policy);
+        Assert.Contains("s3:GetObject", policy);
+        Assert.Contains("s3:PutObject", policy);
+        Assert.DoesNotContain("s3:DeleteObject", policy);
+        Assert.DoesNotContain("BypassGovernanceRetention", policy);
+        Assert.DoesNotContain("PutObjectRetention", policy);
+        Assert.DoesNotContain("roomledger-dev-derived", policy);
+        var env = (IDictionary<string, object>)((IDictionary<string, object>)Fn(SealFn).Props["Environment"])["Variables"];
+        Assert.Equal("roomledger-dev-evidence", env["EVIDENCE_BUCKET"]);
     }
 
     [Fact]
