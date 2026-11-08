@@ -185,9 +185,11 @@ public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage stora
             ContentType = req.ContentType!.ToLowerInvariant(),
             Size = req.Size!.Value,
             Sha256 = req.Sha256!,
+            CaptureSource = req.CaptureSource ?? CaptureSource.Gallery,   // Sang: hai bên thấy nhãn nguồn ảnh
         };
         photo.IncomingKey = Key(tenancy.LandlordId, tenancy.Id, inspection.Id, photo.Id, ext);
         db.Photos.Add(photo);
+        db.Audit(AuditEventTypes.UploadRequested, nameof(Photo), photo.Id);   // Sang: ai gửi ảnh nào, lúc nào
         await db.SaveChangesAsync(ct);
         return Presign(photo.Id, photo.IncomingKey, req);
     }
