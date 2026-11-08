@@ -57,6 +57,7 @@ public static class DependencyInjection
         services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
         services.AddSingleton<IAmazonEventBridge>(_ => new AmazonEventBridgeClient());
         services.AddSingleton<IStorage, S3Storage>();
+        services.AddSingleton<IObjectStore, S3ObjectStore>();   // Sang: xóa ảnh trước khi khóa (MD-04-FE-03)
         services.AddScoped<IEventPublisher, EventBridgePublisher>();
         return services;
     }

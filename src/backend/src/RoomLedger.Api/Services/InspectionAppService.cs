@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using RoomLedger.Api.Contracts;
+using RoomLedger.Core.Abstractions;
 using RoomLedger.Core.Common;
 using RoomLedger.Core.Domain;
 using RoomLedger.Core.Domain.Enums;
@@ -17,9 +18,90 @@ namespace RoomLedger.Api.Services;
  * @author Sang
  * @version 1.0
  */
-public class InspectionAppService(AppDbContext db)
+public class InspectionAppService(
+    AppDbContext db,
+    ICurrentUser user,
+    IObjectStore objects,
+    TimeProvider clock,
+    ILogger<InspectionAppService> log)
 {
     private const string OneMoveInIndex = "ux_inspection_tenancy_id_type";
+
+    /**
+     * Xóa ảnh trước khi khóa (MD-04-FE-03, BR-17). Ảnh của biên bản người gọi không thấy → 404; không phải người gửi
+     * → 403; biên bản đã khóa → 409 RECORD_LOCKED (K1). Hai trường hợp bị từ chối đều ghi PHOTO_DELETE_DENIED.
+     * Xóa dùng UPDATE có điều kiện trạng thái nên không chen được vào sau lúc khóa; đang chờ xác nhận thì xác nhận
+     * bị hủy và biên bản mở lại (ảnh đã đổi nên xác nhận cũ không còn đúng). Object S3 xóa sau khi commit.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public async Task<InspectionResponse> DeletePhotoAsync(Guid photoId, CancellationToken ct)
+    {
+        var photo = await db.Photos.FirstOrDefaultAsync(p => p.Id == photoId, ct)
+            ?? throw new NotFoundException("Không tìm thấy ảnh");
+        var inspection = await db.Inspections.AsNoTracking().FirstOrDefaultAsync(i => i.Id == photo.InspectionId, ct)
+            ?? throw new NotFoundException("Không tìm thấy ảnh");
+
+        if (photo.UploadedBy != user.UserId)
+        {
+            await DenyAsync(photo.Id, "NOT_UPLOADER", ct);
+            throw new ForbiddenException("Chỉ người gửi ảnh mới xóa được ảnh");
+        }
+        if (inspection.Status is not (InspectionStatus.Open or InspectionStatus.AwaitingConfirm))
+        {
+            await DenyAsync(photo.Id, "LOCKED", ct);
+            InspectionStateMachine.EnsureCanChangePhotos(inspection.Status);
+        }
+
+        var now = clock.GetUtcNow();
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            var stillOpen = await db.Inspections
+                .Where(i => i.Id == inspection.Id && (i.Status == InspectionStatus.Open || i.Status == InspectionStatus.AwaitingConfirm))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(i => i.Status, InspectionStatus.Open)
+                    .SetProperty(i => i.LandlordConfirmedAt, (DateTimeOffset?)null)
+                    .SetProperty(i => i.TenantConfirmedAt, (DateTimeOffset?)null)
+                    .SetProperty(i => i.UpdatedAt, now), ct);
+            if (stillOpen == 0)
+            {
+                await tx.RollbackAsync(ct);
+                await DenyAsync(photo.Id, "LOCKED", ct);   // vừa bị khóa giữa lúc kiểm tra và lúc xóa
+                throw new RecordLockedException("Biên bản đã khóa, không xóa được ảnh");
+            }
+
+            db.Photos.Remove(photo);
+            db.Audit(AuditEventTypes.PhotoDeleted, nameof(Photo), photo.Id);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+
+        await DeleteObjectsAsync(photo.IncomingKey, ct);
+        return await GetAsync(inspection.Id, ct);
+    }
+
+    private async Task DenyAsync(Guid photoId, string reason, CancellationToken ct)
+    {
+        db.ChangeTracker.Clear();
+        db.Audit(AuditEventTypes.PhotoDeleteDenied, nameof(Photo), photoId, $$"""{"reason":"{{reason}}"}""");
+        await db.SaveChangesAsync(ct);
+    }
+
+    /** Ảnh gốc (incoming) và bản xem, thumbnail (derived). Lỗi S3 chỉ ghi log: incoming tự xóa sau 7 ngày. */
+    private async Task DeleteObjectsAsync(string incomingKey, CancellationToken ct)
+    {
+        try
+        {
+            await objects.DeleteAsync(StorageBucket.Incoming, incomingKey, ct);
+            await objects.DeleteAsync(StorageBucket.Derived, PhotoRules.ViewKey(incomingKey), ct);
+            await objects.DeleteAsync(StorageBucket.Derived, PhotoRules.ThumbnailKey(incomingKey), ct);
+        }
+        catch (Exception e)
+        {
+            log.LogWarning(e, "Đã xóa bản ghi ảnh nhưng xóa object S3 lỗi: {Key}", incomingKey);
+        }
+    }
 
     /**
      * Mở biên bản nhận phòng (MD-04-FE-01, BR-15). Đã có thì trả biên bản đó (created = false).

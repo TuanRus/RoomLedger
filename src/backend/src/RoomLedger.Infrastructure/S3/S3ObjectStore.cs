@@ -39,6 +39,9 @@ public class S3ObjectStore(IAmazonS3 s3, IOptions<StorageOptions> options) : IOb
         }, ct);
     }
 
+    public Task DeleteAsync(StorageBucket bucket, string key, CancellationToken ct) =>
+        s3.DeleteObjectAsync(BucketName(bucket), key, ct);
+
     private string BucketName(StorageBucket bucket) => bucket switch
     {
         StorageBucket.Incoming => _options.IncomingBucket,

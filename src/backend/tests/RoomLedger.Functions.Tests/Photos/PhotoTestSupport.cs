@@ -94,6 +94,12 @@ public sealed class FakeObjectStore : IObjectStore
         Objects[(bucket, key)] = (content, contentType);
         return Task.CompletedTask;
     }
+
+    public Task DeleteAsync(StorageBucket bucket, string key, CancellationToken ct)
+    {
+        Objects.TryRemove((bucket, key), out _);
+        return Task.CompletedTask;
+    }
 }
 
 /** EventBridge giả: ghi lại sự kiện đã phát. */

@@ -27,4 +27,6 @@ public static class AuditEventTypes
 
     // MD-04, MD-06 (Sang)
     public const string InspectionOpened = "INSPECTION_OPENED";
+    public const string PhotoDeleted = "PHOTO_DELETED";
+    public const string PhotoDeleteDenied = "PHOTO_DELETE_DENIED";
 }

@@ -11,4 +11,7 @@ public interface IObjectStore
     Task<Stream> OpenReadAsync(StorageBucket bucket, string key, CancellationToken ct);
 
     Task PutAsync(StorageBucket bucket, string key, byte[] content, string contentType, CancellationToken ct);
+
+    /** Xóa object; không có cũng không lỗi (giống S3). Không dùng cho bucket evidence (Object Lock). */
+    Task DeleteAsync(StorageBucket bucket, string key, CancellationToken ct);
 }
