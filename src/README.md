@@ -18,7 +18,7 @@ dotnet build
 dotnet test
 
 # Tạo migration EF Core (code first)
-dotnet ef migrations add InitialCreate -p src/RoomLedger.Infrastructure -s src/RoomLedger.Api -o Persistence/Migrations
+dotnet ef migrations add Md0X_TenThayDoi -p src/RoomLedger.Infrastructure -s src/RoomLedger.Infrastructure -o Persistence/Migrations
 
 # Hạ tầng
 cd src/infra/RoomLedger.Cdk
