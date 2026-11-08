@@ -24,4 +24,7 @@ public static class AuditEventTypes
     public const string InvoiceDisputed = "INVOICE_DISPUTED";
     public const string DisputeResolved = "DISPUTE_RESOLVED";
     public const string InvoicePaid = "INVOICE_PAID";
+
+    // MD-04, MD-06 (Sang)
+    public const string InspectionOpened = "INSPECTION_OPENED";
 }

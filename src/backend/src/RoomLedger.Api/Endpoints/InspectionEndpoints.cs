@@ -1,11 +1,30 @@
+using RoomLedger.Api.Auth;
+using RoomLedger.Api.Services;
+
 namespace RoomLedger.Api.Endpoints;
 
+/**
+ * Biên bản nhận phòng (MD-04). Chủ nhà hoặc người thuê của hợp đồng.
+ *
+ * @author Sang
+ * @version 1.0
+ */
 public static class InspectionEndpoints
 {
     public static RouteGroupBuilder MapInspectionEndpoints(this RouteGroupBuilder api)
     {
+        // MD-04-FE-01: tạo mới → 201, hợp đồng đã có biên bản nhận phòng → 200 cùng biên bản đó
+        api.MapPost("/tenancies/{tenancyId:guid}/inspections/move-in", async (Guid tenancyId, InspectionAppService svc, CancellationToken ct) =>
+        {
+            var (inspection, created) = await svc.OpenMoveInAsync(tenancyId, ct);
+            return created
+                ? ApiResults.Created(inspection, "Đã mở biên bản nhận phòng")
+                : ApiResults.Ok(inspection, "Hợp đồng đã có biên bản nhận phòng");
+        }).RequireAuthorization(Policies.LandlordOrTenant);
+
         var group = api.MapGroup("/inspections");
-        // TODO: thêm route
+        group.MapGet("/{inspectionId:guid}", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.GetAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
         return api;
     }
 }
