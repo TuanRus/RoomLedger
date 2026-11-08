@@ -100,6 +100,16 @@ public sealed class FakeObjectStore : IObjectStore
         Objects.TryRemove((bucket, key), out _);
         return Task.CompletedTask;
     }
+
+    /** Số lần chép (evidence-seal); mỗi lần chép tạo một version mới như bucket bật versioning. */
+    public int CopyCount;
+
+    public Task<string?> CopyAsync(StorageBucket from, string fromKey, StorageBucket to, string toKey, CancellationToken ct)
+    {
+        Objects[(to, toKey)] = Objects[(from, fromKey)];
+        Interlocked.Increment(ref CopyCount);
+        return Task.FromResult<string?>(Guid.NewGuid().ToString("N"));
+    }
 }
 
 /** EventBridge giả: ghi lại sự kiện đã phát. */
