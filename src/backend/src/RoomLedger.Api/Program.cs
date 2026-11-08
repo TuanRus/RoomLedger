@@ -48,6 +48,8 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddAwsServices(builder.Configuration);
+builder.Services.AddScoped<PropertyAppService>();
+builder.Services.AddScoped<RoomAppService>();
 builder.Services.AddScoped<AccountAppService>();
 
 var app = builder.Build();
