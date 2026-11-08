@@ -3,17 +3,17 @@ name: infra
 on:
   pull_request:
     branches: [develop, main]
-    paths: ["src/infra/**"]
+    paths: ["src/infra/**", "src/backend/**"]
   push:
     branches: [develop, main]
-    paths: ["src/infra/**"]
+    paths: ["src/infra/**", "src/backend/**"]
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  build:
+  synth:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +23,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install -g aws-cdk
-      - run: cdk synth -c stage=dev
+      - run: npm install -g aws-cdk@2.160.0
+      # Asset Lambda lấy từ thư mục publish (đường dẫn mặc định trong Program.cs)
+      - run: dotnet publish src/backend/src/RoomLedger.Api -c Release -r linux-arm64 --self-contained false -o src/backend/src/RoomLedger.Api/bin/Release/net8.0/publish
+      - run: dotnet publish src/backend/src/RoomLedger.Functions -c Release -r linux-arm64 --self-contained false -o src/backend/src/RoomLedger.Functions/bin/Release/net8.0/publish
+      - run: cdk synth -c stage=dev --quiet
         working-directory: src/infra/RoomLedger.Cdk
-      # Deploy: thêm bước aws-actions/configure-aws-credentials (OIDC) khi SecurityStack có role
+      # Deploy: thêm aws-actions/configure-aws-credentials (OIDC role do Phát tạo ở SecurityStack)
+      # rồi `cdk deploy -c stage=dev -c account=<id>` trên push vào develop.
