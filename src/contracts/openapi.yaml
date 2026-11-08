@@ -11,7 +11,84 @@ paths:
       responses:
         "200":
           description: OK
+  /uploads:
+    post:
+      operationId: createUpload
+      summary: Xin presigned PUT để tải ảnh biên bản thẳng lên S3 (BR-16)
+      description: >
+        Tạo bản ghi photo PENDING_UPLOAD và trả URL PUT có hạn 5 phút. FE phải gửi đúng các header trả về,
+        gồm x-amz-checksum-sha256; S3 từ chối nếu file khác checksum. Chỉ chủ nhà hoặc người thuê của hợp đồng.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUploadRequest"
+      responses:
+        "200":
+          description: Link tải lên
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data:
+                    $ref: "#/components/schemas/UploadResponse"
+        "400":
+          description: INVALID_FILE (sai định dạng, quá 25 MB, SHA-256 sai, quá 20 ảnh/khu vực) hoặc VALIDATION_ERROR
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: UNAUTHORIZED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: NOT_FOUND (biên bản không tồn tại hoặc không thuộc người gọi)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: RECORD_LOCKED (biên bản đã khóa) hoặc INVALID_STATE (đang chờ xác nhận)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
+  schemas:
+    CreateUploadRequest:
+      type: object
+      required: [targetType, targetId, roomAreaId, fileName, contentType, size, sha256, captureSource]
+      properties:
+        targetType: { type: string, enum: [INSPECTION] }
+        targetId: { type: string, format: uuid, description: Mã biên bản }
+        roomAreaId: { type: string, format: uuid }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/heic] }
+        size: { type: integer, format: int64, minimum: 1, maximum: 26214400 }
+        sha256: { type: string, description: "SHA-256 của file gốc, base64 (44 ký tự)", minLength: 44, maxLength: 44 }
+        captureSource: { type: string, enum: [CAMERA, GALLERY] }
+    UploadResponse:
+      type: object
+      required: [photoId, uploadUrl, method, headers, expiresAt]
+      properties:
+        photoId: { type: string, format: uuid }
+        uploadUrl: { type: string, format: uri }
+        method: { type: string, enum: [PUT] }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          description: Gửi nguyên các header này (Content-Type, x-amz-checksum-sha256, x-amz-sdk-checksum-algorithm)
+        expiresAt: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [success, message, errorCode]
+      properties:
+        success: { type: boolean, enum: [false] }
+        message: { type: string }
+        errorCode: { type: string }
   securitySchemes:
     cognito:
       type: http
