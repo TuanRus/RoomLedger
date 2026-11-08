@@ -23,9 +23,94 @@ public class InspectionAppService(
     ICurrentUser user,
     IObjectStore objects,
     TimeProvider clock,
+    IEventPublisher events,
     ILogger<InspectionAppService> log)
 {
     private const string OneMoveInIndex = "ux_inspection_tenancy_id_type";
+
+    /**
+     * Xác nhận biên bản (MD-04-FE-04, BR-18 RULE 1–3). Trong một transaction:
+     * 1. UPDATE có điều kiện (OPEN hoặc AWAITING_CONFIRM) ghi xác nhận của bên gọi → giữ khóa dòng inspection,
+     *    nên xóa ảnh (cũng UPDATE dòng này trước) không chen vào giữa lúc kiểm ảnh và lúc khóa được;
+     * 2. kiểm đủ ảnh READY mỗi khu vực theo bản sao (thiếu → rollback, 409 INCOMPLETE_INSPECTION);
+     * 3. UPDATE … SET LOCKED WHERE status = AWAITING_CONFIRM và đủ hai xác nhận: đúng một request khóa được.
+     * Sau commit: phát InspectionLocked (evidence-seal) hoặc InspectionConfirmed (notify báo bên còn lại).
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public async Task<InspectionResponse> ConfirmAsync(Guid inspectionId, ConfirmInspectionRequest req, CancellationToken ct)
+    {
+        new Validator().Require(req.Agreed == true, "agreed", "Cần tích ô cam kết trước khi xác nhận").ThrowIfInvalid();
+        var inspection = await db.Inspections.AsNoTracking().Include(i => i.Tenancy)
+            .FirstOrDefaultAsync(i => i.Id == inspectionId, ct)
+            ?? throw new NotFoundException("Không tìm thấy biên bản");
+        InspectionStateMachine.EnsureCanConfirm(inspection.Status);
+        var tenancy = inspection.Tenancy!;
+        var isLandlord = user.UserId == tenancy.LandlordId;
+        if (!isLandlord && user.UserId != tenancy.TenantId)
+        {
+            throw new ForbiddenException("Chỉ chủ nhà hoặc người thuê của hợp đồng mới xác nhận được");
+        }
+
+        var now = clock.GetUtcNow();
+        bool locked;
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            var pending = db.Inspections.Where(i => i.Id == inspectionId
+                && (i.Status == InspectionStatus.Open || i.Status == InspectionStatus.AwaitingConfirm));
+            var rows = isLandlord
+                ? await pending.ExecuteUpdateAsync(s => s
+                    .SetProperty(i => i.LandlordConfirmedAt, i => i.LandlordConfirmedAt ?? now)
+                    .SetProperty(i => i.Status, InspectionStatus.AwaitingConfirm)
+                    .SetProperty(i => i.UpdatedAt, now), ct)
+                : await pending.ExecuteUpdateAsync(s => s
+                    .SetProperty(i => i.TenantConfirmedAt, i => i.TenantConfirmedAt ?? now)
+                    .SetProperty(i => i.Status, InspectionStatus.AwaitingConfirm)
+                    .SetProperty(i => i.UpdatedAt, now), ct);
+            if (rows == 0)
+            {
+                throw new RecordLockedException("Biên bản đã khóa");   // tx chưa commit → tự rollback khi dispose
+            }
+
+            var photos = await db.Photos.Where(p => p.InspectionId == inspectionId)
+                .Select(p => new { p.RoomAreaId, p.Status }).ToListAsync(ct);
+            var missing = InspectionService.FindIncompleteAreas(
+                InspectionService.ParseSnapshot(inspection.AreaSnapshotJson), photos.Select(p => (p.RoomAreaId, p.Status)));
+            if (missing.Count > 0)
+            {
+                throw new ConflictException(ErrorCodes.IncompleteInspection, "Biên bản chưa đủ ảnh: " + string.Join(", ", missing));
+            }
+
+            locked = await db.Inspections
+                .Where(i => i.Id == inspectionId && i.Status == InspectionStatus.AwaitingConfirm
+                    && i.LandlordConfirmedAt != null && i.TenantConfirmedAt != null)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, InspectionStatus.Locked).SetProperty(i => i.UpdatedAt, now), ct) == 1;
+
+            var role = isLandlord ? "LANDLORD" : "TENANT";
+            db.Audit(locked ? AuditEventTypes.InspectionLocked : AuditEventTypes.InspectionConfirmed, nameof(Inspection), inspectionId,
+                $$"""{"confirmedBy":"{{role}}"}""");
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+
+        if (locked)
+        {
+            await events.PublishAsync("InspectionLocked", new { inspectionId, tenancyId = tenancy.Id, type = inspection.Type }, ct);
+        }
+        else
+        {
+            await events.PublishAsync("InspectionConfirmed", new
+            {
+                inspectionId,
+                tenancyId = tenancy.Id,
+                confirmedBy = isLandlord ? "LANDLORD" : "TENANT",
+                notifyUserId = isLandlord ? tenancy.TenantId : tenancy.LandlordId,
+            }, ct);
+        }
+
+        return await GetAsync(inspectionId, ct);
+    }
 
     /**
      * Xóa ảnh trước khi khóa (MD-04-FE-03, BR-17). Ảnh của biên bản người gọi không thấy → 404; không phải người gửi

@@ -71,8 +71,10 @@ public class InspectionConfirmTests(ApiFactory factory) : IClassFixture<ApiFacto
 
         var res = await seed.S.TenantClient.PostJsonAsync(ConfirmUrl(seed.InspectionId), Agreed);
 
-        await AssertError(res, HttpStatusCode.Conflict, "INCOMPLETE_INSPECTION");
-        Assert.Contains("Phòng ngủ", (await res.JsonAsync()).GetProperty("message").GetString());
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        var body = await res.JsonAsync();                       // đọc body một lần
+        Assert.Equal("INCOMPLETE_INSPECTION", body.GetProperty("errorCode").GetString());
+        Assert.Contains("Phòng ngủ", body.GetProperty("message").GetString());
         var inspection = await LoadAsync(seed.InspectionId);
         Assert.Equal(InspectionStatus.Open, inspection.Status);
         Assert.Null(inspection.TenantConfirmedAt);

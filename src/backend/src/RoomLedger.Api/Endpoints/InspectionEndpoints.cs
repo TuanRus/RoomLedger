@@ -1,4 +1,5 @@
 using RoomLedger.Api.Auth;
+using RoomLedger.Api.Contracts;
 using RoomLedger.Api.Services;
 
 namespace RoomLedger.Api.Endpoints;
@@ -25,6 +26,11 @@ public static class InspectionEndpoints
         var group = api.MapGroup("/inspections");
         group.MapGet("/{inspectionId:guid}", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.GetAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
+
+        // MD-04-FE-04: xác nhận; đủ hai bên thì khóa
+        group.MapPost("/{inspectionId:guid}/confirm", async (Guid inspectionId, ConfirmInspectionRequest req, InspectionAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.ConfirmAsync(inspectionId, req, ct), "Đã ghi nhận xác nhận"))
+            .RequireAuthorization(Policies.LandlordOrTenant);
 
         // MD-04-FE-03: xóa ảnh trước khi khóa; trả lại biên bản để FE cập nhật số ảnh
         api.MapDelete("/photos/{photoId:guid}", async (Guid photoId, InspectionAppService svc, CancellationToken ct) =>

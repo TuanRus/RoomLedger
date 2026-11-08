@@ -33,6 +33,20 @@ public static class InspectionStateMachine
         }
     }
 
+    /**
+     * Xác nhận chỉ khi OPEN hoặc AWAITING_CONFIRM (BR-18 PRECONDITION); đã khóa → 409 RECORD_LOCKED (EXCEPTION 2).
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public static void EnsureCanConfirm(InspectionStatus status)
+    {
+        if (status is not (InspectionStatus.Open or InspectionStatus.AwaitingConfirm))
+        {
+            throw new RecordLockedException("Biên bản đã khóa");
+        }
+    }
+
     public static void EnsureCanOpenMoveIn(Tenancy tenancy)
     {
         if (tenancy.Status == TenancyStatus.Settled)

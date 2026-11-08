@@ -24,3 +24,11 @@ public record InspectionResponse(
     DateTimeOffset? LandlordConfirmedAt,
     DateTimeOffset? TenantConfirmedAt,
     IReadOnlyList<InspectionAreaResponse> Areas);
+
+/**
+ * Body POST /inspections/{id}/confirm: agreed = người dùng đã tích ô cam kết (BR-18 TRIGGER).
+ *
+ * @author Sang
+ * @version 1.0
+ */
+public record ConfirmInspectionRequest(bool? Agreed);
