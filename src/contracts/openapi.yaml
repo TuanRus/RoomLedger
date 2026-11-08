@@ -270,6 +270,53 @@ paths:
         "200": { $ref: "#/components/responses/Invoice" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /tenancies/{tenancyId}/inspections/move-in:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    post:
+      tags: [MD-04]
+      summary: Mở biên bản nhận phòng, lưu bản sao khu vực của phòng; đã có thì trả 200 với biên bản đó (MD-04-FE-01, BR-15)
+      description: Chủ nhà hoặc người thuê của hợp đồng. Mỗi hợp đồng chỉ có một biên bản nhận phòng, kể cả khi hai bên bấm cùng lúc.
+      responses:
+        "201": { $ref: "#/components/responses/Inspection" }
+        "200": { $ref: "#/components/responses/Inspection" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: INVALID_STATE (hợp đồng đã quyết toán), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /inspections/{inspectionId}:
+    parameters: [{ $ref: "#/components/parameters/InspectionId" }]
+    get:
+      tags: [MD-04]
+      summary: Xem biên bản; khu vực theo bản sao lúc mở, kèm số ảnh đã gửi mỗi khu vực
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "404": { $ref: "#/components/responses/Error" }
+  /inspections/{inspectionId}/confirm:
+    parameters: [{ $ref: "#/components/parameters/InspectionId" }]
+    post:
+      tags: [MD-04]
+      summary: Xác nhận biên bản; bên thứ hai xác nhận thì biên bản khóa (MD-04-FE-04, BR-18)
+      description: Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Bên đầu tiên → AWAITING_CONFIRM; đủ hai bên → LOCKED (đúng một lần).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [agreed], properties: { agreed: { type: boolean, description: Đã tích ô cam kết; phải là true } } }
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "400": { description: VALIDATION_ERROR (chưa tích ô cam kết), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu) hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /photos/{photoId}:
+    parameters: [{ $ref: "#/components/parameters/PhotoId" }]
+    delete:
+      tags: [MD-04]
+      summary: Xóa ảnh trước khi khóa, chỉ người gửi (MD-04-FE-03, BR-17); trả lại biên bản
+      description: Đang AWAITING_CONFIRM thì xác nhận bị hủy và biên bản về OPEN. Lần bị từ chối được ghi nhật ký PHOTO_DELETE_DENIED.
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "403": { description: FORBIDDEN (không phải người gửi ảnh), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: RECORD_LOCKED (biên bản đã khóa), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+
 components:
   securitySchemes:
     cognito:
@@ -283,6 +330,8 @@ components:
     RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
     TenancyId: { name: tenancyId, in: path, required: true, schema: { type: string, format: uuid } }
     InvoiceId: { name: invoiceId, in: path, required: true, schema: { type: string, format: uuid } }
+    InspectionId: { name: inspectionId, in: path, required: true, schema: { type: string, format: uuid } }
+    PhotoId: { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
     VersionNumber: { name: v, in: path, required: true, description: "Số thứ tự phiên bản (1, 2, ...)", schema: { type: integer, minimum: 1 } }
     InviteToken: { name: token, in: path, required: true, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
@@ -314,6 +363,7 @@ components:
     InvoicePage: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/InvoiceResponse" } }, nextCursor: { type: string, nullable: true } } } } }] } } } }
     InvoiceDetail: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvoiceDetailResponse" } } }] } } } }
     Dispute: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/DisputeResponse" } } }] } } } }
+    Inspection: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InspectionResponse" } } }] } } } }
 
   schemas:
     Envelope:
@@ -573,6 +623,7 @@ components:
         contentType: { type: string, enum: [image/jpeg, image/png, image/heic, image/heif, application/pdf], description: PDF chỉ cho TENANCY_VERSION }
         size: { type: integer, format: int64, description: "Ảnh ≤ 25 MB, scan ≤ 20 MB" }
         sha256: { $ref: "#/components/schemas/Sha256Base64" }
+        captureSource: { type: string, enum: [CAMERA, GALLERY], description: "Chỉ cho INSPECTION: chụp trong app hoặc chọn từ thư viện; không gửi = GALLERY. Hai bên thấy nhãn này" }
     UploadUrlResponse:
       type: object
       properties:
@@ -711,3 +762,21 @@ components:
         response: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
         resolvedAt: { type: string, format: date-time, nullable: true }
+    InspectionAreaResponse:
+      type: object
+      properties:
+        areaId: { type: string, format: uuid }
+        name: { type: string }
+        minPhotos: { type: integer }
+        sortOrder: { type: integer }
+        photoCount: { type: integer, description: Số ảnh đã gửi cho khu vực này }
+    InspectionResponse:
+      type: object
+      properties:
+        inspectionId: { type: string, format: uuid }
+        tenancyId: { type: string, format: uuid }
+        type: { type: string, enum: [MOVE_IN, MOVE_OUT] }
+        status: { type: string, enum: [OPEN, AWAITING_CONFIRM, LOCKED, COMPARING, REVIEWING, SETTLED] }
+        landlordConfirmedAt: { type: string, format: date-time, nullable: true }
+        tenantConfirmedAt: { type: string, format: date-time, nullable: true }
+        areas: { type: array, description: Bản sao khu vực lúc mở biên bản (BR-15 R2), items: { $ref: "#/components/schemas/InspectionAreaResponse" } }

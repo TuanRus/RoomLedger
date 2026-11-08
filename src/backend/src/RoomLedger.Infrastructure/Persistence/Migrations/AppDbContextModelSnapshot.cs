@@ -217,6 +217,10 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AreaSnapshotJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("area_snapshot_json");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -593,6 +597,12 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("CaptureSource")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("capture_source");
 
                     b.Property<string>("ContentType")
                         .IsRequired()

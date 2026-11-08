@@ -20,6 +20,7 @@ public static class ErrorCodes
     public const string VersionConflict = "VERSION_CONFLICT";
     public const string RoomCodeExists = "ROOM_CODE_EXISTS";
     public const string RoomOccupied = "ROOM_OCCUPIED";
+    public const string IncompleteInspection = "INCOMPLETE_INSPECTION";   // Sang: BR-18 EXCEPTION 1
     public const string PeriodClosed = "PERIOD_CLOSED";
     public const string InviteInvalid = "INVITE_INVALID";
     public const string Unauthorized = "UNAUTHORIZED";

@@ -34,6 +34,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     };
 
     public FakeEventPublisher Events { get; } = new();
+    public FakeObjectStore ObjectStore { get; } = new();   // Sang: S3 đọc/ghi/xóa (xóa ảnh MD-04-FE-03)
     public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2026, 11, 20, 3, 0, 0, TimeSpan.Zero));
 
     public ApiFactory()
@@ -55,6 +56,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton<IStorage, FakeStorage>();
             services.AddSingleton<IEventPublisher>(Events);
+            services.AddSingleton<IObjectStore>(ObjectStore);
         });
     }
 

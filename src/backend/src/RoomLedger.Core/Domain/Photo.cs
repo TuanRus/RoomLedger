@@ -26,4 +26,6 @@ public class Photo : AuditableEntity
     public string? ObjectVersionId { get; set; }
     public DateTimeOffset? ExifTakenAt { get; set; }
     public bool OldPhotoWarning { get; set; }
+    /** CAMERA hoặc GALLERY, client gửi khi xin URL (Sang, doc-fix-checklist E3). */
+    public CaptureSource CaptureSource { get; set; } = CaptureSource.Gallery;
 }
