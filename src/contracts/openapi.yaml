@@ -573,6 +573,7 @@ components:
         contentType: { type: string, enum: [image/jpeg, image/png, image/heic, image/heif, application/pdf], description: PDF chỉ cho TENANCY_VERSION }
         size: { type: integer, format: int64, description: "Ảnh ≤ 25 MB, scan ≤ 20 MB" }
         sha256: { $ref: "#/components/schemas/Sha256Base64" }
+        captureSource: { type: string, enum: [CAMERA, GALLERY], description: "Chỉ cho INSPECTION: chụp trong app hoặc chọn từ thư viện; không gửi = GALLERY. Hai bên thấy nhãn này" }
     UploadUrlResponse:
       type: object
       properties:
