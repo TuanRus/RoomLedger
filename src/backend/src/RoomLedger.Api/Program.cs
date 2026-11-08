@@ -49,6 +49,7 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddAwsServices(builder.Configuration);
 builder.Services.AddScoped<AccountAppService>();
+builder.Services.AddScoped<UploadAppService>();
 
 var app = builder.Build();
 

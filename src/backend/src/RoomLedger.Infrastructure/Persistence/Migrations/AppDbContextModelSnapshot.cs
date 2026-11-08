@@ -594,6 +594,12 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("CaptureSource")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("capture_source");
+
                     b.Property<string>("ContentType")
                         .IsRequired()
                         .HasMaxLength(100)
