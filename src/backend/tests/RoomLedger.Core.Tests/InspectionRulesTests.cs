@@ -53,6 +53,24 @@ public class InspectionRulesTests
     public void EnsureCanOpenMoveIn_AllowsEveryStatusExceptSettled(TenancyStatus status)
         => InspectionStateMachine.EnsureCanOpenMoveIn(new Tenancy { Status = status });
 
+    [Theory]
+    [InlineData(InspectionStatus.Open)]
+    [InlineData(InspectionStatus.AwaitingConfirm)]
+    public void EnsureCanChangePhotos_AllowsOpenAndAwaitingConfirm(InspectionStatus status)
+        => InspectionStateMachine.EnsureCanChangePhotos(status);
+
+    [Theory]
+    [InlineData(InspectionStatus.Locked)]
+    [InlineData(InspectionStatus.Comparing)]
+    [InlineData(InspectionStatus.Reviewing)]
+    [InlineData(InspectionStatus.Settled)]
+    public void EnsureCanChangePhotos_AfterTheLock_IsRecordLocked(InspectionStatus status)
+    {
+        // BR-17 RULE 2 (kiểm thử bảo mật K1): khóa rồi thì không xóa hay thay ảnh được
+        var ex = Assert.Throws<RecordLockedException>(() => InspectionStateMachine.EnsureCanChangePhotos(status));
+        Assert.Equal(ErrorCodes.RecordLocked, ex.ErrorCode);
+    }
+
     [Fact]
     public void EnsureCanOpenMoveIn_SettledTenancy_IsInvalidState()
     {
