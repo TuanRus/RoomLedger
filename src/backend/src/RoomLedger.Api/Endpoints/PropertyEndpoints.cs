@@ -36,6 +36,17 @@ public static class PropertyEndpoints
         group.MapPost("/{propertyId:guid}/rooms", async (Guid propertyId, CreateRoomRequest req, RoomAppService svc, CancellationToken ct) =>
             ApiResults.Created(await svc.CreateAsync(propertyId, req, ct), "Tạo phòng thành công"));
 
+        group.MapGet("/{propertyId:guid}/meter-readings", async (Guid propertyId, string? period, MeterAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.ListAsync(propertyId, period, ct)));
+
+        group.MapPost("/{propertyId:guid}/meter-readings:confirm-all", async (Guid propertyId, ConfirmAllReadingsRequest req,
+                MeterAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.ConfirmAllAsync(propertyId, req, ct), "Xác nhận chỉ số thành công"));
+
+        group.MapPost("/{propertyId:guid}/invoices:generate", async (Guid propertyId, GenerateInvoicesRequest req,
+                InvoiceAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.GenerateAsync(propertyId, req, ct), "Lập hóa đơn thành công"));
+
         return api;
     }
 }

@@ -1,21 +1,713 @@
 openapi: 3.0.3
 info:
   title: RoomLedger API
-  version: 0.1.0
+  version: 0.2.0
+  description: |
+    Hợp đồng API giữa Backend và Frontend (tab 4 "API cho FE").
+    Bản này có đầy đủ MD-01, MD-02, MD-03, MD-05 và POST /uploads (Tuấn).
+    Các endpoint MD-04, MD-06, MD-07 do Sang bổ sung.
+    Mọi phản hồi thành công có dạng {success, message, data}; lỗi có dạng ApiError.
+    Tiền là số nguyên VND, thời gian ISO 8601 UTC, enum UPPER_SNAKE_CASE, tên trường camelCase.
 servers:
   - url: /api/v1
+security:
+  - cognito: []
+
 paths:
   /health:
     get:
-      summary: Kiểm tra API
+      tags: [Chung]
+      summary: Kiểm tra API sống
+      security: []
       responses:
-        "200":
-          description: OK
+        "200": { description: OK }
+
+  /me:
+    get:
+      tags: [MD-01]
+      summary: Hồ sơ người dùng hiện tại (MD-01-FE-02)
+      responses:
+        "200": { $ref: "#/components/responses/Me" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /invites/{token}:
+    get:
+      tags: [MD-01]
+      summary: Xem trước lời mời, không cần token (MD-01-FE-04)
+      security: []
+      parameters: [{ $ref: "#/components/parameters/InviteToken" }]
+      responses:
+        "200": { $ref: "#/components/responses/InvitePreview" }
+        "410": { $ref: "#/components/responses/Error" }
+  /invites/{token}/accept:
+    post:
+      tags: [MD-01]
+      summary: Người thuê nhận lời mời; email trong token phải trùng email được mời (BR-04)
+      parameters: [{ $ref: "#/components/parameters/InviteToken" }]
+      responses:
+        "200": { $ref: "#/components/responses/AcceptInvite" }
+        "403": { description: INVITE_EMAIL_MISMATCH, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "410": { description: INVITE_INVALID, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /tenant/home:
+    get:
+      tags: [MD-01]
+      summary: Trang chủ người thuê
+      responses:
+        "200": { $ref: "#/components/responses/TenantHome" }
+
+  /properties:
+    get:
+      tags: [MD-02]
+      summary: Danh sách nhà trọ của chủ nhà (MD-02-FE-01)
+      parameters: [{ $ref: "#/components/parameters/Limit" }, { $ref: "#/components/parameters/Cursor" }]
+      responses:
+        "200": { $ref: "#/components/responses/PropertyPage" }
+    post:
+      tags: [MD-02]
+      summary: Tạo nhà trọ (BR-05)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreatePropertyRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Property" }
+        "400": { $ref: "#/components/responses/Error" }
+  /properties/{propertyId}/rooms:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    get:
+      tags: [MD-02]
+      summary: Danh sách phòng kèm trạng thái hiển thị (BR-08)
+      parameters:
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/RoomDisplayStatus" } }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200": { $ref: "#/components/responses/RoomPage" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [MD-02]
+      summary: Tạo phòng và khu vực; tự thêm khu vực "Đồng hồ điện nước" (BR-06)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateRoomRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Room" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: ROOM_CODE_EXISTS, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /rooms/{roomId}:
+    parameters: [{ $ref: "#/components/parameters/RoomId" }]
+    get:
+      tags: [MD-02]
+      summary: Chi tiết phòng, khu vực, hợp đồng hiện tại
+      responses:
+        "200": { $ref: "#/components/responses/RoomDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [MD-02]
+      summary: Sửa giá và/hoặc khu vực, gửi kèm version (BR-07)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateRoomRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/Room" }
+        "409": { description: ROOM_OCCUPIED hoặc VERSION_CONFLICT, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+
+  /rooms/{roomId}/tenancies:
+    parameters: [{ $ref: "#/components/parameters/RoomId" }]
+    post:
+      tags: [MD-03]
+      summary: Tạo hợp đồng nháp DRAFT và phiên bản v1; đã có bản nháp thì trả 200 với bản đó (MD-03-FE-01)
+      responses:
+        "201": { $ref: "#/components/responses/Tenancy" }
+        "200": { $ref: "#/components/responses/Tenancy" }
+        "409": { $ref: "#/components/responses/Error" }
+  /tenancies/{tenancyId}:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    get:
+      tags: [MD-03]
+      summary: Hợp đồng, các phiên bản (mới nhất trước), điều khoản, file (presigned GET 5 phút)
+      responses:
+        "200": { $ref: "#/components/responses/Tenancy" }
+        "404": { $ref: "#/components/responses/Error" }
+  /tenancies/{tenancyId}/versions:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    post:
+      tags: [MD-03]
+      summary: Thêm phiên bản ADDENDUM hoặc RENEWAL (BR-14); bản trước bị REJECTED thì tạo bản thay thế cùng loại
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateTenancyVersionRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/TenancyVersion" }
+        "409": { $ref: "#/components/responses/Error" }
+  /tenancies/{tenancyId}/versions/{v}/terms:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }, { $ref: "#/components/parameters/VersionNumber" }]
+    patch:
+      tags: [MD-03]
+      summary: Lưu điều khoản sau khi sửa số AI đọc (BR-11)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateTermsRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/TenancyVersion" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { description: RECORD_LOCKED hoặc INVALID_STATE, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /tenancies/{tenancyId}/invites:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    post:
+      tags: [MD-03]
+      summary: Tạo link mời gắn email, hạn 72 giờ, gửi qua SES; lời mời cũ bị thu hồi (BR-12)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateInviteRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Invite" }
+        "400": { description: INVALID_EMAIL, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: INVALID_STATE, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /tenancies/{tenancyId}/versions/{v}/confirm:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }, { $ref: "#/components/parameters/VersionNumber" }]
+    post:
+      tags: [MD-03]
+      summary: Người thuê xác nhận, hoặc báo "Không đúng" kèm lý do ≥ 10 ký tự (BR-13)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ConfirmTenancyVersionRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/TenancyVersion" }
+        "409": { description: RECORD_LOCKED hoặc INVALID_STATE, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+
+  /uploads:
+    post:
+      tags: [Chung]
+      summary: Xin presigned PUT URL (hạn 5 phút, bắt buộc x-amz-checksum-sha256)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateUploadRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/UploadUrl" }
+        "400": { description: INVALID_FILE hoặc VALIDATION_ERROR, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "RECORD_LOCKED, INVALID_STATE hoặc PERIOD_CLOSED", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+
+  /properties/{propertyId}/meter-readings:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    get:
+      tags: [MD-05]
+      summary: Bảng chỉ số của kỳ cho mọi phòng đang thuê (MD-05-FE-02)
+      parameters: [{ $ref: "#/components/parameters/PeriodRequired" }]
+      responses:
+        "200": { $ref: "#/components/responses/RoomReadings" }
+  /rooms/{roomId}/meter-readings:
+    parameters: [{ $ref: "#/components/parameters/RoomId" }]
+    post:
+      tags: [MD-05]
+      summary: Tạo chỉ số kỳ và trả URL tải ảnh đồng hồ; đã có chỉ số chưa xác nhận thì trả 200 và URL tải lại (BR-20)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateMeterReadingRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/CreateMeterReading" }
+        "200": { $ref: "#/components/responses/CreateMeterReading" }
+        "409": { description: PERIOD_CLOSED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /meter-readings/{readingId}:
+    parameters: [{ name: readingId, in: path, required: true, schema: { type: string, format: uuid } }]
+    patch:
+      tags: [MD-05]
+      summary: Sửa và/hoặc xác nhận chỉ số (BR-21)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdateMeterReadingRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/MeterReading" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+  /properties/{propertyId}/meter-readings:confirm-all:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    post:
+      tags: [MD-05]
+      summary: Xác nhận mọi chỉ số PENDING_CONFIRM của kỳ; chỉ số NEEDS_REVIEW giữ nguyên
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PeriodRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/ConfirmAll" }
+  /properties/{propertyId}/invoices:generate:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    post:
+      tags: [MD-05]
+      summary: Lập hóa đơn nháp hàng loạt, trả created và skipped (BR-22)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/PeriodRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/GenerateInvoices" }
+        "400": { description: INVALID_PERIOD, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /invoices:
+    get:
+      tags: [MD-05]
+      summary: Danh sách hóa đơn; người thuê chỉ thấy hóa đơn đã gửi của mình
+      parameters:
+        - { $ref: "#/components/parameters/Period" }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/InvoiceStatus" } }
+        - { $ref: "#/components/parameters/Limit" }
+        - { $ref: "#/components/parameters/Cursor" }
+      responses:
+        "200": { $ref: "#/components/responses/InvoicePage" }
+  /invoices/{invoiceId}:
+    parameters: [{ $ref: "#/components/parameters/InvoiceId" }]
+    get:
+      tags: [MD-05]
+      summary: Chi tiết tiền, ảnh đồng hồ (presigned GET 5 phút) và khiếu nại
+      responses:
+        "200": { $ref: "#/components/responses/InvoiceDetail" }
+        "404": { $ref: "#/components/responses/Error" }
+  /invoices/{invoiceId}/send:
+    parameters: [{ $ref: "#/components/parameters/InvoiceId" }]
+    post:
+      tags: [MD-05]
+      summary: Gửi hóa đơn DRAFT → SENT
+      responses:
+        "200": { $ref: "#/components/responses/Invoice" }
+        "409": { $ref: "#/components/responses/Error" }
+  /invoices/{invoiceId}/disputes:
+    parameters: [{ $ref: "#/components/parameters/InvoiceId" }]
+    post:
+      tags: [MD-05]
+      summary: Người thuê khiếu nại chỉ số (lý do ≥ 10 ký tự); hóa đơn chuyển DISPUTED
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CreateDisputeRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Dispute" }
+        "409": { description: INVALID_STATE (hóa đơn đã thanh toán), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /disputes/{disputeId}:
+    parameters: [{ name: disputeId, in: path, required: true, schema: { type: string, format: uuid } }]
+    patch:
+      tags: [MD-05]
+      summary: Chủ nhà xử lý khiếu nại chỉ số. CORRECTED (kèm value) tính lại hóa đơn; KEPT cần response
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ResolveDisputeRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/Dispute" }
+  /invoices/{invoiceId}/paid:
+    parameters: [{ $ref: "#/components/parameters/InvoiceId" }]
+    post:
+      tags: [MD-05]
+      summary: Đánh dấu đã thu tiền SENT → PAID; đang khiếu nại trả INVALID_STATE (BR-24)
+      responses:
+        "200": { $ref: "#/components/responses/Invoice" }
+        "409": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     cognito:
       type: http
       scheme: bearer
       bearerFormat: JWT
-security:
-  - cognito: []
+      description: ID token của Amazon Cognito
+
+  parameters:
+    PropertyId: { name: propertyId, in: path, required: true, schema: { type: string, format: uuid } }
+    RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
+    TenancyId: { name: tenancyId, in: path, required: true, schema: { type: string, format: uuid } }
+    InvoiceId: { name: invoiceId, in: path, required: true, schema: { type: string, format: uuid } }
+    VersionNumber: { name: v, in: path, required: true, description: "Số thứ tự phiên bản (1, 2, ...)", schema: { type: integer, minimum: 1 } }
+    InviteToken: { name: token, in: path, required: true, schema: { type: string } }
+    Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+    Cursor: { name: cursor, in: query, description: nextCursor của lần gọi trước, schema: { type: string } }
+    Period: { name: period, in: query, schema: { $ref: "#/components/schemas/Period" } }
+    PeriodRequired: { name: period, in: query, required: true, schema: { $ref: "#/components/schemas/Period" } }
+
+  responses:
+    Error: { description: Lỗi theo định dạng chuẩn, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+    Me: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/MeResponse" } } }] } } } }
+    InvitePreview: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvitePreviewResponse" } } }] } } } }
+    AcceptInvite: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/AcceptInviteResponse" } } }] } } } }
+    TenantHome: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/TenantHomeResponse" } } }] } } } }
+    Property: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/PropertyResponse" } } }] } } } }
+    PropertyPage: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/PropertyResponse" } }, nextCursor: { type: string, nullable: true } } } } }] } } } }
+    Room: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/RoomResponse" } } }] } } } }
+    RoomDetail: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/RoomDetailResponse" } } }] } } } }
+    RoomPage: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/RoomResponse" } }, nextCursor: { type: string, nullable: true } } } } }] } } } }
+    Tenancy: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/TenancyDetailResponse" } } }] } } } }
+    TenancyVersion: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/TenancyVersionResponse" } } }] } } } }
+    Invite: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InviteResponse" } } }] } } } }
+    UploadUrl: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/UploadUrlResponse" } } }] } } } }
+    MeterReading: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/MeterReadingResponse" } } }] } } } }
+    CreateMeterReading: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { reading: { $ref: "#/components/schemas/MeterReadingResponse" }, upload: { $ref: "#/components/schemas/UploadUrlResponse" } } } } }] } } } }
+    RoomReadings: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: array, items: { $ref: "#/components/schemas/RoomReadingsResponse" } } } }] } } } }
+    ConfirmAll: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { confirmed: { type: integer }, skipped: { type: array, items: { type: string, format: uuid } } } } } }] } } } }
+    GenerateInvoices: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/GenerateInvoicesResponse" } } }] } } } }
+    Invoice: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvoiceResponse" } } }] } } } }
+    InvoicePage: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/InvoiceResponse" } }, nextCursor: { type: string, nullable: true } } } } }] } } } }
+    InvoiceDetail: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvoiceDetailResponse" } } }] } } } }
+    Dispute: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/DisputeResponse" } } }] } } } }
+
+  schemas:
+    Envelope:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean, example: true }
+        message: { type: string, example: OK }
+    ApiError:
+      type: object
+      required: [success, message, errorCode, traceId]
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string, example: "Biên bản đã khóa, không xóa được ảnh" }
+        errorCode:
+          type: string
+          enum: [VALIDATION_ERROR, INVALID_EMAIL, INVALID_FILE, INVALID_PERIOD, UNAUTHORIZED, FORBIDDEN, INVITE_EMAIL_MISMATCH, NOT_FOUND,
+                 RECORD_LOCKED, INVALID_STATE, VERSION_CONFLICT, ROOM_CODE_EXISTS, ROOM_OCCUPIED, PERIOD_CLOSED, INVITE_INVALID, INTERNAL_ERROR]
+        traceId: { type: string }
+        details:
+          type: array
+          nullable: true
+          items: { type: object, properties: { field: { type: string }, message: { type: string } } }
+    Period: { type: string, pattern: "^[0-9]{4}-[0-9]{2}$", example: "2026-11" }
+    Money: { type: integer, format: int64, description: Số nguyên VND, example: 3500000 }
+    Sha256Base64: { type: string, minLength: 44, maxLength: 44, description: SHA-256 của file gốc mã hóa base64 (không phải hex) }
+
+    UserRole: { type: string, enum: [LANDLORD, TENANT, ADMIN] }
+    RoomStatus: { type: string, enum: [VACANT, OCCUPIED] }
+    RoomDisplayStatus: { type: string, enum: [VACANT, AWAITING_CONFIRM, ACTIVE, MOVING_OUT] }
+    TenancyStatus: { type: string, enum: [DRAFT, AWAITING_TENANT, ACTIVE, MOVING_OUT, SETTLED] }
+    TenancyVersionStatus: { type: string, enum: [UPLOADED, TERMS_REVIEWED, AWAITING_CONFIRM, LOCKED, REJECTED] }
+    TenancyVersionType: { type: string, enum: [INITIAL, ADDENDUM, RENEWAL] }
+    AiStatus: { type: string, enum: [PENDING, SUCCEEDED, FAILED] }
+    FileStatus: { type: string, enum: [PENDING_UPLOAD, RECEIVED, READY, SEALED] }
+    MeterKind: { type: string, enum: [ELECTRICITY, WATER] }
+    MeterReadingStatus: { type: string, enum: [PENDING_AI, NEEDS_REVIEW, PENDING_CONFIRM, CONFIRMED] }
+    InvoiceStatus: { type: string, enum: [DRAFT, SENT, PAID, DISPUTED] }
+    DisputeStatus: { type: string, enum: [OPEN, RESOLVED] }
+    DisputeResolution: { type: string, enum: [CORRECTED, KEPT] }
+    UploadTargetType: { type: string, enum: [INSPECTION, TENANCY_VERSION, METER_READING] }
+
+    MeResponse:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        fullName: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/UserRole" }
+    InvitePreviewResponse:
+      type: object
+      properties:
+        propertyName: { type: string }
+        roomCode: { type: string, example: P.204 }
+        emailMasked: { type: string, example: "m*******n@gmail.com" }
+        expiresAt: { type: string, format: date-time }
+    AcceptInviteResponse:
+      type: object
+      properties:
+        tenancyId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/TenancyStatus" }
+    TenantHomeResponse:
+      type: object
+      description: Các trường null khi người thuê chưa có hợp đồng
+      properties:
+        tenancyId: { type: string, format: uuid, nullable: true }
+        roomId: { type: string, format: uuid, nullable: true }
+        roomCode: { type: string, nullable: true }
+        propertyName: { type: string, nullable: true }
+        propertyAddress: { type: string, nullable: true }
+        status: { type: string, allOf: [{ $ref: "#/components/schemas/TenancyStatus" }], nullable: true }
+        monthlyRent: { type: integer, format: int64, nullable: true }
+        deposit: { type: integer, format: int64, nullable: true }
+        endDate: { type: string, format: date, nullable: true }
+        todos:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [CONFIRM_CONTRACT, CONFIRM_INSPECTION, PAY_INVOICE] }
+              targetId: { type: string, format: uuid }
+              title: { type: string }
+        latestInvoice:
+          type: object
+          nullable: true
+          properties:
+            invoiceId: { type: string, format: uuid }
+            period: { $ref: "#/components/schemas/Period" }
+            status: { $ref: "#/components/schemas/InvoiceStatus" }
+            total: { $ref: "#/components/schemas/Money" }
+
+    CreatePropertyRequest:
+      type: object
+      required: [name, address, electricityRate, waterRate]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        address: { type: string, minLength: 1, maxLength: 255 }
+        electricityRate: { type: integer, format: int64, minimum: 1, description: VND/kWh }
+        waterRate: { type: integer, format: int64, minimum: 1, description: VND/m³ }
+        serviceFee: { type: integer, format: int64, minimum: 0, description: "Phí dịch vụ hàng tháng (VND), mặc định 0" }
+    PropertyResponse:
+      type: object
+      properties:
+        propertyId: { type: string, format: uuid }
+        name: { type: string }
+        address: { type: string }
+        electricityRate: { $ref: "#/components/schemas/Money" }
+        waterRate: { $ref: "#/components/schemas/Money" }
+        serviceFee: { $ref: "#/components/schemas/Money" }
+        roomCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+    AreaRequest:
+      type: object
+      required: [name, minPhotos]
+      properties:
+        areaId: { type: string, format: uuid, description: Có khi sửa khu vực đã tồn tại }
+        name: { type: string, minLength: 1, maxLength: 50 }
+        minPhotos: { type: integer, minimum: 1, maximum: 6 }
+    AreaResponse:
+      type: object
+      properties:
+        areaId: { type: string, format: uuid }
+        name: { type: string }
+        minPhotos: { type: integer }
+    CreateRoomRequest:
+      type: object
+      required: [code, monthlyRent, areas]
+      properties:
+        code: { type: string, minLength: 1, maxLength: 20, example: P.204 }
+        monthlyRent: { $ref: "#/components/schemas/Money" }
+        areas: { type: array, maxItems: 10, items: { $ref: "#/components/schemas/AreaRequest" } }
+    UpdateRoomRequest:
+      type: object
+      required: [version]
+      properties:
+        monthlyRent: { $ref: "#/components/schemas/Money" }
+        areas: { type: array, nullable: true, description: "null là không đổi khu vực; gửi cả danh sách mới (giữ areaId của khu vực cũ)", items: { $ref: "#/components/schemas/AreaRequest" } }
+        version: { type: integer, format: int64, description: version đọc được lần trước }
+    RoomResponse:
+      type: object
+      properties:
+        roomId: { type: string, format: uuid }
+        propertyId: { type: string, format: uuid }
+        code: { type: string }
+        monthlyRent: { $ref: "#/components/schemas/Money" }
+        status: { $ref: "#/components/schemas/RoomStatus" }
+        displayStatus: { $ref: "#/components/schemas/RoomDisplayStatus" }
+        tenantName: { type: string, nullable: true }
+        areas: { type: array, items: { $ref: "#/components/schemas/AreaResponse" } }
+        version: { type: integer, format: int64 }
+    RoomDetailResponse:
+      type: object
+      properties:
+        roomId: { type: string, format: uuid }
+        propertyId: { type: string, format: uuid }
+        propertyName: { type: string }
+        code: { type: string }
+        monthlyRent: { $ref: "#/components/schemas/Money" }
+        status: { $ref: "#/components/schemas/RoomStatus" }
+        displayStatus: { $ref: "#/components/schemas/RoomDisplayStatus" }
+        areas: { type: array, items: { $ref: "#/components/schemas/AreaResponse" } }
+        version: { type: integer, format: int64 }
+        currentTenancy:
+          type: object
+          nullable: true
+          properties:
+            tenancyId: { type: string, format: uuid }
+            status: { $ref: "#/components/schemas/TenancyStatus" }
+            tenantName: { type: string, nullable: true }
+
+    CreateTenancyVersionRequest:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, enum: [ADDENDUM, RENEWAL] }
+    UpdateTermsRequest:
+      type: object
+      required: [monthlyRent, deposit, startDate, endDate, electricityRate, waterRate]
+      properties:
+        monthlyRent: { $ref: "#/components/schemas/Money" }
+        deposit: { type: integer, format: int64, minimum: 0 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        electricityRate: { type: integer, format: int64, minimum: 1 }
+        waterRate: { type: integer, format: int64, minimum: 1 }
+    CreateInviteRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+    InviteResponse:
+      type: object
+      description: Không trả token; token chỉ có trong email
+      properties:
+        inviteId: { type: string, format: uuid }
+        email: { type: string }
+        expiresAt: { type: string, format: date-time }
+    ConfirmTenancyVersionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [CONFIRM, REJECT] }
+        reason: { type: string, minLength: 10, maxLength: 500, description: Bắt buộc khi REJECT }
+    TermResponse:
+      type: object
+      properties:
+        value: { description: "Giá trị đã lưu, hoặc giá trị AI đọc khi chưa lưu (số hoặc YYYY-MM-DD)" }
+        aiValue: { description: "Giá trị AI đọc (null nếu AI chưa đọc)" }
+        confidence: { type: number, nullable: true }
+        needsReview: { type: boolean, description: "true khi confidence < 0,8 để FE tô vàng" }
+    TenancyFileResponse:
+      type: object
+      properties:
+        fileId: { type: string, format: uuid }
+        fileName: { type: string }
+        contentType: { type: string }
+        size: { type: integer, format: int64 }
+        status: { $ref: "#/components/schemas/FileStatus" }
+        url: { type: string, nullable: true, description: Presigned GET hạn 5 phút }
+    TenancyVersionResponse:
+      type: object
+      properties:
+        versionId: { type: string, format: uuid }
+        number: { type: integer }
+        type: { $ref: "#/components/schemas/TenancyVersionType" }
+        status: { $ref: "#/components/schemas/TenancyVersionStatus" }
+        aiStatus: { $ref: "#/components/schemas/AiStatus" }
+        terms:
+          type: object
+          description: Khóa monthlyRent, deposit, startDate, endDate, electricityRate, waterRate
+          additionalProperties: { $ref: "#/components/schemas/TermResponse" }
+        editedFields: { type: array, items: { type: string } }
+        landlordConfirmedAt: { type: string, format: date-time, nullable: true }
+        tenantConfirmedAt: { type: string, format: date-time, nullable: true }
+        lockedAt: { type: string, format: date-time, nullable: true }
+        rejectReason: { type: string, nullable: true }
+        files: { type: array, items: { $ref: "#/components/schemas/TenancyFileResponse" } }
+    TenancyDetailResponse:
+      type: object
+      properties:
+        tenancyId: { type: string, format: uuid }
+        roomId: { type: string, format: uuid }
+        roomCode: { type: string }
+        propertyName: { type: string }
+        status: { $ref: "#/components/schemas/TenancyStatus" }
+        tenantName: { type: string, nullable: true }
+        versions: { type: array, items: { $ref: "#/components/schemas/TenancyVersionResponse" } }
+
+    CreateUploadRequest:
+      type: object
+      required: [targetType, targetId, fileName, contentType, size, sha256]
+      properties:
+        targetType: { $ref: "#/components/schemas/UploadTargetType" }
+        targetId: { type: string, format: uuid, description: "inspectionId, versionId hoặc readingId" }
+        areaId: { type: string, format: uuid, description: Bắt buộc khi INSPECTION }
+        fileName: { type: string, maxLength: 255 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/heic, image/heif, application/pdf], description: PDF chỉ cho TENANCY_VERSION }
+        size: { type: integer, format: int64, description: "Ảnh ≤ 25 MB, scan ≤ 20 MB" }
+        sha256: { $ref: "#/components/schemas/Sha256Base64" }
+    UploadUrlResponse:
+      type: object
+      properties:
+        fileId: { type: string, format: uuid }
+        uploadUrl: { type: string }
+        method: { type: string, example: PUT }
+        headers: { type: object, additionalProperties: { type: string }, description: "Gửi đúng các header này khi PUT, không gửi Authorization" }
+        expiresAt: { type: string, format: date-time }
+
+    CreateMeterReadingRequest:
+      type: object
+      required: [kind, period, fileName, contentType, size, sha256]
+      properties:
+        kind: { $ref: "#/components/schemas/MeterKind" }
+        period: { $ref: "#/components/schemas/Period" }
+        fileName: { type: string }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/heic, image/heif] }
+        size: { type: integer, format: int64 }
+        sha256: { $ref: "#/components/schemas/Sha256Base64" }
+    UpdateMeterReadingRequest:
+      type: object
+      properties:
+        value: { type: integer, format: int64, minimum: 0 }
+        meterReplaced: { type: boolean, description: Cho phép chỉ số nhỏ hơn kỳ trước }
+        note: { type: string, maxLength: 500 }
+        confirm: { type: boolean }
+    PeriodRequest:
+      type: object
+      required: [period]
+      properties:
+        period: { $ref: "#/components/schemas/Period" }
+    MeterReadingResponse:
+      type: object
+      properties:
+        readingId: { type: string, format: uuid }
+        roomId: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/MeterKind" }
+        period: { $ref: "#/components/schemas/Period" }
+        status: { $ref: "#/components/schemas/MeterReadingStatus" }
+        value: { type: integer, format: int64, nullable: true }
+        aiValue: { type: integer, format: int64, nullable: true }
+        aiConfidence: { type: number, nullable: true }
+        previousValue: { type: integer, format: int64, nullable: true }
+        needsReview: { type: boolean }
+        reviewReason: { type: string, nullable: true, description: "LOW_CONFIDENCE, LOWER_THAN_PREVIOUS, UNUSUAL_USAGE hoặc AI_FAILED" }
+        meterReplaced: { type: boolean }
+        note: { type: string, nullable: true }
+        editedByLandlord: { type: boolean }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+        photoStatus: { type: string, allOf: [{ $ref: "#/components/schemas/FileStatus" }], nullable: true }
+        photoUrl: { type: string, nullable: true }
+    RoomReadingsResponse:
+      type: object
+      properties:
+        roomId: { type: string, format: uuid }
+        roomCode: { type: string }
+        tenancyId: { type: string, format: uuid }
+        electricity: { type: object, allOf: [{ $ref: "#/components/schemas/MeterReadingResponse" }], nullable: true }
+        water: { type: object, allOf: [{ $ref: "#/components/schemas/MeterReadingResponse" }], nullable: true }
+
+    GenerateInvoicesResponse:
+      type: object
+      properties:
+        created:
+          type: array
+          items: { type: object, properties: { invoiceId: { type: string, format: uuid }, roomId: { type: string, format: uuid }, roomCode: { type: string }, total: { $ref: "#/components/schemas/Money" } } }
+        skipped:
+          type: array
+          items:
+            type: object
+            properties:
+              roomId: { type: string, format: uuid }
+              roomCode: { type: string }
+              reason: { type: string, enum: [MISSING_READINGS, MISSING_PREVIOUS_READING, NO_LOCKED_CONTRACT, ALREADY_INVOICED] }
+    InvoiceResponse:
+      type: object
+      properties:
+        invoiceId: { type: string, format: uuid }
+        tenancyId: { type: string, format: uuid }
+        roomCode: { type: string }
+        propertyName: { type: string }
+        period: { $ref: "#/components/schemas/Period" }
+        status: { $ref: "#/components/schemas/InvoiceStatus" }
+        total: { $ref: "#/components/schemas/Money" }
+        sentAt: { type: string, format: date-time, nullable: true }
+        paidAt: { type: string, format: date-time, nullable: true }
+    UtilityLine:
+      type: object
+      properties:
+        readingId: { type: string, format: uuid }
+        previous: { type: integer, format: int64 }
+        current: { type: integer, format: int64 }
+        usage: { type: integer, format: int64 }
+        rate: { $ref: "#/components/schemas/Money" }
+        amount: { $ref: "#/components/schemas/Money" }
+        photoUrl: { type: string, nullable: true }
+    InvoiceDetailResponse:
+      type: object
+      properties:
+        invoiceId: { type: string, format: uuid }
+        tenancyId: { type: string, format: uuid }
+        roomCode: { type: string }
+        propertyName: { type: string }
+        period: { $ref: "#/components/schemas/Period" }
+        status: { $ref: "#/components/schemas/InvoiceStatus" }
+        roomRent: { $ref: "#/components/schemas/Money" }
+        electricity: { $ref: "#/components/schemas/UtilityLine" }
+        water: { $ref: "#/components/schemas/UtilityLine" }
+        serviceFee: { $ref: "#/components/schemas/Money" }
+        total: { $ref: "#/components/schemas/Money" }
+        sentAt: { type: string, format: date-time, nullable: true }
+        paidAt: { type: string, format: date-time, nullable: true }
+        disputes: { type: array, items: { $ref: "#/components/schemas/DisputeResponse" } }
+    CreateDisputeRequest:
+      type: object
+      required: [readingId, reason]
+      properties:
+        readingId: { type: string, format: uuid }
+        reason: { type: string, minLength: 10, maxLength: 1000 }
+    ResolveDisputeRequest:
+      type: object
+      required: [resolution]
+      properties:
+        resolution: { $ref: "#/components/schemas/DisputeResolution" }
+        value: { type: integer, format: int64, description: Bắt buộc khi CORRECTED }
+        response: { type: string, maxLength: 1000, description: Bắt buộc khi KEPT }
+    DisputeResponse:
+      type: object
+      properties:
+        disputeId: { type: string, format: uuid }
+        invoiceId: { type: string, format: uuid }
+        readingId: { type: string, format: uuid }
+        reason: { type: string }
+        status: { $ref: "#/components/schemas/DisputeStatus" }
+        resolution: { type: string, allOf: [{ $ref: "#/components/schemas/DisputeResolution" }], nullable: true }
+        response: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
