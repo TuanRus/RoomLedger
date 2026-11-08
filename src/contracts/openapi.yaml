@@ -289,6 +289,22 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Inspection" }
         "404": { $ref: "#/components/responses/Error" }
+  /inspections/{inspectionId}/confirm:
+    parameters: [{ $ref: "#/components/parameters/InspectionId" }]
+    post:
+      tags: [MD-04]
+      summary: Xác nhận biên bản; bên thứ hai xác nhận thì biên bản khóa (MD-04-FE-04, BR-18)
+      description: Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Bên đầu tiên → AWAITING_CONFIRM; đủ hai bên → LOCKED (đúng một lần).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [agreed], properties: { agreed: { type: boolean, description: Đã tích ô cam kết; phải là true } } }
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "400": { description: VALIDATION_ERROR (chưa tích ô cam kết), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu) hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /photos/{photoId}:
     parameters: [{ $ref: "#/components/parameters/PhotoId" }]
     delete:
