@@ -289,6 +289,17 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Inspection" }
         "404": { $ref: "#/components/responses/Error" }
+  /photos/{photoId}:
+    parameters: [{ $ref: "#/components/parameters/PhotoId" }]
+    delete:
+      tags: [MD-04]
+      summary: Xóa ảnh trước khi khóa, chỉ người gửi (MD-04-FE-03, BR-17); trả lại biên bản
+      description: Đang AWAITING_CONFIRM thì xác nhận bị hủy và biên bản về OPEN. Lần bị từ chối được ghi nhật ký PHOTO_DELETE_DENIED.
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "403": { description: FORBIDDEN (không phải người gửi ảnh), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: RECORD_LOCKED (biên bản đã khóa), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
 
 components:
   securitySchemes:
@@ -304,6 +315,7 @@ components:
     TenancyId: { name: tenancyId, in: path, required: true, schema: { type: string, format: uuid } }
     InvoiceId: { name: invoiceId, in: path, required: true, schema: { type: string, format: uuid } }
     InspectionId: { name: inspectionId, in: path, required: true, schema: { type: string, format: uuid } }
+    PhotoId: { name: photoId, in: path, required: true, schema: { type: string, format: uuid } }
     VersionNumber: { name: v, in: path, required: true, description: "Số thứ tự phiên bản (1, 2, ...)", schema: { type: integer, minimum: 1 } }
     InviteToken: { name: token, in: path, required: true, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
