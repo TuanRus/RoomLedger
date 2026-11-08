@@ -98,6 +98,68 @@ public class AccountAppService(AppDbContext db, ICurrentUser user)
         return new AcceptInviteResponse(tenancy.Id, tenancy.Status);
     }
 
+    /**
+     * Trang chủ người thuê: hợp đồng chưa quyết toán, điều khoản hiệu lực, việc cần làm và hóa đơn mới nhất.
+     *
+     * @author Tuấn
+     * @version 1.0
+     */
+    public async Task<TenantHomeResponse> GetTenantHomeAsync(CancellationToken ct)
+    {
+        var tenantId = user.UserId;
+        var tenancy = await db.Tenancies.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && t.Status != TenancyStatus.Settled)
+            .OrderByDescending(t => t.CreatedAt)
+            .Select(t => new
+            {
+                t.Id,
+                t.RoomId,
+                t.Status,
+                RoomCode = t.Room!.Code,
+                PropertyName = t.Room.Property!.Name,
+                PropertyAddress = t.Room.Property.Address,
+            })
+            .FirstOrDefaultAsync(ct);
+        if (tenancy is null)
+        {
+            return new TenantHomeResponse(null, null, null, null, null, null, null, null, null, [], null);
+        }
+
+        var versions = await db.TenancyVersions.AsNoTracking()
+            .Where(v => v.TenancyId == tenancy.Id)
+            .OrderByDescending(v => v.Number)
+            .ToListAsync(ct);
+        var effective = versions.FirstOrDefault(v => v.Status == TenancyVersionStatus.Locked);
+
+        var todos = new List<TenantTodoResponse>();
+        foreach (var v in versions.Where(v => v.Status == TenancyVersionStatus.AwaitingConfirm))
+        {
+            todos.Add(new("CONFIRM_CONTRACT", v.Id, $"Xác nhận hợp đồng phiên bản {v.Number}"));
+        }
+
+        var inspections = await db.Inspections.AsNoTracking()
+            .Where(i => i.TenancyId == tenancy.Id && i.TenantConfirmedAt == null
+                && (i.Status == InspectionStatus.Open || i.Status == InspectionStatus.AwaitingConfirm))
+            .Select(i => new { i.Id, i.Type })
+            .ToListAsync(ct);
+        todos.AddRange(inspections.Select(i => new TenantTodoResponse("CONFIRM_INSPECTION", i.Id,
+            i.Type == InspectionType.MoveIn ? "Chụp ảnh và xác nhận biên bản nhận phòng" : "Chụp ảnh trả phòng")));
+
+        var invoices = await db.Invoices.AsNoTracking()
+            .Where(i => i.TenancyId == tenancy.Id && i.Status != InvoiceStatus.Draft)
+            .OrderByDescending(i => i.Period)
+            .Select(i => new { i.Id, i.Period, i.Status, i.Total })
+            .ToListAsync(ct);
+        todos.AddRange(invoices.Where(i => i.Status == InvoiceStatus.Sent)
+            .Select(i => new TenantTodoResponse("PAY_INVOICE", i.Id, $"Thanh toán hóa đơn kỳ {i.Period}")));
+        var latest = invoices.FirstOrDefault();
+
+        return new TenantHomeResponse(
+            tenancy.Id, tenancy.RoomId, tenancy.RoomCode, tenancy.PropertyName, tenancy.PropertyAddress, tenancy.Status,
+            effective?.MonthlyRent, effective?.Deposit, effective?.EndDate, todos,
+            latest is null ? null : new TenantInvoiceSummary(latest.Id, latest.Period, latest.Status, latest.Total));
+    }
+
     private async Task<Invite> FindUsableInviteAsync(string token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Length > 100)

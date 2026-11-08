@@ -5,18 +5,24 @@ using RoomLedger.Api.Services;
 namespace RoomLedger.Api.Endpoints;
 
 /**
- * POST /api/v1/uploads: xin presigned PUT để tải ảnh thẳng lên S3 (BR-16 RULE 2).
+ * Route POST /uploads (presigned PUT kèm x-amz-checksum-sha256).
  *
- * @author Sang
- * @version 1.0
+ * @author Tuấn
+ * @version 1.1
  */
 public static class UploadEndpoints
 {
+    /**
+     * Đăng ký route /uploads.
+     *
+     * @author Tuấn
+     * @version 1.1
+     */
     public static RouteGroupBuilder MapUploadEndpoints(this RouteGroupBuilder api)
     {
-        var group = api.MapGroup("/uploads");
-        group.MapPost("", async (CreateUploadRequest req, UploadAppService svc, CancellationToken ct) =>
-            ApiResults.Ok(await svc.CreateAsync(req, ct), "Đã tạo link tải lên")).RequireAuthorization(Policies.LandlordOrTenant);
+        api.MapPost("/uploads", async (CreateUploadRequest req, UploadAppService svc, CancellationToken ct) =>
+            ApiResults.Created(await svc.CreateAsync(req, ct), "Tạo link tải lên thành công"))
+            .RequireAuthorization(Policies.LandlordOrTenant);
         return api;
     }
 }

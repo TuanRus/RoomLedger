@@ -3,30 +3,28 @@ using RoomLedger.Core.Domain.Enums;
 namespace RoomLedger.Api.Contracts;
 
 /**
- * Body của POST /api/v1/uploads. Trường để nullable để kiểm thiếu trường và trả VALIDATION_ERROR theo từng trường.
- * sha256: SHA-256 của file gốc, mã hóa base64 (FE tính bằng WebCrypto).
+ * Body POST /uploads. sha256 là SHA-256 của file gốc, mã hóa base64 (44 ký tự).
  *
- * @author Sang
+ * @author Tuấn
  * @version 1.0
  */
 public record CreateUploadRequest(
     UploadTargetType? TargetType,
     Guid? TargetId,
-    Guid? RoomAreaId,
+    Guid? AreaId,
     string? FileName,
     string? ContentType,
     long? Size,
-    string? Sha256,
-    CaptureSource? CaptureSource);
+    string? Sha256);
 
 /**
- * Presigned PUT: FE gửi đúng method và headers (gồm x-amz-checksum-sha256) trước expiresAt.
+ * Presigned PUT URL và các header FE phải gửi đúng khi PUT lên S3 (hạn 5 phút).
  *
- * @author Sang
+ * @author Tuấn
  * @version 1.0
  */
-public record UploadResponse(
-    Guid PhotoId,
+public record UploadUrlResponse(
+    Guid FileId,
     string UploadUrl,
     string Method,
     IReadOnlyDictionary<string, string> Headers,
