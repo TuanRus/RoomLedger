@@ -3,10 +3,10 @@ name: infra
 on:
   pull_request:
     branches: [develop, main]
-    paths: ["src/infra/**"]
+    paths: ["src/infra/**", "src/backend/src/RoomLedger.Functions/**"]
   push:
     branches: [develop, main]
-    paths: ["src/infra/**"]
+    paths: ["src/infra/**", "src/backend/src/RoomLedger.Functions/**"]
 
 permissions:
   id-token: write
@@ -24,6 +24,10 @@ jobs:
         with:
           node-version: 20
       - run: npm install -g aws-cdk
+      - run: dotnet tool restore
+      # DataStack cần gói Lambda (Program.cs đọc artifacts/functions.zip)
+      - run: dotnet lambda package --project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip
+      - run: dotnet test src/infra/RoomLedger.Cdk.Tests
       - run: cdk synth -c stage=dev
         working-directory: src/infra/RoomLedger.Cdk
       # Deploy: thêm bước aws-actions/configure-aws-credentials (OIDC) khi SecurityStack có role
