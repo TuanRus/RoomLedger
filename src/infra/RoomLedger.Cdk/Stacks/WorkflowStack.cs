@@ -26,11 +26,13 @@ public sealed class WorkflowStackProps : StackProps
     public required string FunctionsAssetPath { get; init; }
     public required string IncomingBucketName { get; init; }
     public required string DerivedBucketName { get; init; }
+    public required string EvidenceBucketName { get; init; }
 }
 
 /**
  * EventBridge + Lambda xử lý ảnh (T12). Sau này thêm Step Functions so ảnh, read-document, persist-results, notify.
  * Luồng upload: S3 "Object Created" (incoming) → photo-ingest → PhotoReceived → photo-derive.
+ * Khóa biên bản: API InspectionLocked → evidence-seal (chép sang bucket evidence Object Lock, BR-18 RULE 4).
  * Lambda chạy trong VPC (cập nhật bảng photo), đăng nhập roomledger_app bằng IAM token, quyền S3 tối thiểu.
  * Phụ trách: Sang.
  *
@@ -41,9 +43,12 @@ public sealed class WorkflowStack : Stack
 {
     public const string FunctionsSource = "roomledger.functions";
     public const string PhotoReceived = "PhotoReceived";
+    public const string ApiSource = "roomledger.api";
+    public const string InspectionLocked = "InspectionLocked";
 
     public Function PhotoIngest { get; }
     public Function PhotoDerive { get; }
+    public Function EvidenceSeal { get; }
 
     public WorkflowStack(Construct scope, string id, WorkflowStackProps props) : base(scope, id, props)
     {
@@ -55,6 +60,7 @@ public sealed class WorkflowStack : Stack
                                 $"Username={DataStack.AppUser};SSL Mode=Require",
             ["INCOMING_BUCKET"] = props.IncomingBucketName,
             ["DERIVED_BUCKET"] = props.DerivedBucketName,
+            ["EVIDENCE_BUCKET"] = props.EvidenceBucketName,
             ["EVENT_BUS_NAME"] = "default",
             ["PHOTO_MAX_AGE_DAYS"] = "3",
         };
@@ -77,6 +83,8 @@ public sealed class WorkflowStack : Stack
 
         PhotoIngest = VpcFunction("PhotoIngest", "photo-ingest", 512, Duration.Seconds(60));
         PhotoDerive = VpcFunction("PhotoDerive", "photo-derive", 2048, Duration.Minutes(2)); // HEIC 12 MP ≈ 50 MB điểm ảnh
+        // Biên bản tối đa ~20 ảnh/khu vực × vài khu vực; mỗi ảnh ≤ 25 MB đọc 2 lần để băm
+        EvidenceSeal = VpcFunction("EvidenceSeal", "evidence-seal", 1024, Duration.Minutes(5));
 
         var incomingObjects = $"arn:{Aws.PARTITION}:s3:::{props.IncomingBucketName}/*";
         var derivedObjects = $"arn:{Aws.PARTITION}:s3:::{props.DerivedBucketName}/*";
@@ -96,9 +104,24 @@ public sealed class WorkflowStack : Stack
             Resources = new[] { derivedObjects },
         }));
 
+        // evidence-seal: đọc ảnh gốc (băm + nguồn CopyObject), ghi và đọc lại bản trong evidence.
+        // Không cho xóa, đổi retention hay bypass Object Lock: bằng chứng chỉ ghi được một lần.
+        var evidenceObjects = $"arn:{Aws.PARTITION}:s3:::{props.EvidenceBucketName}/*";
+        EvidenceSeal.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Actions = new[] { "s3:GetObject" },
+            Resources = new[] { incomingObjects, evidenceObjects },
+        }));
+        EvidenceSeal.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Actions = new[] { "s3:PutObject" },
+            Resources = new[] { evidenceObjects },
+        }));
+
         EventBus.FromEventBusName(this, "DefaultBus", "default").GrantPutEventsTo(PhotoIngest);
         props.Db.GrantConnect(PhotoIngest, DataStack.AppUser);
         props.Db.GrantConnect(PhotoDerive, DataStack.AppUser);
+        props.Db.GrantConnect(EvidenceSeal, DataStack.AppUser);
 
         new Rule(this, "PhotoUploaded", new RuleProps
         {
@@ -124,6 +147,17 @@ public sealed class WorkflowStack : Stack
                 DetailType = new[] { PhotoReceived },
             },
             Targets = new IRuleTarget[] { new LambdaFunction(PhotoDerive, new LambdaFunctionProps { RetryAttempts = 2 }) },
+        });
+
+        new Rule(this, "InspectionLockedRule", new RuleProps
+        {
+            Description = "Inspection locked (API) -> evidence-seal",
+            EventPattern = new EventPattern
+            {
+                Source = new[] { ApiSource },
+                DetailType = new[] { InspectionLocked },
+            },
+            Targets = new IRuleTarget[] { new LambdaFunction(EvidenceSeal, new LambdaFunctionProps { RetryAttempts = 2 }) },
         });
     }
 }

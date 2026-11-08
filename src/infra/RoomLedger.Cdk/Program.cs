@@ -47,6 +47,7 @@ new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
     FunctionsAssetPath = functionsAsset,
     IncomingBucketName = (string?)app.Node.TryGetContext("incomingBucket") ?? $"roomledger-{stage}-incoming",
     DerivedBucketName = (string?)app.Node.TryGetContext("derivedBucket") ?? $"roomledger-{stage}-derived",
+    EvidenceBucketName = (string?)app.Node.TryGetContext("evidenceBucket") ?? $"roomledger-{stage}-evidence",
 });
 // WAF cho CloudFront phải ở us-east-1, nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi. Cần cả nhóm quyết định.
 new EdgeStack(app, Id("edge"), new StackProps { Env = new Amazon.CDK.Environment { Region = "us-east-1" } });
