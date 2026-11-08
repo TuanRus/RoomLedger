@@ -40,7 +40,7 @@ jobs:
         # Nếu script có COMMIT riêng, transaction của Lambda kết thúc sớm và GrantSql lỗi
         # (xem tests/RoomLedger.Functions.Tests/Migrate/MigrateFunctionTests.cs).
         run: |
-          dotnet tool install --global dotnet-ef --version 8.0.10
+          dotnet tool restore   # dotnet-ef 8.x ghim trong .config/dotnet-tools.json
           dotnet ef migrations script --idempotent --no-transactions \
             --project src/backend/src/RoomLedger.Infrastructure \
             --startup-project src/backend/src/RoomLedger.Infrastructure \
