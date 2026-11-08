@@ -28,6 +28,12 @@ public static class RoomEndpoints
         group.MapPatch("/{roomId:guid}", async (Guid roomId, UpdateRoomRequest req, RoomAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.UpdateAsync(roomId, req, ct), "Cập nhật phòng thành công")).RequireAuthorization(Policies.Landlord);
 
+        group.MapPost("/{roomId:guid}/tenancies", async (Guid roomId, TenancyAppService svc, CancellationToken ct) =>
+        {
+            var (tenancy, created) = await svc.CreateAsync(roomId, ct);
+            return created ? ApiResults.Created(tenancy, "Tạo hợp đồng nháp thành công") : ApiResults.Ok(tenancy, "Phòng đã có hợp đồng nháp");
+        }).RequireAuthorization(Policies.Landlord);
+
         return api;
     }
 }
