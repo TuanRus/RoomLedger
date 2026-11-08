@@ -1,5 +1,4 @@
 using Amazon.Lambda.CloudWatchEvents;
-using Amazon.Lambda.S3Events;
 using Amazon.Lambda.TestUtilities;
 using ImageMagick;
 using Microsoft.Extensions.Time.Testing;
@@ -12,7 +11,7 @@ using Ingest = RoomLedger.Functions.PhotoIngest.Function;
 namespace RoomLedger.Functions.Tests.Photos;
 
 /**
- * Lambda photo-ingest (S3 ObjectCreated → RECEIVED, EXIF, cảnh báo ảnh cũ, phát PhotoReceived) và
+ * Lambda photo-ingest (S3 "Object Created" qua EventBridge → RECEIVED, EXIF, cảnh báo ảnh cũ, phát PhotoReceived) và
  * photo-derive (PhotoReceived → bản xem JPEG + thumbnail trong bucket derived → READY). BR-16 RULE 4–5.
  *
  * @author Sang
@@ -27,22 +26,31 @@ public class PhotoLambdaTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture>
     private Ingest NewIngest() => new(db.NewDb, _store, _events, _clock, maxAgeDays: 3);
     private Derive NewDerive() => new(db.NewDb, _store);
 
-    private static S3Event ObjectCreated(string key) => new()
+    /** Sự kiện "Object Created" mà S3 gửi qua EventBridge (bucket incoming bật EventBridge notifications). */
+    private static CloudWatchEvent<S3ObjectCreatedDetail> ObjectCreated(string key) => new()
     {
-        Records =
-        [
-            new S3Event.S3EventNotificationRecord
-            {
-                EventName = "ObjectCreated:Put",
-                S3 = new S3Event.S3Entity
-                {
-                    Bucket = new S3Event.S3BucketEntity { Name = "roomledger-dev-incoming" },
-                    // S3 gửi key đã URL-encode
-                    Object = new S3Event.S3ObjectEntity { Key = Uri.EscapeDataString(key).Replace("%2F", "/") },
-                },
-            },
-        ],
+        Source = "aws.s3",
+        DetailType = "Object Created",
+        Detail = new S3ObjectCreatedDetail(new S3BucketRef("roomledger-dev-incoming"), new S3ObjectRef(key, 1_000)),
     };
+
+    [Fact]
+    public void ObjectCreatedJson_FromEventBridge_DeserializesWithTheLambdaSerializer()
+    {
+        // Rút gọn từ ví dụ trong tài liệu S3 → EventBridge
+        const string json = """
+            {"version":"0","id":"17793124-05d4-b198-2fde-7ededc63b103","detail-type":"Object Created","source":"aws.s3",
+             "account":"123456789012","time":"2026-11-08T03:00:00Z","region":"ap-southeast-2",
+             "resources":["arn:aws:s3:::roomledger-dev-incoming"],
+             "detail":{"version":"0","bucket":{"name":"roomledger-dev-incoming"},
+                       "object":{"key":"a/b/c/d.heic","size":5,"etag":"b1946ac92492d2347c6235b4d2611184","sequencer":"00617F08299329D189"},
+                       "request-id":"N4N7GDK58NMKJ12R","requester":"123456789012","reason":"PutObject"}}
+            """;
+        var serializer = new Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer();
+        var evt = serializer.Deserialize<CloudWatchEvent<S3ObjectCreatedDetail>>(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json)));
+        Assert.Equal("roomledger-dev-incoming", evt.Detail.Bucket.Name);
+        Assert.Equal("a/b/c/d.heic", evt.Detail.Object.Key);
+    }
 
     private static CloudWatchEvent<PhotoEventDetail> Received(Guid photoId) =>
         new() { DetailType = PhotoEventDetail.PhotoReceived, Detail = new PhotoEventDetail(photoId) };
