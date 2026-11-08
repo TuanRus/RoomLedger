@@ -34,6 +34,12 @@ public static class RoomEndpoints
             return created ? ApiResults.Created(tenancy, "Tạo hợp đồng nháp thành công") : ApiResults.Ok(tenancy, "Phòng đã có hợp đồng nháp");
         }).RequireAuthorization(Policies.Landlord);
 
+        group.MapPost("/{roomId:guid}/meter-readings", async (Guid roomId, CreateMeterReadingRequest req, MeterAppService svc, CancellationToken ct) =>
+        {
+            var (reading, created) = await svc.CreateAsync(roomId, req, ct);
+            return created ? ApiResults.Created(reading, "Tạo chỉ số thành công") : ApiResults.Ok(reading, "Đã tạo link tải lại ảnh đồng hồ");
+        }).RequireAuthorization(Policies.LandlordOrTenant);
+
         return api;
     }
 }
