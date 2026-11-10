@@ -70,16 +70,21 @@ public class StorageAuthApiStackTests
         }
     }
 
+    // CDK bật EventBridge qua custom resource Custom::S3BucketNotifications, không ghi vào AWS::S3::Bucket
     [Fact]
     public void Storage_IncomingSendsEventsToEventBridge()
-        => Templates.Value.Storage.HasResourceProperties("AWS::S3::Bucket", new Dictionary<string, object>
+    {
+        var storage = Templates.Value.Storage;
+        var incomingId = storage.FindResources("AWS::S3::Bucket", new Dictionary<string, object>
         {
-            ["BucketName"] = "roomledger-dev-incoming",
-            ["NotificationConfiguration"] = Match.ObjectLike(new Dictionary<string, object>
-            {
-                ["EventBridgeConfiguration"] = Match.AnyValue(),
-            }),
-        });
+            ["Properties"] = Match.ObjectLike(new Dictionary<string, object> { ["BucketName"] = "roomledger-dev-incoming" }),
+        }).Keys.Single();
+        var notifications = storage.FindResources("Custom::S3BucketNotifications");
+        var single = Assert.Single(notifications.Values);
+        var json = Json(single);
+        Assert.Contains("EventBridgeConfiguration", json);
+        Assert.Contains(incomingId, json);
+    }
 
     [Fact]
     public void Storage_EvidenceHasVersioningAndObjectLock_AndIsRetained()
