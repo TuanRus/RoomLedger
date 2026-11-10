@@ -32,3 +32,25 @@ public record InspectionResponse(
  * @version 1.0
  */
 public record ConfirmInspectionRequest(bool? Agreed);
+
+/**
+ * Một ảnh của biên bản cho FE. URL là presigned GET tới bucket derived (5 phút); không có khóa S3 hay SHA-256.
+ * viewUrl/thumbnailUrl null khi ảnh đang xử lý (RECEIVED). canDelete: người gọi là người gửi và biên bản chưa khóa.
+ *
+ * @author Sang
+ * @version 1.0
+ */
+public record InspectionPhotoResponse(
+    Guid PhotoId,
+    Guid AreaId,
+    string FileName,
+    FileStatus Status,
+    UserRole UploaderRole,
+    bool UploadedByMe,
+    CaptureSource CaptureSource,
+    DateTimeOffset? ExifTakenAt,
+    bool OldPhotoWarning,
+    DateTimeOffset UploadedAt,
+    string? ViewUrl,
+    string? ThumbnailUrl,
+    bool CanDelete);

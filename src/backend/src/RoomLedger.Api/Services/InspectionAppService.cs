@@ -22,11 +22,13 @@ public class InspectionAppService(
     AppDbContext db,
     ICurrentUser user,
     IObjectStore objects,
+    IStorage storage,
     TimeProvider clock,
     IEventPublisher events,
     ILogger<InspectionAppService> log)
 {
     private const string OneMoveInIndex = "ux_inspection_tenancy_id_type";
+    private static readonly TimeSpan DownloadLifetime = TimeSpan.FromMinutes(5);
 
     /**
      * Xác nhận biên bản (MD-04-FE-04, BR-18 RULE 1–3). Trong một transaction:
@@ -254,6 +256,35 @@ public class InspectionAppService(
             .ToList();
         return new InspectionResponse(inspection.Id, inspection.TenancyId, inspection.Type, inspection.Status,
             inspection.LandlordConfirmedAt, inspection.TenantConfirmedAt, areas);
+    }
+
+    /**
+     * Danh sách ảnh của biên bản theo thứ tự gửi (màn hình biên bản MD-04, ảnh đối chiếu MD-06-FE-01).
+     * Người không thuộc hợp đồng không thấy biên bản (global query filter) → 404. Ảnh PENDING_UPLOAD (chưa tải lên)
+     * bị bỏ; ảnh chưa có bản xem trả URL null. Bản xem và thumbnail lấy từ bucket derived, kể cả khi đã niêm phong.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public async Task<IReadOnlyList<InspectionPhotoResponse>> ListPhotosAsync(Guid inspectionId, CancellationToken ct)
+    {
+        var inspection = await db.Inspections.AsNoTracking().FirstOrDefaultAsync(i => i.Id == inspectionId, ct)
+            ?? throw new NotFoundException("Không tìm thấy biên bản");
+        var canChange = inspection.Status is InspectionStatus.Open or InspectionStatus.AwaitingConfirm;
+        var photos = await db.Photos.AsNoTracking()
+            .Where(p => p.InspectionId == inspectionId && p.Status != FileStatus.PendingUpload)
+            .OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)
+            .ToListAsync(ct);
+        return photos.Select(p =>
+        {
+            var mine = p.UploadedBy == user.UserId;
+            return new InspectionPhotoResponse(p.Id, p.RoomAreaId, p.FileName, p.Status, p.UploaderRole, mine,
+                p.CaptureSource, p.ExifTakenAt, p.OldPhotoWarning, p.CreatedAt,
+                p.DerivedKey is null ? null : storage.CreateDownloadUrl(StorageBucket.Derived, p.DerivedKey, DownloadLifetime),
+                p.DerivedKey is null ? null
+                    : storage.CreateDownloadUrl(StorageBucket.Derived, PhotoRules.ThumbnailKey(p.IncomingKey), DownloadLifetime),
+                mine && canChange);
+        }).ToList();
     }
 
     private async Task<Guid?> FindMoveInIdAsync(Guid tenancyId, CancellationToken ct) =>
