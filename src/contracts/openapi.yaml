@@ -319,6 +319,17 @@ paths:
                   message: { type: string }
                   data: { type: array, items: { $ref: "#/components/schemas/InspectionPhotoResponse" } }
         "404": { $ref: "#/components/responses/Error" }
+  /inspections/{inspectionId}/submit:
+    parameters: [{ $ref: "#/components/parameters/InspectionId" }]
+    post:
+      tags: [MD-06]
+      summary: Người thuê gửi biên bản trả phòng để so sánh (MD-06-FE-01, BR-25 RULE 4); OPEN → COMPARING
+      description: Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Phát sự kiện MoveOutSubmitted (inspectionId, tenancyId, moveInInspectionId) để so ảnh (MD-06-FE-02). Gửi lại khi đang COMPARING → 200, không khởi động lại. Sau khi gửi không thêm hoặc xóa ảnh được.
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "403": { description: FORBIDDEN (không phải người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước so sánh), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /inspections/{inspectionId}/confirm:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     post:
@@ -334,7 +345,7 @@ paths:
         "200": { $ref: "#/components/responses/Inspection" }
         "400": { description: VALIDATION_ERROR (chưa tích ô cam kết), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu) hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), RECORD_LOCKED hoặc INVALID_STATE (biên bản trả phòng không xác nhận theo cách này), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /photos/{photoId}:
     parameters: [{ $ref: "#/components/parameters/PhotoId" }]
     delete:
