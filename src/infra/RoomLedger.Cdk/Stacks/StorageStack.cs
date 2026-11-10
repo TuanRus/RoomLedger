@@ -8,7 +8,7 @@ namespace RoomLedger.Cdk.Stacks;
  * Tham số của StorageStack. Tên bucket do Program.cs truyền vào, dùng chung với WorkflowStack.
  *
  * @author Tuấn
- * @version 1.1
+ * @version 1.2
  */
 public sealed class StorageStackProps : StackProps
 {
@@ -26,7 +26,7 @@ public sealed class StorageStackProps : StackProps
  * Phát rà soát và hoàn thiện bucket policy (StorageStack cần Phát duyệt).
  *
  * @author Tuấn
- * @version 1.1
+ * @version 1.2
  */
 public sealed class StorageStack : Stack
 {
@@ -54,21 +54,25 @@ public sealed class StorageStack : Stack
             ],
         });
 
+        // dev: giữ 1 ngày để dọn được nhanh, không chuyển Deep Archive (tính tối thiểu 180 ngày, phí cho ảnh test).
+        // demo: 365 ngày, chuyển Deep Archive 30 ngày sau khi hợp đồng đóng. Đổi retention sau không áp lại cho object đã ghi.
         Evidence = NewBucket("Evidence", props.EvidenceBucketName, RemovalPolicy.RETAIN, new BucketProps
         {
             Versioned = true,
             ObjectLockEnabled = true,
             // Governance ở dev/demo để còn dọn được khi cần; production dùng Compliance
-            ObjectLockDefaultRetention = ObjectLockRetention.Governance(Duration.Days(365)),
-            LifecycleRules =
-            [
-                new LifecycleRule
+            ObjectLockDefaultRetention = ObjectLockRetention.Governance(Duration.Days(isDev ? 1 : 365)),
+            LifecycleRules = isDev
+                ? null
+                : new ILifecycleRule[]
                 {
-                    Id = "closed-tenancy-deep-archive",
-                    TagFilters = new Dictionary<string, object> { ["tenancy-status"] = "closed" },
-                    Transitions = [new Transition { StorageClass = StorageClass.DEEP_ARCHIVE, TransitionAfter = Duration.Days(30) }],
+                    new LifecycleRule
+                    {
+                        Id = "closed-tenancy-deep-archive",
+                        TagFilters = new Dictionary<string, object> { ["tenancy-status"] = "closed" },
+                        Transitions = [new Transition { StorageClass = StorageClass.DEEP_ARCHIVE, TransitionAfter = Duration.Days(30) }],
+                    },
                 },
-            ],
         });
 
         Derived = NewBucket("Derived", props.DerivedBucketName, isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN, new BucketProps());

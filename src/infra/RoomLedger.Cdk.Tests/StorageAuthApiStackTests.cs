@@ -59,6 +59,43 @@ public class StorageAuthApiStackTests
 
     private static string Json(object o) => JsonSerializer.Serialize(o);
 
+    private static readonly Lazy<Template> DemoStorage = new(() =>
+    {
+        var app = new App();
+        var env = new Amazon.CDK.Environment { Account = "123456789012", Region = "ap-southeast-2" };
+        return Template.FromStack(new StorageStack(app, "TestDemoStorage", new StorageStackProps
+        {
+            Stage = "demo",
+            Env = env,
+            IncomingBucketName = "roomledger-demo-incoming",
+            DerivedBucketName = "roomledger-demo-derived",
+            EvidenceBucketName = "roomledger-demo-evidence",
+        }));
+    });
+
+    private static string EvidenceJson(Template t) => Json(t.FindResources("AWS::S3::Bucket", new Dictionary<string, object>
+    {
+        ["Properties"] = Match.ObjectLike(new Dictionary<string, object> { ["ObjectLockEnabled"] = true }),
+    }).Values.Single());
+
+    [Fact]
+    public void Storage_Dev_EvidenceRetainsOneDay_AndNeverGoesToDeepArchive()
+    {
+        var evidence = EvidenceJson(Templates.Value.Storage);
+        Assert.Contains("\"Mode\":\"GOVERNANCE\"", evidence);
+        Assert.Matches("\"Days\":1[,}]", evidence);
+        Assert.DoesNotContain("DEEP_ARCHIVE", evidence);
+    }
+
+    [Fact]
+    public void Storage_Demo_EvidenceRetains365Days_AndArchivesClosedTenancies()
+    {
+        var evidence = EvidenceJson(DemoStorage.Value);
+        Assert.Matches("\"Days\":365[,}]", evidence);
+        Assert.Contains("DEEP_ARCHIVE", evidence);
+        Assert.Contains("tenancy-status", evidence);
+    }
+
     [Fact]
     public void Storage_HasThreeBuckets_WithTheNamesWorkflowStackUses()
     {

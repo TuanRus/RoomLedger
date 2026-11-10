@@ -35,11 +35,14 @@ if (!File.Exists(apiAsset) && !Directory.Exists(apiAsset))
         "(hoặc truyền -c apiAsset=<đường dẫn>).");
 }
 
-// Tên bucket theo quy ước roomledger-{stage}-{tên}, dùng chung cho StorageStack và WorkflowStack.
+// Tên bucket roomledger-{stage}-{tên}-{account}, dùng chung cho StorageStack và WorkflowStack.
+// Tên S3 là duy nhất toàn cầu nên thêm hậu tố account (Aws.ACCOUNT_ID tự thay khi deploy, không cần biết trước).
 // Ghi đè bằng -c incomingBucket=... -c derivedBucket=... -c evidenceBucket=...
-var incomingBucket = (string?)app.Node.TryGetContext("incomingBucket") ?? $"roomledger-{stage}-incoming";
-var derivedBucket = (string?)app.Node.TryGetContext("derivedBucket") ?? $"roomledger-{stage}-derived";
-var evidenceBucket = (string?)app.Node.TryGetContext("evidenceBucket") ?? $"roomledger-{stage}-evidence";
+string BucketName(string purpose) =>
+    (string?)app.Node.TryGetContext($"{purpose}Bucket") ?? $"roomledger-{stage}-{purpose}-{Aws.ACCOUNT_ID}";
+var incomingBucket = BucketName("incoming");
+var derivedBucket = BucketName("derived");
+var evidenceBucket = BucketName("evidence");
 
 var network = new NetworkStack(app, Id("network"), new NetworkStackProps { Env = env, Stage = stage });
 new SecurityStack(app, Id("security"), P());
