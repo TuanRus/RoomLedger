@@ -281,6 +281,18 @@ paths:
         "200": { $ref: "#/components/responses/Inspection" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { description: INVALID_STATE (hợp đồng đã quyết toán), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /tenancies/{tenancyId}/inspections/move-out:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    post:
+      tags: [MD-06]
+      summary: Người thuê mở biên bản trả phòng (MD-06-FE-01, BR-25 RULE 1); đã có thì trả lại biên bản đó
+      description: Khu vực chép nguyên bản sao của biên bản nhận phòng. Hợp đồng chuyển sang MOVING_OUT. referenceInspectionId là biên bản nhận phòng để lấy ảnh đối chiếu qua GET /inspections/{id}/photos.
+      responses:
+        "201": { $ref: "#/components/responses/Inspection" }
+        "200": { $ref: "#/components/responses/Inspection" }
+        "403": { description: FORBIDDEN (không phải người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: NO_MOVE_IN_RECORD (chưa có biên bản nhận phòng đã khóa) hoặc INVALID_STATE (hợp đồng không ACTIVE), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /inspections/{inspectionId}:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     get:
@@ -814,3 +826,4 @@ components:
         landlordConfirmedAt: { type: string, format: date-time, nullable: true }
         tenantConfirmedAt: { type: string, format: date-time, nullable: true }
         areas: { type: array, description: Bản sao khu vực lúc mở biên bản (BR-15 R2), items: { $ref: "#/components/schemas/InspectionAreaResponse" } }
+        referenceInspectionId: { type: string, format: uuid, nullable: true, description: Biên bản trả phòng → id biên bản nhận phòng; biên bản nhận phòng → null }
