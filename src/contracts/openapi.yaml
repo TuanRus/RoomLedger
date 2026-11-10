@@ -289,6 +289,24 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Inspection" }
         "404": { $ref: "#/components/responses/Error" }
+  /inspections/{inspectionId}/photos:
+    parameters: [{ $ref: "#/components/parameters/InspectionId" }]
+    get:
+      tags: [MD-04]
+      summary: Danh sách ảnh của biên bản theo thứ tự gửi, kèm URL xem và thumbnail có hạn 5 phút
+      description: Bỏ ảnh PENDING_UPLOAD. Ảnh đang xử lý (RECEIVED) có viewUrl/thumbnailUrl null. Dùng cho màn hình biên bản và ảnh đối chiếu khi trả phòng (MD-06-FE-01).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  data: { type: array, items: { $ref: "#/components/schemas/InspectionPhotoResponse" } }
+        "404": { $ref: "#/components/responses/Error" }
   /inspections/{inspectionId}/confirm:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     post:
@@ -770,6 +788,22 @@ components:
         minPhotos: { type: integer }
         sortOrder: { type: integer }
         photoCount: { type: integer, description: Số ảnh đã gửi cho khu vực này }
+    InspectionPhotoResponse:
+      type: object
+      properties:
+        photoId: { type: string, format: uuid }
+        areaId: { type: string, format: uuid }
+        fileName: { type: string }
+        status: { type: string, enum: [RECEIVED, READY, SEALED] }
+        uploaderRole: { type: string, enum: [LANDLORD, TENANT] }
+        uploadedByMe: { type: boolean }
+        captureSource: { type: string, enum: [CAMERA, GALLERY] }
+        exifTakenAt: { type: string, format: date-time, nullable: true }
+        oldPhotoWarning: { type: boolean, description: Ảnh chụp cách lúc gửi quá ngưỡng (mặc định 3 ngày) }
+        uploadedAt: { type: string, format: date-time }
+        viewUrl: { type: string, format: uri, nullable: true, description: Presigned GET bản xem trong bucket derived, hạn 5 phút }
+        thumbnailUrl: { type: string, format: uri, nullable: true, description: Presigned GET thumbnail 400 px, hạn 5 phút }
+        canDelete: { type: boolean, description: Người gọi là người gửi và biên bản chưa khóa }
     InspectionResponse:
       type: object
       properties:
