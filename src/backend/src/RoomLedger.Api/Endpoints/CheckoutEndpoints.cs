@@ -30,6 +30,14 @@ public static class CheckoutEndpoints
             ApiResults.Ok(await svc.ChargeAsync(findingId, req, ct), "Đã tính tiền")).RequireAuthorization(Policies.LandlordOrTenant);
         group.MapPost("/{findingId:guid}/dismiss", async (Guid findingId, FindingAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.DismissAsync(findingId, ct), "Đã bỏ qua")).RequireAuthorization(Policies.LandlordOrTenant);
+
+        // MD-06-FE-04 (BR-28): người thuê đồng ý / khiếu nại, chủ nhà trả lời khiếu nại
+        group.MapPost("/{findingId:guid}/accept", async (Guid findingId, FindingAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.AcceptAsync(findingId, ct), "Đã đồng ý")).RequireAuthorization(Policies.LandlordOrTenant);
+        group.MapPost("/{findingId:guid}/dispute", async (Guid findingId, DisputeFindingRequest req, FindingAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.DisputeAsync(findingId, req, ct), "Đã gửi khiếu nại")).RequireAuthorization(Policies.LandlordOrTenant);
+        group.MapPost("/{findingId:guid}/respond", async (Guid findingId, RespondFindingDisputeRequest req, FindingAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.RespondAsync(findingId, req, ct), "Đã trả lời khiếu nại")).RequireAuthorization(Policies.LandlordOrTenant);
         return api;
     }
 }
