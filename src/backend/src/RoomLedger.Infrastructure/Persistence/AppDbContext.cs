@@ -45,6 +45,7 @@ public class AppDbContext : DbContext
     public DbSet<Invite> Invites => Set<Invite>();
     public DbSet<Inspection> Inspections => Set<Inspection>();
     public DbSet<Photo> Photos => Set<Photo>();
+    public DbSet<Finding> Findings => Set<Finding>();
     public DbSet<MeterReading> MeterReadings => Set<MeterReading>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Dispute> Disputes => Set<Dispute>();
@@ -118,6 +119,8 @@ public class AppDbContext : DbContext
             || v.Tenancy!.LandlordId == _userId || v.Tenancy.TenantId == _userId);
         b.Entity<Inspection>().HasQueryFilter(i => _isSystem
             || i.Tenancy!.LandlordId == _userId || i.Tenancy.TenantId == _userId);
+        b.Entity<Finding>().HasQueryFilter(f => _isSystem
+            || f.Inspection!.Tenancy!.LandlordId == _userId || f.Inspection.Tenancy.TenantId == _userId);
         b.Entity<MeterReading>().HasQueryFilter(m => _isSystem
             || m.Tenancy!.LandlordId == _userId || m.Tenancy.TenantId == _userId);
         b.Entity<Invoice>().HasQueryFilter(i => _isSystem

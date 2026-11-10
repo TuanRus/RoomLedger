@@ -31,6 +31,10 @@ public static class AuditEventTypes
     public const string PhotoDeleteDenied = "PHOTO_DELETE_DENIED";
     public const string InspectionConfirmed = "INSPECTION_CONFIRMED";
     public const string InspectionLocked = "INSPECTION_LOCKED";
+    public const string FindingCharged = "FINDING_CHARGED";     // Sang: BR-27 RULE 1
+    public const string FindingDismissed = "FINDING_DISMISSED"; // Sang: BR-27 RULE 2
+    public const string FindingAdded = "FINDING_ADDED";         // Sang: BR-27 RULE 3 (mục tay)
+    public const string FindingsSent = "FINDINGS_SENT";         // Sang: BR-27 RULE 4
     public const string MoveOutSubmitted = "MOVE_OUT_SUBMITTED";   // Sang: BR-25 RULE 4
     public const string EvidenceSealed = "EVIDENCE_SEALED";
     public const string EvidenceHashMismatch = "EVIDENCE_HASH_MISMATCH";

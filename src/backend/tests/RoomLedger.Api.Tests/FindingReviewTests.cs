@@ -51,7 +51,7 @@ public class FindingReviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
             FileName = "a.jpg", ContentType = "image/jpeg", Size = 1000, Sha256 = Scenario.Sha,
             IncomingKey = $"k/{Guid.NewGuid()}.jpg", Status = FileStatus.Ready,
         };
-        await factory.WithDbAsync(async db => { db.Photos.Add(photo); await db.SaveChangesAsync(); });
+        await factory.WithDbAsync(async db => { db.Photos.Add(photo); return await db.SaveChangesAsync(); });
         return photo.Id;
     }
 
@@ -65,7 +65,7 @@ public class FindingReviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
             Description = "Mảng ố vàng cạnh cửa sổ.", BoundingBoxJson = """{"x":0.1,"y":0.2,"width":0.3,"height":0.25}""",
             Confidence = 0.82m, ModelId = "au.anthropic.claude-sonnet-4-5-20250929-v1:0",
         };
-        await factory.WithDbAsync(async db => { db.Findings.Add(finding); await db.SaveChangesAsync(); });
+        await factory.WithDbAsync(async db => { db.Findings.Add(finding); return await db.SaveChangesAsync(); });
         return finding.Id;
     }
 

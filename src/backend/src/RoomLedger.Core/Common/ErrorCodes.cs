@@ -22,6 +22,8 @@ public static class ErrorCodes
     public const string RoomOccupied = "ROOM_OCCUPIED";
     public const string IncompleteInspection = "INCOMPLETE_INSPECTION";   // Sang: BR-18 EXCEPTION 1
     public const string NoMoveInRecord = "NO_MOVE_IN_RECORD";             // Sang: BR-25 EXCEPTION 1
+    public const string PendingFindings = "PENDING_FINDINGS";             // Sang: BR-27 EXCEPTION 1
+    public const string AmountExceedsDeposit = "AMOUNT_EXCEEDS_DEPOSIT";  // Sang: BR-27 EXCEPTION 2
     public const string PeriodClosed = "PERIOD_CLOSED";
     public const string InviteInvalid = "INVITE_INVALID";
     public const string Unauthorized = "UNAUTHORIZED";

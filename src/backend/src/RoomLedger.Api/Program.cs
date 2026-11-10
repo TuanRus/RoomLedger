@@ -54,6 +54,7 @@ builder.Services.AddScoped<TenancyAppService>();
 builder.Services.AddScoped<AccountAppService>();
 builder.Services.AddScoped<UploadAppService>();
 builder.Services.AddScoped<InspectionAppService>();
+builder.Services.AddScoped<FindingAppService>();
 builder.Services.AddScoped<MeterAppService>();
 builder.Services.AddScoped<InvoiceAppService>();
 
