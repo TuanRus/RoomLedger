@@ -45,3 +45,26 @@ RoomLedger/
 | MD-04-FE-05 Xuất PDF biên bản nhận phòng | ⬜ Stretch | Quyết định ngày 25/11 |
 
 **Chưa kiểm trên AWS (T13):** chưa deploy. Cần Network + Data, StorageStack (bucket `roomledger-{stage}-incoming`, `-derived`, `-evidence` có versioning + Object Lock, bật EventBridge cho incoming) và Api/Auth.
+
+## Trạng thái MD-06 Trả phòng và quyết toán (Sang, cập nhật 2026-11-10)
+
+Nhánh `feature/md-06-move-out-compare`.
+
+| Chức năng | Trạng thái | Ghi chú |
+|---|---|---|
+| Danh sách ảnh biên bản | ✅ Xong | `GET /inspections/{id}/photos`: URL xem và thumbnail 5 phút (bucket derived), `canDelete`; dùng cho màn MD-04 và ảnh đối chiếu MD-06 |
+| MD-06-FE-01 Mở biên bản trả phòng (BR-25 RULE 1–2) | ✅ Xong | `POST /tenancies/{id}/inspections/move-out`: chỉ người thuê; cần biên bản nhận phòng LOCKED (không thì 409 `NO_MOVE_IN_RECORD`); chép khu vực của biên bản nhận phòng; hợp đồng → MOVING_OUT; `referenceInspectionId` để hiện ảnh nhận phòng |
+| MD-06-FE-01 Gửi để so sánh (BR-25 RULE 4) | ✅ Xong | `POST /inspections/{id}/submit`: đủ ảnh → COMPARING đúng một lần, phát sự kiện `MoveOutSubmitted`; biên bản trả phòng không dùng được `confirm` |
+| MD-06-FE-01 Ảnh đồng hồ tháng cuối (BR-25 RULE 3) | ❌ **Chưa nối** | Đang dùng upload chỉ số của MD-05 (Tuấn), chưa gắn với biên bản trả phòng |
+| MD-06-FE-02 Lọc và ghép cặp ảnh (BR-26 RULE 1–2) | ✅ Xong (logic) | Perceptual hash DCT 64 bit; ghép ảnh cùng khu vực gần nhất; dưới ngưỡng (6) → SKIPPED; giới hạn số lần gọi (30) chia đều giữa các khu vực, vượt → NOT_ANALYZED |
+| MD-06-FE-02 So ảnh bằng Bedrock (BR-26 RULE 3, EXCEPTION 2) | ✅ Xong (logic) | Prompt và schema `compareRoomPhotos`; Sonnet 4.5 → Haiku 4.5 dự phòng; cả hai lỗi → NOT_ANALYZED |
+| MD-06-FE-02 Lưu kết quả, Step Functions, chỉ số (BR-26 RULE 4–5) | ❌ **Chưa làm** | Cần thống nhất bảng `finding` với Tuấn (đề xuất trong ERD); Lambda compare-pairs, persist-results; rule `MoveOutSubmitted`; ngưỡng và giới hạn trong SSM; CloudWatch; → REVIEWING |
+| MD-06-FE-03 Chủ nhà duyệt gợi ý | ⬜ Chưa làm | |
+| MD-06-FE-04 Người thuê đồng ý hoặc khiếu nại | ⬜ Chưa làm | |
+| MD-06-FE-05 Quyết toán và biên bản thanh lý PDF | ⬜ Chưa làm | |
+
+**Cần biết:**
+- Bedrock thật chưa gọi được: tài khoản 479365371363 chưa gửi form use-case Anthropic (không phải do SCP). Test dùng Bedrock giả.
+- Chủ nhà vẫn tải được ảnh vào biên bản trả phòng qua `/uploads` (BR-25 chỉ cho người thuê); cần nhóm quyết định có chặn không.
+- Ngưỡng 6 mới kiểm trên ảnh dựng; cần chỉnh trên bộ ảnh thật.
+- Chưa kiểm trên AWS.
