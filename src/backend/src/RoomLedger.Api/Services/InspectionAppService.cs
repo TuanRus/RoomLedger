@@ -27,7 +27,7 @@ public class InspectionAppService(
     IEventPublisher events,
     ILogger<InspectionAppService> log)
 {
-    private const string OneMoveInIndex = "ux_inspection_tenancy_id_type";
+    private const string OneInspectionPerTypeIndex = "ux_inspection_tenancy_id_type";
     private static readonly TimeSpan DownloadLifetime = TimeSpan.FromMinutes(5);
 
     /**
@@ -223,10 +223,66 @@ public class InspectionAppService(
             await db.SaveChangesAsync(ct);
         }
         catch (DbUpdateException e) when (e.InnerException is PostgresException
-                                          { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: OneMoveInIndex })
+                                          { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: OneInspectionPerTypeIndex })
         {
             db.ChangeTracker.Clear();
             var winner = await FindMoveInIdAsync(tenancyId, ct);
+            if (winner is null)
+            {
+                throw;
+            }
+            return (await GetAsync(winner.Value, ct), false);
+        }
+
+        return (await GetAsync(inspection.Id, ct), true);
+    }
+
+    /**
+     * Mở biên bản trả phòng (MD-06-FE-01, BR-25 RULE 1). Chỉ người thuê; hợp đồng ACTIVE và biên bản nhận phòng LOCKED
+     * (không thì 409 NO_MOVE_IN_RECORD). Khu vực chép nguyên bản sao của biên bản nhận phòng để so đúng khu vực cũ;
+     * hợp đồng → MOVING_OUT trong cùng lần lưu. Đã có biên bản trả phòng → trả lại biên bản đó (200); hai request
+     * cùng lúc: index unique (tenancy_id, type) chỉ cho một bản, bên thua rollback cả việc đổi trạng thái hợp đồng.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public async Task<(InspectionResponse Inspection, bool Created)> OpenMoveOutAsync(Guid tenancyId, CancellationToken ct)
+    {
+        var tenancy = await db.Tenancies.FirstOrDefaultAsync(t => t.Id == tenancyId, ct)
+            ?? throw new NotFoundException("Không tìm thấy hợp đồng");
+        if (user.UserId != tenancy.TenantId)
+        {
+            throw new ForbiddenException("Chỉ người thuê mới mở được biên bản trả phòng");
+        }
+        if (await FindIdAsync(tenancyId, InspectionType.MoveOut, ct) is { } existingId)
+        {
+            return (await GetAsync(existingId, ct), false);
+        }
+
+        var moveIn = await db.Inspections.AsNoTracking()
+            .Where(i => i.TenancyId == tenancyId && i.Type == InspectionType.MoveIn)
+            .Select(i => new { i.Status, i.AreaSnapshotJson }).FirstOrDefaultAsync(ct);
+        InspectionStateMachine.EnsureCanOpenMoveOut(tenancy, moveIn?.Status);
+
+        var inspection = new Inspection
+        {
+            TenancyId = tenancy.Id,
+            Type = InspectionType.MoveOut,
+            Status = InspectionStatus.Open,
+            AreaSnapshotJson = moveIn!.AreaSnapshotJson,
+        };
+        db.Inspections.Add(inspection);
+        tenancy.Status = TenancyStatus.MovingOut;
+        db.Audit(AuditEventTypes.InspectionOpened, nameof(Inspection), inspection.Id, """{"type":"MOVE_OUT"}""");
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException e) when (e.InnerException is PostgresException
+                                          { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: OneInspectionPerTypeIndex })
+        {
+            db.ChangeTracker.Clear();
+            var winner = await FindIdAsync(tenancyId, InspectionType.MoveOut, ct);
             if (winner is null)
             {
                 throw;
@@ -254,8 +310,9 @@ public class InspectionAppService(
         var areas = InspectionService.ParseSnapshot(inspection.AreaSnapshotJson)
             .Select(a => new InspectionAreaResponse(a.RoomAreaId, a.Name, a.MinPhotos, a.SortOrder, counts.GetValueOrDefault(a.RoomAreaId)))
             .ToList();
+        var reference = inspection.Type == InspectionType.MoveOut ? await FindMoveInIdAsync(inspection.TenancyId, ct) : null;
         return new InspectionResponse(inspection.Id, inspection.TenancyId, inspection.Type, inspection.Status,
-            inspection.LandlordConfirmedAt, inspection.TenantConfirmedAt, areas);
+            inspection.LandlordConfirmedAt, inspection.TenantConfirmedAt, areas, reference);
     }
 
     /**
@@ -287,7 +344,9 @@ public class InspectionAppService(
         }).ToList();
     }
 
-    private async Task<Guid?> FindMoveInIdAsync(Guid tenancyId, CancellationToken ct) =>
-        await db.Inspections.Where(i => i.TenancyId == tenancyId && i.Type == InspectionType.MoveIn)
+    private async Task<Guid?> FindIdAsync(Guid tenancyId, InspectionType type, CancellationToken ct) =>
+        await db.Inspections.Where(i => i.TenancyId == tenancyId && i.Type == type)
             .Select(i => (Guid?)i.Id).FirstOrDefaultAsync(ct);
+
+    private Task<Guid?> FindMoveInIdAsync(Guid tenancyId, CancellationToken ct) => FindIdAsync(tenancyId, InspectionType.MoveIn, ct);
 }

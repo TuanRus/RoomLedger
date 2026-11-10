@@ -23,7 +23,8 @@ public record InspectionResponse(
     InspectionStatus Status,
     DateTimeOffset? LandlordConfirmedAt,
     DateTimeOffset? TenantConfirmedAt,
-    IReadOnlyList<InspectionAreaResponse> Areas);
+    IReadOnlyList<InspectionAreaResponse> Areas,
+    Guid? ReferenceInspectionId = null);   // biên bản trả phòng: id biên bản nhận phòng để hiện ảnh đối chiếu
 
 /**
  * Body POST /inspections/{id}/confirm: agreed = người dùng đã tích ô cam kết (BR-18 TRIGGER).

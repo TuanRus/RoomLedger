@@ -47,6 +47,24 @@ public static class InspectionStateMachine
         }
     }
 
+    /**
+     * Mở biên bản trả phòng (BR-25): hợp đồng phải ACTIVE và biên bản nhận phòng đã LOCKED.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public static void EnsureCanOpenMoveOut(Tenancy tenancy, InspectionStatus? moveInStatus)
+    {
+        if (tenancy.Status != TenancyStatus.Active)
+        {
+            throw new InvalidStateException("Hợp đồng không ở trạng thái đang thuê, không mở biên bản trả phòng được");
+        }
+        if (moveInStatus != InspectionStatus.Locked)
+        {
+            throw new ConflictException(ErrorCodes.NoMoveInRecord, "Chưa có biên bản nhận phòng đã khóa");
+        }
+    }
+
     public static void EnsureCanOpenMoveIn(Tenancy tenancy)
     {
         if (tenancy.Status == TenancyStatus.Settled)

@@ -23,6 +23,15 @@ public static class InspectionEndpoints
                 : ApiResults.Ok(inspection, "Hợp đồng đã có biên bản nhận phòng");
         }).RequireAuthorization(Policies.LandlordOrTenant);
 
+        // MD-06-FE-01: người thuê mở biên bản trả phòng; tạo mới → 201, đã có → 200
+        api.MapPost("/tenancies/{tenancyId:guid}/inspections/move-out", async (Guid tenancyId, InspectionAppService svc, CancellationToken ct) =>
+        {
+            var (inspection, created) = await svc.OpenMoveOutAsync(tenancyId, ct);
+            return created
+                ? ApiResults.Created(inspection, "Đã mở biên bản trả phòng")
+                : ApiResults.Ok(inspection, "Hợp đồng đã có biên bản trả phòng");
+        }).RequireAuthorization(Policies.LandlordOrTenant);
+
         var group = api.MapGroup("/inspections");
         group.MapGet("/{inspectionId:guid}", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.GetAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
