@@ -40,6 +40,11 @@ public static class InspectionEndpoints
         group.MapGet("/{inspectionId:guid}/photos", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.ListPhotosAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
 
+        // MD-06-FE-01 RULE 4: người thuê gửi biên bản trả phòng để so sánh
+        group.MapPost("/{inspectionId:guid}/submit", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.SubmitMoveOutAsync(inspectionId, ct), "Đã gửi biên bản để so sánh"))
+            .RequireAuthorization(Policies.LandlordOrTenant);
+
         // MD-04-FE-04: xác nhận; đủ hai bên thì khóa
         group.MapPost("/{inspectionId:guid}/confirm", async (Guid inspectionId, ConfirmInspectionRequest req, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.ConfirmAsync(inspectionId, req, ct), "Đã ghi nhận xác nhận"))

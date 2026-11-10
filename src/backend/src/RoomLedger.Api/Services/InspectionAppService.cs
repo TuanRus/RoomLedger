@@ -48,6 +48,7 @@ public class InspectionAppService(
             .FirstOrDefaultAsync(i => i.Id == inspectionId, ct)
             ?? throw new NotFoundException("Không tìm thấy biên bản");
         InspectionStateMachine.EnsureCanConfirm(inspection.Status);
+        InspectionStateMachine.EnsureIsMoveIn(inspection.Type);
         var tenancy = inspection.Tenancy!;
         var isLandlord = user.UserId == tenancy.LandlordId;
         if (!isLandlord && user.UserId != tenancy.TenantId)
@@ -291,6 +292,61 @@ public class InspectionAppService(
         }
 
         return (await GetAsync(inspection.Id, ct), true);
+    }
+
+    /**
+     * Gửi biên bản trả phòng để so sánh (MD-06-FE-01, BR-25 RULE 4). Chỉ người thuê. Trong một transaction:
+     * UPDATE có điều kiện OPEN → COMPARING trước (giữ khóa dòng, nên xóa ảnh không chen vào), rồi kiểm mỗi khu vực
+     * đủ ảnh READY (thiếu → rollback, 409 INCOMPLETE_INSPECTION). Sau commit phát MoveOutSubmitted để Step Functions
+     * so ảnh (MD-06-FE-02). Đã COMPARING → 200, không phát lại; đã qua bước so sánh → 409 RECORD_LOCKED.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public async Task<InspectionResponse> SubmitMoveOutAsync(Guid inspectionId, CancellationToken ct)
+    {
+        var inspection = await db.Inspections.AsNoTracking().Include(i => i.Tenancy)
+            .FirstOrDefaultAsync(i => i.Id == inspectionId, ct)
+            ?? throw new NotFoundException("Không tìm thấy biên bản");
+        InspectionStateMachine.EnsureIsMoveOut(inspection.Type);
+        var tenancy = inspection.Tenancy!;
+        if (user.UserId != tenancy.TenantId)
+        {
+            throw new ForbiddenException("Chỉ người thuê mới gửi được biên bản trả phòng");
+        }
+
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            var rows = await db.Inspections.Where(i => i.Id == inspectionId && i.Status == InspectionStatus.Open)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, InspectionStatus.Comparing)
+                    .SetProperty(i => i.UpdatedAt, clock.GetUtcNow()), ct);
+            if (rows == 0)
+            {
+                var current = await db.Inspections.Where(i => i.Id == inspectionId).Select(i => i.Status).SingleAsync(ct);
+                if (current == InspectionStatus.Comparing)
+                {
+                    return await GetAsync(inspectionId, ct);   // gửi lại (bấm hai lần): không khởi động so sánh lần nữa
+                }
+                throw new RecordLockedException("Biên bản trả phòng đã qua bước so sánh");
+            }
+
+            var photos = await db.Photos.Where(p => p.InspectionId == inspectionId)
+                .Select(p => new { p.RoomAreaId, p.Status }).ToListAsync(ct);
+            var missing = InspectionService.FindIncompleteAreas(
+                InspectionService.ParseSnapshot(inspection.AreaSnapshotJson), photos.Select(p => (p.RoomAreaId, p.Status)));
+            if (missing.Count > 0)
+            {
+                throw new ConflictException(ErrorCodes.IncompleteInspection, "Biên bản chưa đủ ảnh: " + string.Join(", ", missing));
+            }
+
+            db.Audit(AuditEventTypes.MoveOutSubmitted, nameof(Inspection), inspectionId);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+
+        var moveInId = await FindMoveInIdAsync(tenancy.Id, ct);
+        await events.PublishAsync("MoveOutSubmitted", new { inspectionId, tenancyId = tenancy.Id, moveInInspectionId = moveInId }, ct);
+        return await GetAsync(inspectionId, ct);
     }
 
     /**
