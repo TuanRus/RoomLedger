@@ -46,7 +46,7 @@ RoomLedger/
 
 **Chưa kiểm trên AWS (T13):** chưa deploy. Cần Network + Data, StorageStack (bucket `roomledger-{stage}-incoming`, `-derived`, `-evidence` có versioning + Object Lock, bật EventBridge cho incoming) và Api/Auth.
 
-## Trạng thái MD-06 Trả phòng và quyết toán (Sang, cập nhật 2026-11-10)
+## Trạng thái MD-06 Trả phòng và quyết toán (Sang, cập nhật 2026-11-10, chiều)
 
 Nhánh `feature/md-06-move-out-compare`.
 
@@ -59,8 +59,8 @@ Nhánh `feature/md-06-move-out-compare`.
 | MD-06-FE-02 Lọc và ghép cặp ảnh (BR-26 RULE 1–2) | ✅ Xong (logic) | Perceptual hash DCT 64 bit; ghép ảnh cùng khu vực gần nhất; dưới ngưỡng (6) → SKIPPED; giới hạn số lần gọi (30) chia đều giữa các khu vực, vượt → NOT_ANALYZED |
 | MD-06-FE-02 So ảnh bằng Bedrock (BR-26 RULE 3, EXCEPTION 2) | ✅ Xong (logic) | Prompt và schema `compareRoomPhotos`; Sonnet 4.5 → Haiku 4.5 dự phòng; cả hai lỗi → NOT_ANALYZED |
 | MD-06-FE-02 Lưu kết quả, Step Functions, chỉ số (BR-26 RULE 4–5) | ❌ **Chưa làm** | Cần thống nhất bảng `finding` với Tuấn (đề xuất trong ERD); Lambda compare-pairs, persist-results; rule `MoveOutSubmitted`; ngưỡng và giới hạn trong SSM; CloudWatch; → REVIEWING |
-| MD-06-FE-03 Chủ nhà duyệt gợi ý | ⬜ Chưa làm | |
-| MD-06-FE-04 Người thuê đồng ý hoặc khiếu nại | ⬜ Chưa làm | |
+| MD-06-FE-03 Chủ nhà duyệt gợi ý (BR-27) | ✅ Xong | Bảng `finding` (thiết kế của Sang, chờ Tuấn duyệt; migration `Md06_Finding`). `GET/POST /inspections/{id}/findings`, `POST /findings/{id}/charge`, `/dismiss`, `POST /inspections/{id}/send-to-tenant`; tổng tiền ≤ tiền cọc (`AMOUNT_EXCEEDS_DEPOSIT`); còn gợi ý chưa xử lý → `PENDING_FINDINGS` |
+| MD-06-FE-04 Người thuê đồng ý hoặc khiếu nại (BR-28) | ✅ Xong | `POST /findings/{id}/accept`, `/dispute` (lý do ≥ 10 ký tự, tạo `dispute` FINDING), `/respond` (chủ nhà: CORRECTED / KEPT / REMOVED); người thuê đồng ý lại → RESOLVED. Email báo hai bên chờ `notify` |
 | MD-06-FE-05 Quyết toán và biên bản thanh lý PDF | ⬜ Chưa làm | |
 
 **Cần biết:**
