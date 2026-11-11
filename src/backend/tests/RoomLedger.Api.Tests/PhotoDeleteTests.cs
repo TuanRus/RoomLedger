@@ -143,7 +143,8 @@ public class PhotoDeleteTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("PHOTO_DELETED", evt.GetProperty("reason").GetString());
         var detail = await factory.WithDbAsync(db => db.AuditEvents
             .Where(a => a.TargetId == seed.PhotoId && a.EventType == "PHOTO_DELETED").Select(a => a.DetailJson).SingleAsync());
-        Assert.Contains("\"reopened\":true", detail);
+        using var json = System.Text.Json.JsonDocument.Parse(detail!);   // jsonb tự định dạng lại, so theo JSON
+        Assert.True(json.RootElement.GetProperty("reopened").GetBoolean());
     }
 
     [Fact]
