@@ -22,8 +22,11 @@ public class InspectionConfirmTests(ApiFactory factory) : IClassFixture<ApiFacto
     private static string ConfirmUrl(Guid id) => $"/api/v1/inspections/{id}/confirm";
     private static readonly object Agreed = new { agreed = true };
 
-    /** Hợp đồng ACTIVE + biên bản nhận phòng mở; complete = mỗi khu vực đủ ảnh READY. */
-    private async Task<Seed> SeedAsync(bool complete = true, FileStatus status = FileStatus.Ready)
+    /**
+     * Hợp đồng ACTIVE + biên bản nhận phòng mở; complete = mỗi khu vực đủ ảnh READY;
+     * readings = đã nhập chỉ số điện nước ban đầu (BR-18 RULE 5, Sang).
+     */
+    private async Task<Seed> SeedAsync(bool complete = true, FileStatus status = FileStatus.Ready, bool readings = true)
     {
         var s = await new Scenario(factory).WithActiveTenancyAsync();
         var opened = await (await s.TenantClient.PostAsync($"/api/v1/tenancies/{s.TenancyId}/inspections/move-in", null)).DataAsync();
@@ -47,7 +50,28 @@ public class InspectionConfirmTests(ApiFactory factory) : IClassFixture<ApiFacto
             }
             return db.SaveChangesAsync();
         });
+        if (readings)
+        {
+            await factory.WithDbAsync(db => db.Tenancies.Where(t => t.Id == s.TenancyId).ExecuteUpdateAsync(x => x
+                .SetProperty(t => t.OpeningElectricity, 1200L).SetProperty(t => t.OpeningWater, 35L)));
+        }
         return new Seed(s, inspectionId);
+    }
+
+    [Fact]
+    public async Task MissingOpeningReadings_Gets409_IncompleteInspection_NamingThem()   // BR-18 RULE 5 (Sang)
+    {
+        var seed = await SeedAsync(readings: false);
+
+        var res = await seed.S.TenantClient.PostJsonAsync(ConfirmUrl(seed.InspectionId), Agreed);
+
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        var body = await res.JsonAsync();
+        Assert.Equal("INCOMPLETE_INSPECTION", body.GetProperty("errorCode").GetString());
+        Assert.Contains("chỉ số", body.GetProperty("message").GetString());
+        var inspection = await LoadAsync(seed.InspectionId);
+        Assert.Equal(InspectionStatus.Open, inspection.Status);
+        Assert.Null(inspection.TenantConfirmedAt);
     }
 
     private Task<Inspection> LoadAsync(Guid id) => factory.WithDbAsync(db => db.Inspections.AsNoTracking().SingleAsync(i => i.Id == id));
