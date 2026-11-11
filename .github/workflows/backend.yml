@@ -3,18 +3,30 @@ name: backend
 on:
   pull_request:
     branches: [develop, main]
-    paths: ["src/backend/**"]
+    paths: ["src/backend/**", "src/contracts/**"]
   push:
     branches: [develop, main]
-    paths: ["src/backend/**"]
+    paths: ["src/backend/**", "src/contracts/**"]
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Chỉ dùng cho DB tạm trong CI; mỗi fixture tạo/xoá DB roomledger_test_* riêng
+      ROOMLEDGER_TEST_DB: Host=localhost;Port=5432;Username=postgres;Password=postgres
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -23,3 +35,25 @@ jobs:
       - run: dotnet restore src/backend/RoomLedger.sln
       - run: dotnet build src/backend/RoomLedger.sln --no-restore -c Release
       - run: dotnet test src/backend/RoomLedger.sln --no-build -c Release --filter "FullyQualifiedName!~SecurityTests"
+      - name: Migration script (idempotent)
+        # --no-transactions: Lambda migrate tự mở một transaction cho cả script và GrantSql.
+        # Nếu script có COMMIT riêng, transaction của Lambda kết thúc sớm và GrantSql lỗi
+        # (xem tests/RoomLedger.Functions.Tests/Migrate/MigrateFunctionTests.cs).
+        run: |
+          dotnet tool restore   # dotnet-ef 8.x ghim trong .config/dotnet-tools.json
+          dotnet ef migrations script --idempotent --no-transactions \
+            --project src/backend/src/RoomLedger.Infrastructure \
+            --startup-project src/backend/src/RoomLedger.Infrastructure \
+            -o migrate.sql
+        env:
+          ROOMLEDGER_DB: Host=localhost;Database=design;Username=postgres;Password=postgres
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrate-sql
+          path: migrate.sql
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx --yes @redocly/cli@1.25.11 lint src/contracts/openapi.yaml

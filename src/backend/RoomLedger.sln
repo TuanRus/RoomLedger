@@ -1,4 +1,4 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -22,6 +22,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoomLedger.Api.Tests", "tests\RoomLedger.Api.Tests\RoomLedger.Api.Tests.csproj", "{926AFD8A-FE29-4F93-842D-DCFE4BEDEE07}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoomLedger.SecurityTests", "tests\RoomLedger.SecurityTests\RoomLedger.SecurityTests.csproj", "{45379805-F551-49B5-A952-1C2604E0E3D0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoomLedger.Functions.Tests", "tests\RoomLedger.Functions.Tests\RoomLedger.Functions.Tests.csproj", "{96C92AC9-6A20-4717-B254-0DF7F90162DC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -61,6 +63,10 @@ Global
 		{45379805-F551-49B5-A952-1C2604E0E3D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{45379805-F551-49B5-A952-1C2604E0E3D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{45379805-F551-49B5-A952-1C2604E0E3D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96C92AC9-6A20-4717-B254-0DF7F90162DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96C92AC9-6A20-4717-B254-0DF7F90162DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96C92AC9-6A20-4717-B254-0DF7F90162DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96C92AC9-6A20-4717-B254-0DF7F90162DC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{726E86B1-F2F1-47A1-B684-549EC503A226} = {ECDE61F7-291F-4009-9DCC-6081B6A359D3}
@@ -71,5 +77,6 @@ Global
 		{CB6B2A9D-A4C9-483E-992A-E8CF6AC4CEB6} = {FFFD7CD9-552F-4897-B5AE-6CF208EA15E9}
 		{926AFD8A-FE29-4F93-842D-DCFE4BEDEE07} = {FFFD7CD9-552F-4897-B5AE-6CF208EA15E9}
 		{45379805-F551-49B5-A952-1C2604E0E3D0} = {FFFD7CD9-552F-4897-B5AE-6CF208EA15E9}
+		{96C92AC9-6A20-4717-B254-0DF7F90162DC} = {FFFD7CD9-552F-4897-B5AE-6CF208EA15E9}
 	EndGlobalSection
 EndGlobal

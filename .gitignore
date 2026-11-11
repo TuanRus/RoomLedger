@@ -28,3 +28,17 @@ appsettings.Development.json
 .idea/
 Thumbs.db
 .DS_Store
+
+# --- added when merging Sang's local work (2026-11-08) ---
+*.trx
+coverage*/
+cdk.context.json
+# Packaged Lambda code (dotnet lambda package -o artifacts/functions.zip)
+artifacts/
+# T0 toolchain check temp dir (normally auto-deleted)
+src/backend/.t0-canary/
+# Evaluation photos are large; keep labels and scripts in git
+src/evaluation/datasets/**/*.jpg
+src/evaluation/datasets/**/*.jpeg
+src/evaluation/datasets/**/*.heic
+src/evaluation/datasets/**/*.png
