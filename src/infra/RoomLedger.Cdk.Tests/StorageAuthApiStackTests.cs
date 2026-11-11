@@ -59,19 +59,50 @@ public class StorageAuthApiStackTests
 
     private static string Json(object o) => JsonSerializer.Serialize(o);
 
-    private static readonly Lazy<Template> DemoStorage = new(() =>
-    {
-        var app = new App();
-        var env = new Amazon.CDK.Environment { Account = "123456789012", Region = "ap-southeast-2" };
-        return Template.FromStack(new StorageStack(app, "TestDemoStorage", new StorageStackProps
+    private const string DemoOrigin = "https://demo.roomledger.test";
+
+    private static StorageStack NewDemoStorage(string? webOrigin) =>
+        new(new App(), "TestDemoStorage", new StorageStackProps
         {
             Stage = "demo",
-            Env = env,
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = "ap-southeast-2" },
             IncomingBucketName = "roomledger-demo-incoming",
             DerivedBucketName = "roomledger-demo-derived",
             EvidenceBucketName = "roomledger-demo-evidence",
-        }));
-    });
+            WebOrigin = webOrigin,
+        });
+
+    private static readonly Lazy<Template> DemoStorage = new(() => Template.FromStack(NewDemoStorage(DemoOrigin)));
+
+    private static string IncomingCorsJson(Template t) => Json(t.FindResources("AWS::S3::Bucket", new Dictionary<string, object>
+    {
+        ["Properties"] = Match.ObjectLike(new Dictionary<string, object> { ["CorsConfiguration"] = Match.AnyValue() }),
+    }).Values.Single());
+
+    [Fact]
+    public void Storage_Dev_WithoutWebOrigin_AllowsAnyOrigin()
+    {
+        Assert.Contains("\"AllowedOrigins\":[\"*\"]", IncomingCorsJson(Templates.Value.Storage));
+    }
+
+    [Fact]
+    public void Storage_Demo_UsesTheGivenWebOrigin()
+    {
+        var cors = IncomingCorsJson(DemoStorage.Value);
+        Assert.Contains($"\"AllowedOrigins\":[\"{DemoOrigin}\"]", cors);
+        Assert.DoesNotContain("\"*\"", cors);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("*")]
+    public void Storage_Demo_WithoutConcreteWebOrigin_FailsAtSynth(string? webOrigin)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => NewDemoStorage(webOrigin));
+        Assert.Contains("webOrigin", ex.Message);
+    }
 
     private static string EvidenceJson(Template t) => Json(t.FindResources("AWS::S3::Bucket", new Dictionary<string, object>
     {

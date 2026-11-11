@@ -61,7 +61,7 @@ var storage = new StorageStack(app, Id("storage"), new StorageStackProps
     IncomingBucketName = incomingBucket,
     DerivedBucketName = derivedBucket,
     EvidenceBucketName = evidenceBucket,
-    WebOrigin = (string?)app.Node.TryGetContext("webOrigin") ?? "*",
+    WebOrigin = (string?)app.Node.TryGetContext("webOrigin"),   // bắt buộc khi stage khác dev, xem StorageStack
 });
 var auth = new AuthStack(app, Id("auth"), new AuthStackProps
 {
