@@ -8,8 +8,8 @@ on:
     branches: [develop, main]
     paths: ["src/infra/**", "src/backend/src/RoomLedger.Functions/**", "src/backend/src/RoomLedger.Api/**"]
 
+# Mặc định chỉ đọc repo; chỉ job deploy được xin OIDC token.
 permissions:
-  id-token: write
   contents: read
 
 jobs:
@@ -32,4 +32,52 @@ jobs:
       - run: dotnet test src/infra/RoomLedger.Cdk.Tests
       - run: cdk synth -c stage=dev
         working-directory: src/infra/RoomLedger.Cdk
-      # Deploy: thêm bước aws-actions/configure-aws-credentials (OIDC) khi SecurityStack có role
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-packages
+          path: artifacts/
+          retention-days: 1
+
+  # Chỉ chạy khi push vào develop (stage dev) hoặc main (stage demo), không chạy khi PR.
+  # Trust policy của role roomledger-{stage}-github-deploy chỉ nhận sub repo:TuanRus/RoomLedger:ref:refs/heads/{nhánh},
+  # nên không dùng GitHub Environment ở đây (Environment đổi sub thành ...:environment:{tên}).
+  # Bỏ qua cho tới khi repo có biến AWS_DEPLOY_ROLE_ARN_DEV / AWS_DEPLOY_ROLE_ARN_DEMO (output GitHubDeployRoleArn).
+  deploy:
+    needs: build
+    if: >-
+      github.event_name == 'push' &&
+      ((github.ref == 'refs/heads/develop' && vars.AWS_DEPLOY_ROLE_ARN_DEV != '') ||
+       (github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN_DEMO != ''))
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    concurrency:
+      group: infra-deploy-${{ github.ref_name }}
+      cancel-in-progress: false
+    env:
+      STAGE: ${{ github.ref == 'refs/heads/main' && 'demo' || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: lambda-packages
+          path: artifacts/
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g aws-cdk
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN_DEMO || vars.AWS_DEPLOY_ROLE_ARN_DEV }}
+          aws-region: ap-southeast-2
+          role-session-name: roomledger-${{ github.run_id }}
+      # demo cần vars.WEB_ORIGIN_DEMO (origin của web cho CORS bucket incoming); dev để trống.
+      - run: cdk deploy --all --require-approval never -c stage=$STAGE ${WEB_ORIGIN:+-c webOrigin=$WEB_ORIGIN}
+        working-directory: src/infra/RoomLedger.Cdk
+        env:
+          WEB_ORIGIN: ${{ github.ref == 'refs/heads/main' && vars.WEB_ORIGIN_DEMO || '' }}

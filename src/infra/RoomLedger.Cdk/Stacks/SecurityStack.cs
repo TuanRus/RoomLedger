@@ -32,10 +32,15 @@ public class SecurityStackProps : StackProps
  * cách nhau bằng dấu phẩy; cần đổi nếu dùng GitHub Environment, khi đó sub có dạng repo:{repo}:environment:{tên});
  * cdkQualifier (hnb659fds); createGithubOidcProvider (false).
  *
+ * Rủi ro còn lại (ghi vào threat model): deploy-role cho CloudFormation chạy bằng cfn-exec-role, mà `cdk bootstrap`
+ * mặc định gắn AdministratorAccess. Nên quyền thực tế của pipeline vẫn gần như admin trong account, dù role GitHub
+ * chỉ assume được ba role trên. Giảm rủi ro: chỉ nhánh develop/main lấy được token (đã có); bootstrap kèm
+ * --cloudformation-execution-policies trỏ tới policy hẹp hơn (chỉ dịch vụ các stack dùng) khi danh sách dịch vụ đã ổn định.
+ *
  * KMS, CloudTrail, GuardDuty, Budgets, Secrets Manager sẽ được thêm ở các PR sau.
  *
  * @author Phát
- * @version 1.1
+ * @version 1.2
  */
 public class SecurityStack : Stack
 {
