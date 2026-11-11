@@ -32,6 +32,43 @@ RoomLedger/
 | Lambda concurrency | Account limit is **10** (increase requested) | Don't set reserved concurrency until it's raised |
 | Toolchain check | `bash scripts/verify-toolchain.sh` must end with `T0 RESULT: GREEN` | Checks SDK 8, dotnet-ef 8 and that no project resolves EF/Npgsql 9.x |
 
+## Deploy lần đầu (làm một lần cho mỗi AWS account)
+
+Chạy từ `src/infra/RoomLedger.Cdk`, region `ap-southeast-2`, bằng tài khoản có quyền admin (chỉ lần đầu; sau đó GitHub Actions deploy qua OIDC, không lưu AWS key trong GitHub).
+
+1. Bootstrap CDK:
+
+   ```bash
+   cdk bootstrap aws://<ACCOUNT_ID>/ap-southeast-2
+   ```
+
+2. Tạo GitHub OIDC provider. Mỗi account chỉ có **một** provider cho URL `token.actions.githubusercontent.com`, dùng chung cho dev và demo. `SecurityStack` mặc định không tạo provider mà tham chiếu provider có sẵn, nên provider phải có trước khi deploy. Chọn **một** trong hai cách, chỉ làm một lần:
+
+   - Tạo tay (khuyên dùng, không gắn với stage nào):
+
+     ```bash
+     aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com
+     ```
+
+   - Hoặc để CDK tạo khi deploy **một** stage duy nhất (provider được giữ lại khi `cdk destroy`):
+
+     ```bash
+     cdk deploy roomledger-dev-security -c stage=dev -c createGithubOidcProvider=true
+     ```
+
+   Không truyền `createGithubOidcProvider=true` cho stage thứ hai: CloudFormation sẽ báo provider đã tồn tại. Kiểm tra: `aws iam list-open-id-connect-providers`.
+
+3. Deploy stage. Stage `demo` bắt buộc có `webOrigin` (origin của web, dùng cho CORS của bucket incoming); thiếu, bỏ trống hoặc `*` thì `cdk synth` báo lỗi. Stage `dev` không truyền thì dùng `*`.
+
+   ```bash
+   cdk deploy --all -c stage=dev
+   cdk deploy --all -c stage=demo -c webOrigin=https://<domain web demo>
+   ```
+
+4. Lấy ARN role `roomledger-{stage}-github-deploy` từ output của `SecurityStack`, gắn vào bước `aws-actions/configure-aws-credentials` (`role-to-assume`) trong `.github/workflows/infra.yml`.
+
+Dọn dẹp: `cdk destroy --all -c stage=<stage>`. Được giữ lại và phải xóa tay: bucket evidence (Object Lock, mọi stage), cả ba bucket ở stage demo, và OIDC provider (chỉ xóa khi không còn stage nào dùng).
+
 ## Trạng thái MD-04 Biên bản nhận phòng (Sang, cập nhật 2026-11-08)
 
 | Chức năng | Trạng thái | Ghi chú |
