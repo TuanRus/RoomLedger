@@ -305,7 +305,7 @@ paths:
         "400": { description: VALIDATION_ERROR (thiếu hoặc âm), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "403": { description: FORBIDDEN, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: RECORD_LOCKED (biên bản đã khóa) hoặc INVALID_STATE (không phải biên bản nhận phòng, hợp đồng đã quyết toán, hoặc đã có chỉ số đồng hồ CONFIRMED), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "RECORD_LOCKED (biên bản đã khóa) hoặc INVALID_STATE (không phải biên bản nhận phòng, hợp đồng đã quyết toán, hoặc đã có chỉ số đồng hồ CONFIRMED)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /inspections/{inspectionId}/confirm:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     post:
