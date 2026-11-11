@@ -27,6 +27,11 @@ public static class InspectionEndpoints
         group.MapGet("/{inspectionId:guid}", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.GetAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
 
+        // MD-04-FE-04 BR-18 RULE 5: chỉ số điện nước ban đầu
+        group.MapPut("/{inspectionId:guid}/opening-readings", async (Guid inspectionId, OpeningReadingsRequest req, InspectionAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.SetOpeningReadingsAsync(inspectionId, req, ct), "Đã lưu chỉ số ban đầu"))
+            .RequireAuthorization(Policies.LandlordOrTenant);
+
         // MD-04-FE-04: xác nhận; đủ hai bên thì khóa
         group.MapPost("/{inspectionId:guid}/confirm", async (Guid inspectionId, ConfirmInspectionRequest req, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.ConfirmAsync(inspectionId, req, ct), "Đã ghi nhận xác nhận"))

@@ -76,10 +76,24 @@ public class InspectionAppService(
             var photos = await db.Photos.Where(p => p.InspectionId == inspectionId)
                 .Select(p => new { p.RoomAreaId, p.Status }).ToListAsync(ct);
             var missing = InspectionService.FindIncompleteAreas(
-                InspectionService.ParseSnapshot(inspection.AreaSnapshotJson), photos.Select(p => (p.RoomAreaId, p.Status)));
+                InspectionService.ParseSnapshot(inspection.AreaSnapshotJson), photos.Select(p => (p.RoomAreaId, p.Status))).ToList();
+            if (inspection.Type == InspectionType.MoveIn)
+            {
+                // BR-18 RULE 5: đọc lại trong transaction, vì bên kia có thể vừa sửa chỉ số
+                var opening = await db.Tenancies.Where(t => t.Id == tenancy.Id)
+                    .Select(t => new { t.OpeningElectricity, t.OpeningWater }).SingleAsync(ct);
+                if (opening.OpeningElectricity is null)
+                {
+                    missing.Add("chỉ số điện ban đầu");
+                }
+                if (opening.OpeningWater is null)
+                {
+                    missing.Add("chỉ số nước ban đầu");
+                }
+            }
             if (missing.Count > 0)
             {
-                throw new ConflictException(ErrorCodes.IncompleteInspection, "Biên bản chưa đủ ảnh: " + string.Join(", ", missing));
+                throw new ConflictException(ErrorCodes.IncompleteInspection, "Biên bản chưa đủ: " + string.Join(", ", missing));
             }
 
             locked = await db.Inspections
@@ -252,8 +266,72 @@ public class InspectionAppService(
         var areas = InspectionService.ParseSnapshot(inspection.AreaSnapshotJson)
             .Select(a => new InspectionAreaResponse(a.RoomAreaId, a.Name, a.MinPhotos, a.SortOrder, counts.GetValueOrDefault(a.RoomAreaId)))
             .ToList();
+        var opening = inspection.Type == InspectionType.MoveIn
+            ? await db.Tenancies.Where(t => t.Id == inspection.TenancyId)
+                .Select(t => new { t.OpeningElectricity, t.OpeningWater }).FirstOrDefaultAsync(ct)
+            : null;
         return new InspectionResponse(inspection.Id, inspection.TenancyId, inspection.Type, inspection.Status,
-            inspection.LandlordConfirmedAt, inspection.TenantConfirmedAt, areas);
+            inspection.LandlordConfirmedAt, inspection.TenantConfirmedAt, areas,
+            opening?.OpeningElectricity, opening?.OpeningWater);
+    }
+
+    /**
+     * Chỉ số điện nước ban đầu (MD-04-FE-04, BR-18 RULE 5). Hai bên nhập khi biên bản nhận phòng chưa khóa; ghi vào
+     * tenancy.opening_electricity / opening_water (MD-05 dùng làm chỉ số cũ cho hóa đơn đầu tiên). Số mới khác số cũ →
+     * hủy mọi xác nhận và biên bản về OPEN (bên kia đã xác nhận số khác), làm bằng UPDATE có điều kiện trạng thái nên
+     * không chen được vào sau lúc khóa. Lưu lại đúng số cũ thì không đổi gì.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public async Task<InspectionResponse> SetOpeningReadingsAsync(Guid inspectionId, OpeningReadingsRequest req, CancellationToken ct)
+    {
+        new Validator()
+            .Require(req.Electricity is >= 0, "electricity", "Chỉ số điện phải là số nguyên từ 0")
+            .Require(req.Water is >= 0, "water", "Chỉ số nước phải là số nguyên từ 0")
+            .ThrowIfInvalid();
+        var inspection = await db.Inspections.AsNoTracking().Include(i => i.Tenancy)
+            .FirstOrDefaultAsync(i => i.Id == inspectionId, ct)
+            ?? throw new NotFoundException("Không tìm thấy biên bản");
+        var tenancy = inspection.Tenancy!;
+        if (user.UserId != tenancy.LandlordId && user.UserId != tenancy.TenantId)
+        {
+            throw new ForbiddenException("Chỉ chủ nhà hoặc người thuê của hợp đồng mới nhập được chỉ số");
+        }
+        if (inspection.Type != InspectionType.MoveIn)
+        {
+            throw new InvalidStateException("Chỉ số ban đầu chỉ nhập trong biên bản nhận phòng");
+        }
+        InspectionStateMachine.EnsureCanChangePhotos(inspection.Status);
+        if (tenancy.OpeningElectricity == req.Electricity && tenancy.OpeningWater == req.Water)
+        {
+            return await GetAsync(inspectionId, ct);
+        }
+
+        var now = clock.GetUtcNow();
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            var reopened = await db.Inspections.Where(i => i.Id == inspectionId
+                    && (i.Status == InspectionStatus.Open || i.Status == InspectionStatus.AwaitingConfirm))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(i => i.Status, InspectionStatus.Open)
+                    .SetProperty(i => i.LandlordConfirmedAt, (DateTimeOffset?)null)
+                    .SetProperty(i => i.TenantConfirmedAt, (DateTimeOffset?)null)
+                    .SetProperty(i => i.UpdatedAt, now), ct);
+            if (reopened == 0)
+            {
+                throw new RecordLockedException("Biên bản đã khóa, không sửa được chỉ số");
+            }
+            await db.Tenancies.Where(t => t.Id == tenancy.Id).ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.OpeningElectricity, req.Electricity)
+                .SetProperty(t => t.OpeningWater, req.Water)
+                .SetProperty(t => t.UpdatedAt, now), ct);
+            db.Audit(AuditEventTypes.OpeningReadingsSet, nameof(Tenancy), tenancy.Id,
+                $$"""{"electricity":{{req.Electricity}},"water":{{req.Water}}}""");
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+        return await GetAsync(inspectionId, ct);
     }
 
     private async Task<Guid?> FindMoveInIdAsync(Guid tenancyId, CancellationToken ct) =>
