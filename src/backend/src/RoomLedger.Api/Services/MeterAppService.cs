@@ -196,18 +196,44 @@ public class MeterAppService(AppDbContext db, ICurrentUser user, IStorage storag
 
     /**
      * Chỉ số kỳ trước của nhiều phòng một lần, để không truy vấn từng phòng.
+     * Lấy chỉ số CONFIRMED gần nhất trước kỳ. Nếu chưa có kỳ nào của hợp đồng đang mở (hóa đơn đầu tiên)
+     * thì dùng chỉ số ban đầu ghi lúc nhận phòng (BR-18 RULE 5); không có cả hai thì null.
      *
      * @author Tuấn
-     * @version 1.0
+     * @version 1.1
      */
     public async Task<Dictionary<(Guid RoomId, MeterKind Kind), long?>> PreviousValuesAsync(List<Guid> roomIds, string period, CancellationToken ct)
     {
         var rows = await db.MeterReadings.AsNoTracking()
             .Where(m => roomIds.Contains(m.RoomId) && m.Status == MeterReadingStatus.Confirmed && string.Compare(m.Period, period) < 0)
             .GroupBy(m => new { m.RoomId, m.Kind })
-            .Select(g => g.OrderByDescending(m => m.Period).Select(m => new { m.RoomId, m.Kind, m.Value }).First())
+            .Select(g => g.OrderByDescending(m => m.Period).Select(m => new { m.RoomId, m.Kind, m.TenancyId, m.Value }).First())
             .ToListAsync(ct);
-        return rows.ToDictionary(r => (r.RoomId, r.Kind), r => r.Value);
+        var openings = await db.Tenancies.AsNoTracking()
+            .Where(t => roomIds.Contains(t.RoomId) && t.Status != TenancyStatus.Settled)
+            .Select(t => new { t.Id, t.RoomId, t.OpeningElectricity, t.OpeningWater })
+            .ToListAsync(ct);
+
+        var result = new Dictionary<(Guid RoomId, MeterKind Kind), long?>();
+        foreach (var roomId in roomIds.Distinct())
+        {
+            var tenancy = openings.FirstOrDefault(t => t.RoomId == roomId);
+            foreach (var kind in new[] { MeterKind.Electricity, MeterKind.Water })
+            {
+                var last = rows.FirstOrDefault(r => r.RoomId == roomId && r.Kind == kind);
+                var opening = kind == MeterKind.Electricity ? tenancy?.OpeningElectricity : tenancy?.OpeningWater;
+                // Chỉ số cũ của người thuê trước không dùng khi hợp đồng mới đã ghi chỉ số ban đầu
+                var value = last is not null && (tenancy is null || last.TenancyId == tenancy.Id || opening is null)
+                    ? last.Value
+                    : opening;
+                if (value is not null)
+                {
+                    result[(roomId, kind)] = value;
+                }
+            }
+        }
+
+        return result;
     }
 
     /**

@@ -23,7 +23,7 @@ dotnet ef database update -p src/RoomLedger.Infrastructure -s src/RoomLedger.Inf
 dotnet run --project src/RoomLedger.Api
 ```
 
-Chạy API local cần `Cognito__Authority` (vd. `https://cognito-idp.ap-southeast-1.amazonaws.com/<userPoolId>`) và `Cognito__ClientId` của User Pool dev để kiểm ID token. Trên Lambda, Cognito authorizer của API Gateway đã kiểm token.
+Chạy API local cần `Cognito__Authority` (vd. `https://cognito-idp.ap-southeast-2.amazonaws.com/<userPoolId>`) và `Cognito__ClientId` của User Pool dev để kiểm ID token. Trên Lambda, Cognito authorizer của API Gateway đã kiểm token.
 
 Test tích hợp đọc `ROOMLEDGER_TEST_DB` (mặc định `Host=localhost;Port=5432;Username=postgres;Password=postgres`).
 

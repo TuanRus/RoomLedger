@@ -9,7 +9,7 @@ namespace RoomLedger.Api.Tests;
  * Test tích hợp MD-05 (BR-20 đến BR-24).
  *
  * @author Tuấn
- * @version 1.0
+ * @version 1.1
  */
 public class MeterInvoiceTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
@@ -140,4 +140,51 @@ public class MeterInvoiceTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Empty(gen.GetProperty("created").EnumerateArray());
         Assert.Equal("MISSING_READINGS", gen.GetProperty("skipped")[0].GetProperty("reason").GetString());
     }
+    [Fact]
+    public async Task FirstInvoice_UsesOpeningReadingsWhenNoPreviousPeriod()
+    {
+        var s = await new Scenario(factory).WithActiveTenancyAsync();
+        await SetOpeningAsync(s.TenancyId, 1000, 50);
+        await s.ConfirmedReadingAsync("2026-11", MeterKind.Electricity, 1120);
+        await s.ConfirmedReadingAsync("2026-11", MeterKind.Water, 56);
+
+        var gen = await (await s.LandlordClient.PostJsonAsync($"/api/v1/properties/{s.PropertyId}/invoices:generate", new { period = "2026-11" })).DataAsync();
+        Assert.Empty(gen.GetProperty("skipped").EnumerateArray());
+        // 3.500.000 + 120 kWh × 3.500 + 6 m³ × 20.000 + 100.000 phí dịch vụ
+        Assert.Equal(4_140_000, gen.GetProperty("created")[0].GetProperty("total").GetInt64());
+
+        var invoiceId = gen.GetProperty("created")[0].GetProperty("invoiceId").GetGuid();
+        var detail = await (await s.LandlordClient.GetAsync($"/api/v1/invoices/{invoiceId}")).DataAsync();
+        Assert.Equal(1000, detail.GetProperty("electricity").GetProperty("previous").GetInt64());
+        Assert.Equal(50, detail.GetProperty("water").GetProperty("previous").GetInt64());
+    }
+
+    [Fact]
+    public async Task FirstInvoice_WithoutOpeningReadings_SkipsMissingPrevious()
+    {
+        var s = await new Scenario(factory).WithActiveTenancyAsync();
+        await SetOpeningAsync(s.TenancyId, 1000, null);
+        await s.ConfirmedReadingAsync("2026-11", MeterKind.Electricity, 1120);
+        await s.ConfirmedReadingAsync("2026-11", MeterKind.Water, 56);
+
+        var gen = await (await s.LandlordClient.PostJsonAsync($"/api/v1/properties/{s.PropertyId}/invoices:generate", new { period = "2026-11" })).DataAsync();
+        Assert.Empty(gen.GetProperty("created").EnumerateArray());
+        Assert.Equal("MISSING_PREVIOUS_READING", gen.GetProperty("skipped")[0].GetProperty("reason").GetString());
+    }
+
+    [Fact]
+    public async Task ReadingList_ShowsOpeningAsPreviousValue()
+    {
+        var s = await new Scenario(factory).WithActiveTenancyAsync();
+        await SetOpeningAsync(s.TenancyId, 1000, 50);
+        await s.ConfirmedReadingAsync("2026-11", MeterKind.Electricity, 1120);
+
+        var rows = await (await s.LandlordClient.GetAsync($"/api/v1/properties/{s.PropertyId}/meter-readings?period=2026-11")).DataAsync();
+        Assert.Equal(1000, rows[0].GetProperty("electricity").GetProperty("previousValue").GetInt64());
+    }
+
+    // Chỉ số ban đầu do MD-04 (biên bản nhận phòng) nhập; test ghi thẳng vào database
+    private Task SetOpeningAsync(Guid tenancyId, long? electricity, long? water) =>
+        factory.WithDbAsync(db => db.Tenancies.Where(t => t.Id == tenancyId)
+            .ExecuteUpdateAsync(u => u.SetProperty(t => t.OpeningElectricity, electricity).SetProperty(t => t.OpeningWater, water)));
 }

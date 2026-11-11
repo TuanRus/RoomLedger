@@ -1010,6 +1010,14 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("landlord_id");
 
+                    b.Property<long?>("OpeningElectricity")
+                        .HasColumnType("bigint")
+                        .HasColumnName("opening_electricity");
+
+                    b.Property<long?>("OpeningWater")
+                        .HasColumnType("bigint")
+                        .HasColumnName("opening_water");
+
                     b.Property<Guid>("RoomId")
                         .HasColumnType("uuid")
                         .HasColumnName("room_id");
@@ -1046,7 +1054,12 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenantId")
                         .HasDatabaseName("ix_tenancy_tenant_id");
 
-                    b.ToTable("tenancy", (string)null);
+                    b.ToTable("tenancy", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tenancy_opening_electricity", "opening_electricity IS NULL OR opening_electricity >= 0");
+
+                            t.HasCheckConstraint("ck_tenancy_opening_water", "opening_water IS NULL OR opening_water >= 0");
+                        });
                 });
 
             modelBuilder.Entity("RoomLedger.Core.Domain.TenancyFile", b =>
