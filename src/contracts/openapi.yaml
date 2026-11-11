@@ -329,7 +329,7 @@ paths:
         "200": { $ref: "#/components/responses/Inspection" }
         "403": { description: FORBIDDEN (không phải người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước so sánh), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước so sánh)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /inspections/{inspectionId}/confirm:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     post:
@@ -345,7 +345,7 @@ paths:
         "200": { $ref: "#/components/responses/Inspection" }
         "400": { description: VALIDATION_ERROR (chưa tích ô cam kết), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), RECORD_LOCKED hoặc INVALID_STATE (biên bản trả phòng không xác nhận theo cách này), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), RECORD_LOCKED hoặc INVALID_STATE (biên bản trả phòng không xác nhận theo cách này)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /photos/{photoId}:
     parameters: [{ $ref: "#/components/parameters/PhotoId" }]
     delete:
@@ -377,7 +377,7 @@ paths:
             schema: { $ref: "#/components/schemas/AddFindingRequest" }
       responses:
         "201": { description: OK, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, message: { type: string }, data: { $ref: "#/components/schemas/FindingResponse" } } } } } }
-        "400": { description: VALIDATION_ERROR (thiếu cặp ảnh nhận/trả cùng khu vực, số tiền ≤ 0) hoặc AMOUNT_EXCEEDS_DEPOSIT, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "400": { description: "VALIDATION_ERROR (thiếu cặp ảnh nhận/trả cùng khu vực, số tiền ≤ 0) hoặc AMOUNT_EXCEEDS_DEPOSIT", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
         "409": { description: INVALID_STATE (chưa REVIEWING) hoặc RECORD_LOCKED (đã gửi người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
@@ -391,7 +391,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, message: { type: string }, data: { $ref: "#/components/schemas/SendFindingsResponse" } } } } } }
         "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: PENDING_FINDINGS (còn SUGGESTED chưa xử lý), INVALID_STATE hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "PENDING_FINDINGS (còn SUGGESTED chưa xử lý), INVALID_STATE hoặc RECORD_LOCKED", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /findings/{findingId}/charge:
     parameters: [{ $ref: "#/components/parameters/FindingId" }]
     post:
@@ -426,8 +426,8 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: object, properties: { success: { type: boolean }, message: { type: string }, data: { $ref: "#/components/schemas/FindingResponse" } } } } } }
         "403": { description: FORBIDDEN (không phải người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
-        "404": { description: NOT_FOUND (mục không thuộc phòng của người thuê, BR-28 EXCEPTION 1), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
-        "409": { description: INVALID_STATE (chưa gửi, đã đồng ý, khiếu nại chưa được trả lời) hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { description: "NOT_FOUND (mục không thuộc phòng của người thuê, BR-28 EXCEPTION 1)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "INVALID_STATE (chưa gửi, đã đồng ý, khiếu nại chưa được trả lời) hoặc RECORD_LOCKED", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /findings/{findingId}/dispute:
     parameters: [{ $ref: "#/components/parameters/FindingId" }]
     post:
