@@ -125,4 +125,33 @@ public class PhotoDeleteTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Null(inspection.TenantConfirmedAt);
         Assert.Null(inspection.LandlordConfirmedAt);
     }
+
+    [Fact]
+    public async Task DeletingAfterTheLandlordConfirmed_TellsTheLandlord_AndAuditsReopened()   // review #15 điểm 2 (Tuấn)
+    {
+        var seed = await SeedAsync();
+        await factory.WithDbAsync(db => db.Inspections.Where(i => i.Id == seed.InspectionId).ExecuteUpdateAsync(x => x
+            .SetProperty(i => i.Status, InspectionStatus.AwaitingConfirm)
+            .SetProperty(i => i.LandlordConfirmedAt, factory.Clock.GetUtcNow())));
+        var landlordId = await factory.WithDbAsync(db => db.Tenancies.Where(t => t.Id == seed.S.TenancyId).Select(t => t.LandlordId).SingleAsync());
+
+        Assert.Equal(HttpStatusCode.OK, (await seed.S.TenantClient.DeleteAsync($"/api/v1/photos/{seed.PhotoId}")).StatusCode);
+
+        var evt = factory.Events.Last("InspectionReopened");
+        Assert.Equal(seed.InspectionId, evt.GetProperty("inspectionId").GetGuid());
+        Assert.Equal(landlordId, evt.GetProperty("notifyUserId").GetGuid());
+        Assert.Equal("PHOTO_DELETED", evt.GetProperty("reason").GetString());
+        var detail = await factory.WithDbAsync(db => db.AuditEvents
+            .Where(a => a.TargetId == seed.PhotoId && a.EventType == "PHOTO_DELETED").Select(a => a.DetailJson).SingleAsync());
+        Assert.Contains("\"reopened\":true", detail);
+    }
+
+    [Fact]
+    public async Task DeletingWithNoConfirmation_NoReopenedEvent()
+    {
+        var seed = await SeedAsync();
+        await seed.S.TenantClient.DeleteAsync($"/api/v1/photos/{seed.PhotoId}");
+        Assert.DoesNotContain(factory.Events.Published, e => e.DetailType == "InspectionReopened"
+            && e.Detail.GetProperty("inspectionId").GetGuid() == seed.InspectionId);
+    }
 }

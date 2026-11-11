@@ -59,6 +59,19 @@ public class InspectionConfirmTests(ApiFactory factory) : IClassFixture<ApiFacto
     }
 
     [Fact]
+    public async Task ReadingsPresent_ButPhotosMissing_MessageNamesOnlyTheArea()   // review #15 điểm 4 (Tuấn)
+    {
+        var seed = await SeedAsync(complete: false);   // readings = true
+
+        var res = await seed.S.TenantClient.PostJsonAsync(ConfirmUrl(seed.InspectionId), Agreed);
+
+        Assert.Equal(HttpStatusCode.Conflict, res.StatusCode);
+        var message = (await res.JsonAsync()).GetProperty("message").GetString();
+        Assert.Contains("Phòng ngủ", message);
+        Assert.DoesNotContain("chỉ số", message);
+    }
+
+    [Fact]
     public async Task MissingOpeningReadings_Gets409_IncompleteInspection_NamingThem()   // BR-18 RULE 5 (Sang)
     {
         var seed = await SeedAsync(readings: false);
