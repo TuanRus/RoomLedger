@@ -23,7 +23,7 @@ if (!File.Exists(functionsAsset) && !Directory.Exists(functionsAsset))
 }
 
 var network = new NetworkStack(app, Id("network"), new NetworkStackProps { Env = env, Stage = stage });
-new SecurityStack(app, Id("security"), P());
+new SecurityStack(app, Id("security"), new SecurityStackProps { Env = env, Stage = stage });
 var data = new DataStack(app, Id("data"), new DataStackProps
 {
     Env = env,
