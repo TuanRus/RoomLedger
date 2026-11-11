@@ -23,7 +23,9 @@ public record InspectionResponse(
     InspectionStatus Status,
     DateTimeOffset? LandlordConfirmedAt,
     DateTimeOffset? TenantConfirmedAt,
-    IReadOnlyList<InspectionAreaResponse> Areas);
+    IReadOnlyList<InspectionAreaResponse> Areas,
+    long? OpeningElectricity = null,   // BR-18 RULE 5: chỉ số ban đầu (chỉ biên bản nhận phòng)
+    long? OpeningWater = null);
 
 /**
  * Body POST /inspections/{id}/confirm: agreed = người dùng đã tích ô cam kết (BR-18 TRIGGER).
@@ -32,3 +34,6 @@ public record InspectionResponse(
  * @version 1.0
  */
 public record ConfirmInspectionRequest(bool? Agreed);
+
+/** Chỉ số điện nước ban đầu (BR-18 RULE 5): số nguyên từ 0, bắt buộc cả hai. */
+public record OpeningReadingsRequest(long? Electricity, long? Water);
