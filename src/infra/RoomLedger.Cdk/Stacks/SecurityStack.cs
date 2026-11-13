@@ -8,7 +8,7 @@ namespace RoomLedger.Cdk.Stacks;
  * Tham số của SecurityStack: stage được truyền qua props như các stack khác (NetworkStack, DataStack, WorkflowStack).
  *
  * @author Phát
- * @version 1.1
+ * @version 1.2
  */
 public class SecurityStackProps : StackProps
 {
@@ -35,7 +35,7 @@ public class SecurityStackProps : StackProps
  * KMS, CloudTrail, GuardDuty, Budgets, Secrets Manager sẽ được thêm ở các PR sau.
  *
  * @author Phát
- * @version 1.1
+ * @version 1.2
  */
 public class SecurityStack : Stack
 {
@@ -92,7 +92,8 @@ public class SecurityStack : Stack
         GitHubDeployRole = new Role(this, "GitHubDeployRole", new RoleProps
         {
             RoleName = $"roomledger-{stage}-github-deploy",
-            Description = "Role cho GitHub Actions deploy RoomLedger qua OIDC; chỉ assume được các role bootstrap của CDK",
+            // Description đi thẳng lên IAM, chỉ nhận ASCII hoặc Latin-1: không dùng tiếng Việt có dấu ở đây.
+            Description = "GitHub Actions deploy role for RoomLedger via OIDC; can only assume the CDK bootstrap roles",
             MaxSessionDuration = Duration.Hours(1),
             AssumedBy = new FederatedPrincipal(providerArn, new Dictionary<string, object>
             {
