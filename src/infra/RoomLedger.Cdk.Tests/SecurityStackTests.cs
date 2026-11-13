@@ -12,7 +12,7 @@ namespace RoomLedger.Cdk.Tests;
  * giới hạn nhánh theo stage và phạm vi assume role.
  *
  * @author Phát
- * @version 1.1
+ * @version 1.2
  */
 public class SecurityStackTests
 {
@@ -148,4 +148,11 @@ public class SecurityStackTests
         {
             ["MaxSessionDuration"] = 3600,
         });
+
+    [Fact]
+    public void Template_has_no_characters_beyond_latin1_because_iam_rejects_them_in_descriptions()
+    {
+        // IAM chỉ nhận Description theo mẫu [\u0009\u000A\u000D\u0020-\u007E\u00A1-\u00FF]; System.Text.Json thoát ký tự ngoài ASCII thành \uXXXX.
+        Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\\u(?!00)[0-9a-fA-F]{4}"), Json(Build()));
+    }
 }
