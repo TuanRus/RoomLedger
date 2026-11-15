@@ -319,8 +319,8 @@ public class WorkflowStackTests
         Assert.Contains("aws-sdk:cloudwatch:putMetricData", def);
         Assert.Contains("RoomLedger/Compare", def);
         Assert.Contains("\"DetailType\":\"MoveOutCompared\"", def);   // notify sẽ gửi email chủ nhà
-        Assert.Contains("$.Persisted", def);
-        Assert.Contains("$.InspectionId", def);
+        Assert.Contains("$.persist.Persisted", def);
+        Assert.Contains("$.plan.InspectionId", def);
         Assert.Contains("$.MoveOutPhotoId", def);
     }
 

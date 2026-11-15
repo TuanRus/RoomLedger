@@ -138,6 +138,7 @@ public class PlanCompareTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture>
     {
         var seed = await SeedAsync();
         var other = await new CompareScene(db, _store).BuildAsync();
+        other.Areas["Bếp"] = seed.Scene.Areas["Bếp"];   // cùng khu vực: nếu không kiểm hợp đồng thì ảnh này sẽ được ghép
         await other.AddPhotoAsync(other.MoveInId, "Bếp", FileStatus.Sealed, RoomImages.Room());
 
         var plan = await NewPlan().HandleAsync(Start(seed) with { MoveInInspectionId = other.MoveInId }, new TestLambdaContext());

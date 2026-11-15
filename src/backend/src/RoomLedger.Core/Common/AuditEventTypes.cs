@@ -41,6 +41,7 @@ public static class AuditEventTypes
     public const string FindingDisputeAnswered = "FINDING_DISPUTE_ANSWERED";   // Sang: BR-28 RULE 3
     public const string FindingResolved = "FINDING_RESOLVED";   // Sang: BR-28 RULE 3
     public const string MoveOutSubmitted = "MOVE_OUT_SUBMITTED";   // Sang: BR-25 RULE 4
+    public const string MoveOutCompared = "MOVE_OUT_COMPARED";   // Sang: BR-26 (persist-results)
     public const string OpeningReadingsSet = "OPENING_READINGS_SET";   // Sang: BR-18 RULE 5
     public const string EvidenceSealed = "EVIDENCE_SEALED";
     public const string EvidenceHashMismatch = "EVIDENCE_HASH_MISMATCH";
