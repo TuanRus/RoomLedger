@@ -1,13 +1,11 @@
 using Amazon.Lambda.Core;
+using RoomLedger.Functions.Shared;
+using RoomLedger.Infrastructure.Persistence;
 
 namespace RoomLedger.Functions.PersistResults;
 
-/// <summary>Ghi kết quả Step Functions vào RDS (trong VPC)</summary>
-public class Function
+/** RED stub. */
+public class Function(Func<AppDbContext> db)
 {
-    public Task HandleAsync(object input, ILambdaContext context)
-    {
-        context.Logger.LogInformation("PersistResults started");
-        return Task.CompletedTask;
-    }
+    public Task<PersistOutput> HandleAsync(PersistInput input, ILambdaContext context) => throw new NotImplementedException();
 }

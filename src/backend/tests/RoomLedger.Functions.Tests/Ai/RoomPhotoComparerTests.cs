@@ -26,28 +26,6 @@ public class RoomPhotoComparerTests
           "boundingBox":{"x":0.1,"y":0.2,"width":0.3,"height":0.25},"confidence":0.82}]}
         """;
 
-    /** Bedrock giả: mỗi model id trả một câu trả lời hoặc ném lỗi; ghi lại mọi request. */
-    private sealed class FakeBedrock() : AmazonBedrockRuntimeClient(new AnonymousAWSCredentials(), RegionEndpoint.APSoutheast2)
-    {
-        public Dictionary<string, Func<string>> Replies { get; } = new();
-        public List<ConverseRequest> Requests { get; } = [];
-
-        public override Task<ConverseResponse> ConverseAsync(ConverseRequest request, CancellationToken cancellationToken = default)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            Requests.Add(request);
-            var text = Replies[request.ModelId]();
-            return Task.FromResult(new ConverseResponse
-            {
-                Output = new ConverseOutput
-                {
-                    Message = new Message { Role = ConversationRole.Assistant, Content = [new ContentBlock { Text = text }] },
-                },
-                StopReason = StopReason.End_turn,
-            });
-        }
-    }
-
     private static (RoomPhotoComparer Comparer, FakeBedrock Bedrock) Create(Func<string> sonnet, Func<string>? haiku = null)
     {
         var fake = new FakeBedrock();

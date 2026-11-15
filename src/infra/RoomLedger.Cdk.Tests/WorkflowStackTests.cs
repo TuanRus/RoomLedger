@@ -18,6 +18,11 @@ public class WorkflowStackTests
     private const string Ingest = "roomledger-dev-photo-ingest";
     private const string Derive = "roomledger-dev-photo-derive";
     private const string SealFn = "roomledger-dev-evidence-seal";
+    private const string PlanFn = "roomledger-dev-plan-compare";
+    private const string PairsFn = "roomledger-dev-compare-pairs";
+    private const string PersistFn = "roomledger-dev-persist-results";
+    private const string Sonnet = "au.anthropic.claude-sonnet-4-5-20250929-v1:0";
+    private const string Haiku = "au.anthropic.claude-haiku-4-5-20251001-v1:0";
 
     private static readonly Lazy<Template> DevTemplate = new(Build);
 
@@ -70,6 +75,8 @@ public class WorkflowStackTests
     [InlineData(Ingest, "RoomLedger.Functions::RoomLedger.Functions.PhotoIngest.Function::HandleAsync")]
     [InlineData(Derive, "RoomLedger.Functions::RoomLedger.Functions.PhotoDerive.Function::HandleAsync")]
     [InlineData(SealFn, "RoomLedger.Functions::RoomLedger.Functions.EvidenceSeal.Function::HandleAsync")]
+    [InlineData(PlanFn, "RoomLedger.Functions::RoomLedger.Functions.PlanCompare.Function::HandleAsync")]
+    [InlineData(PersistFn, "RoomLedger.Functions::RoomLedger.Functions.PersistResults.Function::HandleAsync")]
     public void Functions_RunDotnet8_WithTheRightHandler_InsideTheVpc(string name, string handler)
     {
         var fn = Fn(name).Props;
@@ -201,4 +208,166 @@ public class WorkflowStackTests
     [Fact]
     public void NoPolicyAllowsEveryAction()
         => Assert.DoesNotContain("\"Action\":\"*\"", Json(Synth().FindResources("AWS::IAM::Policy")));
+
+    // ---- MD-06-FE-02 slice 3: Step Functions so ảnh trả phòng (Sang) ----
+
+    private static string Definition()
+    {
+        var sm = PropsOf(Synth().FindResources("AWS::StepFunctions::StateMachine").Values.Single());
+        var def = sm["DefinitionString"];
+        if (def is string text)
+        {
+            return text;
+        }
+        var join = (object[])((IDictionary<string, object>)def)["Fn::Join"];
+        return string.Concat(((object[])join[1]).Select(p => p as string ?? Json(p)));
+    }
+
+    private static string StateMachineLogicalId() => Synth().FindResources("AWS::StepFunctions::StateMachine").Keys.Single();
+
+    private static string StateMachinePolicy() =>
+        Json(Synth().FindResources("AWS::IAM::Policy").Values.Select(PropsOf)
+            .Where(p => Json(p["Roles"]).Contains(StateMachineLogicalId()[..^8]))
+            .ToList());
+
+    [Fact]
+    public void ComparePairs_RunsOutsideTheVpc_WithBothBedrockModels()
+    {
+        var fn = Fn(PairsFn).Props;
+        Assert.Equal("dotnet8", fn["Runtime"]);
+        Assert.Equal("RoomLedger.Functions::RoomLedger.Functions.ComparePairs.Function::HandleAsync", fn["Handler"]);
+        Assert.False(fn.ContainsKey("VpcConfig"));   // VPC không có NAT, Bedrock chỉ gọi được từ ngoài VPC
+        Assert.False(fn.ContainsKey("ReservedConcurrentExecutions"));
+        var env = (IDictionary<string, object>)((IDictionary<string, object>)fn["Environment"])["Variables"];
+        Assert.Equal(Sonnet, env["BEDROCK_PRIMARY_MODEL"]);
+        Assert.Equal(Haiku, env["BEDROCK_FALLBACK_MODEL"]);
+        Assert.Equal("roomledger-dev-derived", env["DERIVED_BUCKET"]);
+        Assert.False(env.ContainsKey("ROOMLEDGER_DB"));
+    }
+
+    [Fact]
+    public void ComparePairs_InvokesOnlyTheTwoClaudeModels_AndOnlyReadsDerived()
+    {
+        var policy = PolicyOf(Fn(PairsFn).LogicalId);
+        Assert.Contains("bedrock:InvokeModel", policy);
+        Assert.Contains("inference-profile/" + Sonnet, policy);
+        Assert.Contains("inference-profile/" + Haiku, policy);
+        Assert.Contains("foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0", policy);
+        Assert.Contains("foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0", policy);
+        Assert.Contains("roomledger-dev-derived/*", policy);
+        Assert.DoesNotContain("s3:PutObject", policy);
+        Assert.DoesNotContain("roomledger-dev-incoming", policy);
+        Assert.DoesNotContain("rds-db:connect", policy);
+        Assert.DoesNotContain("foundation-model/*", policy);
+    }
+
+    [Fact]
+    public void PlanReadsDerivedThumbnails_PersistTouchesNoS3_NeitherCallsBedrock()
+    {
+        var plan = PolicyOf(Fn(PlanFn).LogicalId);
+        Assert.Contains("s3:GetObject", plan);
+        Assert.Contains("roomledger-dev-derived/*", plan);
+        Assert.DoesNotContain("s3:PutObject", plan);
+        Assert.DoesNotContain("bedrock", plan);
+        var persist = PolicyOf(Fn(PersistFn).LogicalId);
+        Assert.DoesNotContain("s3:", persist);
+        Assert.DoesNotContain("bedrock", persist);
+        Assert.Contains("rds-db:connect", persist);
+    }
+
+    [Theory]
+    [InlineData("/roomledger/dev/compare/phash-threshold", "6")]
+    [InlineData("/roomledger/dev/compare/max-calls", "30")]
+    public void CompareSettings_AreSsmParameters_TunableWithoutDeploy(string name, string value)
+        => Synth().HasResourceProperties("AWS::SSM::Parameter", new Dictionary<string, object>
+        {
+            ["Name"] = name,
+            ["Value"] = value,
+            ["Type"] = "String",
+        });
+
+    [Fact]
+    public void MoveOutSubmittedFromTheApi_StartsTheStateMachine_WithTheEventDetail()
+        => Synth().HasResourceProperties("AWS::Events::Rule", new Dictionary<string, object>
+        {
+            ["EventPattern"] = Match.ObjectLike(new Dictionary<string, object>
+            {
+                ["source"] = new[] { "roomledger.api" },
+                ["detail-type"] = new[] { "MoveOutSubmitted" },
+            }),
+            ["Targets"] = Match.ArrayWith([Match.ObjectLike(new Dictionary<string, object>
+            {
+                ["Arn"] = new Dictionary<string, object> { ["Ref"] = StateMachineLogicalId() },
+                ["InputPath"] = "$.detail",
+            })]),
+        });
+
+    [Fact]
+    public void StateMachine_ReadsSettings_Plans_MapsComparePairs_Persists_ThenReports()
+    {
+        var def = Definition();
+        Assert.Contains("aws-sdk:ssm:getParameter", def);
+        Assert.Contains("/roomledger/dev/compare/phash-threshold", def);
+        Assert.Contains("/roomledger/dev/compare/max-calls", def);
+        Assert.Contains(Fn(PlanFn).LogicalId, def);
+        Assert.Contains("\"Type\":\"Map\"", def);
+        Assert.Contains("\"MaxConcurrency\":3", def);         // quota Bedrock tài khoản mới thấp
+        Assert.Contains(Fn(PairsFn).LogicalId, def);
+        Assert.Contains("\"Status\":\"NOT_ANALYZED\"", def);  // Catch: lỗi sau khi thử lại → không phân tích được
+        Assert.Contains("States.ALL", def);
+        Assert.Contains(Fn(PersistFn).LogicalId, def);
+        Assert.Contains("aws-sdk:cloudwatch:putMetricData", def);
+        Assert.Contains("RoomLedger/Compare", def);
+        Assert.Contains("\"DetailType\":\"MoveOutCompared\"", def);   // notify sẽ gửi email chủ nhà
+        Assert.Contains("$.Persisted", def);
+        Assert.Contains("$.InspectionId", def);
+        Assert.Contains("$.MoveOutPhotoId", def);
+    }
+
+    [Fact]
+    public void StateMachine_HasAStableName()
+        => Synth().HasResourceProperties("AWS::StepFunctions::StateMachine", new Dictionary<string, object>
+        {
+            ["StateMachineName"] = "roomledger-dev-move-out-compare",
+        });
+
+    [Fact]
+    public void StateMachineRole_InvokesTheFunctions_ReadsSettings_PutsMetricsAndEvents_NoBedrock()
+    {
+        var policy = StateMachinePolicy();
+        Assert.Contains("lambda:InvokeFunction", policy);
+        Assert.Contains("ssm:GetParameter", policy);
+        Assert.Contains("cloudwatch:PutMetricData", policy);
+        Assert.Contains("events:PutEvents", policy);
+        Assert.DoesNotContain("bedrock", policy);
+    }
+
+    [Fact]
+    public void EveryRuleTarget_HasADeadLetterQueue()
+    {
+        var rules = Synth().FindResources("AWS::Events::Rule").Values.Select(PropsOf).ToList();
+        Assert.Equal(4, rules.Count);
+        foreach (var target in rules.SelectMany(r => (object[])r["Targets"]).Cast<IDictionary<string, object>>())
+        {
+            Assert.True(target.ContainsKey("DeadLetterConfig"), Json(target));
+        }
+    }
+
+    [Fact]
+    public void Alarms_OnTheDeadLetterQueue_AndOnFailedCompareRuns()
+    {
+        Synth().HasResourceProperties("AWS::CloudWatch::Alarm", new Dictionary<string, object>
+        {
+            ["MetricName"] = "ApproximateNumberOfMessagesVisible",
+            ["Namespace"] = "AWS/SQS",
+            ["Threshold"] = 1,
+            ["ComparisonOperator"] = "GreaterThanOrEqualToThreshold",
+        });
+        Synth().HasResourceProperties("AWS::CloudWatch::Alarm", new Dictionary<string, object>
+        {
+            ["MetricName"] = "ExecutionsFailed",
+            ["Namespace"] = "AWS/States",
+            ["Threshold"] = 1,
+        });
+    }
 }

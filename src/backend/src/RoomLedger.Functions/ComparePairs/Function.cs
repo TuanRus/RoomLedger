@@ -1,13 +1,12 @@
 using Amazon.Lambda.Core;
+using RoomLedger.Ai.Compare;
+using RoomLedger.Core.Abstractions;
+using RoomLedger.Functions.Shared;
 
 namespace RoomLedger.Functions.ComparePairs;
 
-/// <summary>Lọc perceptual hash, gọi Bedrock cho cặp khác biệt (ngoài VPC)</summary>
-public class Function
+/** RED stub. */
+public class Function(IObjectStore store, RoomPhotoComparer comparer)
 {
-    public Task HandleAsync(object input, ILambdaContext context)
-    {
-        context.Logger.LogInformation("ComparePairs started");
-        return Task.CompletedTask;
-    }
+    public Task<PairResult> HandleAsync(CompareTask input, ILambdaContext context) => throw new NotImplementedException();
 }
