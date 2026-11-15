@@ -29,6 +29,7 @@ public static class AuditEventTypes
     public const string InspectionOpened = "INSPECTION_OPENED";
     public const string PhotoDeleted = "PHOTO_DELETED";
     public const string PhotoDeleteDenied = "PHOTO_DELETE_DENIED";
+    public const string PhotoIngestRejected = "PHOTO_INGEST_REJECTED";   // Sang: K2, ảnh tới sau khi khóa
     public const string InspectionConfirmed = "INSPECTION_CONFIRMED";
     public const string InspectionLocked = "INSPECTION_LOCKED";
     public const string OpeningReadingsSet = "OPENING_READINGS_SET";   // Sang: BR-18 RULE 5
