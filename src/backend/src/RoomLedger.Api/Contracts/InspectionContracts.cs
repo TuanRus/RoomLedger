@@ -24,7 +24,9 @@ public record InspectionResponse(
     DateTimeOffset? LandlordConfirmedAt,
     DateTimeOffset? TenantConfirmedAt,
     IReadOnlyList<InspectionAreaResponse> Areas,
-    Guid? ReferenceInspectionId = null);   // biên bản trả phòng: id biên bản nhận phòng để hiện ảnh đối chiếu
+    Guid? ReferenceInspectionId = null,   // biên bản trả phòng: id biên bản nhận phòng để hiện ảnh đối chiếu
+    long? OpeningElectricity = null,   // BR-18 RULE 5: chỉ số ban đầu (chỉ biên bản nhận phòng)
+    long? OpeningWater = null);
 
 /**
  * Body POST /inspections/{id}/confirm: agreed = người dùng đã tích ô cam kết (BR-18 TRIGGER).
@@ -55,3 +57,6 @@ public record InspectionPhotoResponse(
     string? ViewUrl,
     string? ThumbnailUrl,
     bool CanDelete);
+
+/** Chỉ số điện nước ban đầu (BR-18 RULE 5): số nguyên từ 0, bắt buộc cả hai. */
+public record OpeningReadingsRequest(long? Electricity, long? Water);

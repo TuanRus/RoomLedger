@@ -19,17 +19,18 @@ public static class InspectionStateMachine
      * @version 1.0
      */
     /**
-     * Gửi, xóa hoặc thay ảnh chỉ khi biên bản chưa khóa: OPEN hoặc AWAITING_CONFIRM (BR-17 RULE 2, kiểm thử K1).
-     * Từ LOCKED trở đi → 409 RECORD_LOCKED.
+     * Sửa biên bản (gửi, xóa, thay ảnh; chỉ số ban đầu) chỉ khi chưa khóa: OPEN hoặc AWAITING_CONFIRM
+     * (BR-17 RULE 2, BR-18 RULE 5, kiểm thử K1). Từ LOCKED trở đi → 409 RECORD_LOCKED. Tên cũ EnsureCanChangePhotos
+     * (đổi theo review #15).
      *
      * @author Sang
-     * @version 1.0
+     * @version 1.1
      */
-    public static void EnsureCanChangePhotos(InspectionStatus status)
+    public static void EnsureEditable(InspectionStatus status)
     {
         if (status is not (InspectionStatus.Open or InspectionStatus.AwaitingConfirm))
         {
-            throw new RecordLockedException("Biên bản đã khóa, không xóa được ảnh");
+            throw new RecordLockedException("Biên bản đã khóa, không sửa được");
         }
     }
 

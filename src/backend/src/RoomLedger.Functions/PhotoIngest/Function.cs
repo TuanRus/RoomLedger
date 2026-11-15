@@ -4,6 +4,8 @@ using Amazon.Lambda.CloudWatchEvents;
 using Microsoft.EntityFrameworkCore;
 using RoomLedger.Ai.Imaging;
 using RoomLedger.Core.Abstractions;
+using RoomLedger.Core.Common;
+using RoomLedger.Core.Domain;
 using RoomLedger.Core.Domain.Enums;
 using RoomLedger.Core.Services;
 using RoomLedger.Functions.Shared;
@@ -70,6 +72,18 @@ public class Function
 
         if (photo.Status == FileStatus.PendingUpload)
         {
+            // K2: URL cấp trước lúc khóa (hoặc gửi so sánh) nhưng ảnh tới sau → không nhận; incoming tự xóa sau 7 ngày
+            var inspection = await db.Inspections.AsNoTracking().Where(i => i.Id == photo.InspectionId)
+                .Select(i => new { i.Type, i.Status }).SingleAsync(ct);
+            if (!PhotoRules.AcceptsPhotos(inspection.Type, inspection.Status))
+            {
+                db.Audit(AuditEventTypes.PhotoIngestRejected, nameof(Photo), photo.Id,
+                    $$"""{"inspectionStatus":"{{UpperSnake(inspection.Status)}}"}""");
+                await db.SaveChangesAsync(ct);
+                context.Logger.LogWarning($"Ảnh {photo.Id} tới khi biên bản đã {inspection.Status}, không nhận");
+                return;
+            }
+
             await using (var original = await _store.OpenReadAsync(StorageBucket.Incoming, key, ct))
             {
                 // timestamptz chỉ nhận offset 0: lưu UTC (cùng thời điểm, FE hiển thị theo giờ địa phương)
@@ -83,4 +97,7 @@ public class Function
         await _events.PublishAsync(PhotoEventDetail.PhotoReceived, new PhotoEventDetail(photo.Id), ct);
         context.Logger.LogInformation($"Ảnh {photo.Id} RECEIVED, oldPhotoWarning={photo.OldPhotoWarning}");
     }
+
+    private static string UpperSnake(InspectionStatus status) =>
+        System.Text.Json.JsonNamingPolicy.SnakeCaseUpper.ConvertName(status.ToString());
 }
