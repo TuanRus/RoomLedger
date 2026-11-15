@@ -289,6 +289,23 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Inspection" }
         "404": { $ref: "#/components/responses/Error" }
+  /inspections/{inspectionId}/opening-readings:
+    parameters: [{ $ref: "#/components/parameters/InspectionId" }]
+    put:
+      tags: [MD-04]
+      summary: Nhập chỉ số điện nước ban đầu trong biên bản nhận phòng (MD-04-FE-04, BR-18 RULE 5)
+      description: Hai bên của hợp đồng nhập khi biên bản chưa khóa; ghi vào tenancy.opening_electricity / opening_water (hóa đơn đầu tiên dùng làm chỉ số cũ). Số mới khác số cũ thì mọi xác nhận bị hủy, biên bản về OPEN và bên đã xác nhận được báo qua sự kiện InspectionReopened. Xác nhận biên bản cần đủ hai chỉ số.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [electricity, water], properties: { electricity: { type: integer, format: int64, minimum: 0 }, water: { type: integer, format: int64, minimum: 0 } } }
+      responses:
+        "200": { $ref: "#/components/responses/Inspection" }
+        "400": { description: VALIDATION_ERROR (thiếu hoặc âm), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "403": { description: FORBIDDEN, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "RECORD_LOCKED (biên bản đã khóa) hoặc INVALID_STATE (không phải biên bản nhận phòng, hợp đồng đã quyết toán, hoặc đã có chỉ số đồng hồ CONFIRMED)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /inspections/{inspectionId}/confirm:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     post:
@@ -304,7 +321,7 @@ paths:
         "200": { $ref: "#/components/responses/Inspection" }
         "400": { description: VALIDATION_ERROR (chưa tích ô cam kết), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu) hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu ảnh hoặc chỉ số điện nước ban đầu còn thiếu) hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /photos/{photoId}:
     parameters: [{ $ref: "#/components/parameters/PhotoId" }]
     delete:
@@ -780,3 +797,5 @@ components:
         landlordConfirmedAt: { type: string, format: date-time, nullable: true }
         tenantConfirmedAt: { type: string, format: date-time, nullable: true }
         areas: { type: array, description: Bản sao khu vực lúc mở biên bản (BR-15 R2), items: { $ref: "#/components/schemas/InspectionAreaResponse" } }
+        openingElectricity: { type: integer, format: int64, nullable: true, description: Chỉ số điện ban đầu (BR-18 RULE 5); chỉ biên bản nhận phòng }
+        openingWater: { type: integer, format: int64, nullable: true, description: Chỉ số nước ban đầu (BR-18 RULE 5); chỉ biên bản nhận phòng }
