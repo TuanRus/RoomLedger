@@ -1,6 +1,7 @@
 using Amazon.Lambda.CloudWatchEvents;
 using Amazon.Lambda.TestUtilities;
 using ImageMagick;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Time.Testing;
 using RoomLedger.Core.Abstractions;
 using RoomLedger.Core.Domain.Enums;
@@ -134,5 +135,47 @@ public class PhotoLambdaTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture>
 
         Assert.Equal(FileStatus.PendingUpload, (await db.ReloadAsync(photo.Id)).Status);
         Assert.Empty(_store.Objects);
+    }
+
+    // ---------- K2 (Phát, 15/11): ảnh tới sau khi khóa ----------
+
+    private async Task SetInspectionAsync(Guid photoId, InspectionStatus status, InspectionType type = InspectionType.MoveIn)
+    {
+        await using var ctx = db.NewDb();
+        var inspectionId = await ctx.Photos.Where(p => p.Id == photoId).Select(p => p.InspectionId).SingleAsync();
+        await ctx.Inspections.Where(i => i.Id == inspectionId)
+            .ExecuteUpdateAsync(x => x.SetProperty(i => i.Status, status).SetProperty(i => i.Type, type));
+    }
+
+    [Theory]
+    [InlineData(InspectionType.MoveIn, InspectionStatus.Locked)]
+    [InlineData(InspectionType.MoveOut, InspectionStatus.Comparing)]
+    public async Task Ingest_PhotoArrivingAfterTheLock_IsNotReceived_NoEvent_AndAudited(InspectionType type, InspectionStatus status)
+    {
+        var photo = await db.SeedPhotoAsync(FileStatus.PendingUpload);
+        _store.Objects[(StorageBucket.Incoming, photo.IncomingKey)] = (SampleImages.Heic(), "image/heic");
+        await SetInspectionAsync(photo.Id, status, type);
+
+        await NewIngest().HandleAsync(ObjectCreated(photo.IncomingKey), new TestLambdaContext());
+
+        Assert.Equal(FileStatus.PendingUpload, (await db.ReloadAsync(photo.Id)).Status);
+        Assert.Empty(_events.Published);
+        await using var ctx = db.NewDb();
+        var detail = await ctx.AuditEvents.Where(a => a.TargetId == photo.Id && a.EventType == "PHOTO_INGEST_REJECTED")
+            .Select(a => a.DetailJson).SingleAsync();
+        Assert.Contains(status == InspectionStatus.Locked ? "LOCKED" : "COMPARING", detail);
+    }
+
+    [Fact]
+    public async Task Ingest_WhileAwaitingConfirm_StillReceivesTheMoveInPhoto()
+    {
+        var photo = await db.SeedPhotoAsync(FileStatus.PendingUpload);
+        _store.Objects[(StorageBucket.Incoming, photo.IncomingKey)] = (SampleImages.Heic(), "image/heic");
+        await SetInspectionAsync(photo.Id, InspectionStatus.AwaitingConfirm);
+
+        await NewIngest().HandleAsync(ObjectCreated(photo.IncomingKey), new TestLambdaContext());
+
+        Assert.Equal(FileStatus.Received, (await db.ReloadAsync(photo.Id)).Status);
+        Assert.Single(_events.Published);
     }
 }
