@@ -1,12 +1,20 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { AsyncPipe, JsonPipe } from '@angular/common';
+import { OidcSecurityService } from 'angular-auth-oidc-client';
+
+import { AuthService } from './core/auth/auth.service';
 
 @Component({
-  imports: [RouterOutlet],
   selector: 'app-root',
-  styleUrl: './app.scss',
+  imports: [AsyncPipe, JsonPipe],
   templateUrl: './app.html',
+  styleUrl: './app.scss',
 })
 export class App {
-  protected readonly title = signal('roomledger-web');
+  protected readonly auth = inject(AuthService);
+  protected readonly oidc = inject(OidcSecurityService);
+
+  protected readonly isAuthenticated$ = this.oidc.isAuthenticated$;
+
+  protected readonly userData$ = this.oidc.userData$;
 }
