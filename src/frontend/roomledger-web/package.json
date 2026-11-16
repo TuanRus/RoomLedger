@@ -19,6 +19,7 @@
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
     "@aws-amplify/ui-angular": "^6.0.2",
+    "angular-auth-oidc-client": "^22.0.2",
     "aws-amplify": "^6.22.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
