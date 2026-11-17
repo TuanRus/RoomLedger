@@ -49,6 +49,7 @@ public class AppDbContext : DbContext
     public DbSet<MeterReading> MeterReadings => Set<MeterReading>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Dispute> Disputes => Set<Dispute>();
+    public DbSet<Settlement> Settlements => Set<Settlement>();   // Sang: MD-06-FE-05
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
     /** Thời điểm hiện tại theo đồng hồ của context (test thay được). */
@@ -127,6 +128,8 @@ public class AppDbContext : DbContext
             || i.Tenancy!.LandlordId == _userId || i.Tenancy.TenantId == _userId);
         b.Entity<Dispute>().HasQueryFilter(d => _isSystem
             || d.Tenancy!.LandlordId == _userId || d.Tenancy.TenantId == _userId);
+        b.Entity<Settlement>().HasQueryFilter(s => _isSystem
+            || s.Tenancy!.LandlordId == _userId || s.Tenancy.TenantId == _userId);
         b.Entity<Invite>().HasQueryFilter(i => _isSystem || i.Tenancy!.LandlordId == _userId);
         b.Entity<AppUser>().HasQueryFilter(u => _isSystem || u.Id == _userId);
     }

@@ -997,6 +997,86 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.ToTable("room_area", (string)null);
                 });
 
+            modelBuilder.Entity("RoomLedger.Core.Domain.Settlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<long>("DeductionsTotal")
+                        .HasColumnType("bigint")
+                        .HasColumnName("deductions_total");
+
+                    b.Property<long>("Deposit")
+                        .HasColumnType("bigint")
+                        .HasColumnName("deposit");
+
+                    b.Property<Guid>("InspectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("inspection_id");
+
+                    b.Property<string>("PdfKey")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("pdf_key");
+
+                    b.Property<long>("Refund")
+                        .HasColumnType("bigint")
+                        .HasColumnName("refund");
+
+                    b.Property<DateTimeOffset>("SettledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("settled_at");
+
+                    b.Property<Guid>("SettledBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("settled_by");
+
+                    b.Property<Guid>("TenancyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenancy_id");
+
+                    b.Property<long>("UnpaidInvoicesTotal")
+                        .HasColumnType("bigint")
+                        .HasColumnName("unpaid_invoices_total");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_settlement");
+
+                    b.HasIndex("InspectionId")
+                        .HasDatabaseName("ix_settlement_inspection_id");
+
+                    b.HasIndex("SettledBy")
+                        .HasDatabaseName("ix_settlement_settled_by");
+
+                    b.HasIndex("TenancyId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_settlement_tenancy_id");
+
+                    b.ToTable("settlement", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_settlement_amounts", "deposit >= 0 AND deductions_total >= 0 AND unpaid_invoices_total >= 0");
+
+                            t.HasCheckConstraint("ck_settlement_refund", "refund = deposit - deductions_total - unpaid_invoices_total");
+                        });
+                });
+
             modelBuilder.Entity("RoomLedger.Core.Domain.Tenancy", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1410,6 +1490,32 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_room_area_room_room_id");
+                });
+
+            modelBuilder.Entity("RoomLedger.Core.Domain.Settlement", b =>
+                {
+                    b.HasOne("RoomLedger.Core.Domain.Inspection", null)
+                        .WithMany()
+                        .HasForeignKey("InspectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_settlement_inspection_inspection_id");
+
+                    b.HasOne("RoomLedger.Core.Domain.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("SettledBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_settlement_app_user_settled_by");
+
+                    b.HasOne("RoomLedger.Core.Domain.Tenancy", "Tenancy")
+                        .WithMany()
+                        .HasForeignKey("TenancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_settlement_tenancies_tenancy_id");
+
+                    b.Navigation("Tenancy");
                 });
 
             modelBuilder.Entity("RoomLedger.Core.Domain.Tenancy", b =>
