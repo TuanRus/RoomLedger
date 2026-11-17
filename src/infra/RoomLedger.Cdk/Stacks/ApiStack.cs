@@ -42,7 +42,7 @@ public sealed class ApiStack : Stack
 
     public ApiStack(Construct scope, string id, ApiStackProps props) : base(scope, id, props)
     {
-        string Name(string n) => $"roomledger-{props.Stage}-{n}";
+        string Name(string n) => Naming.Resource(props.Stage, n);
         var storage = props.Storage;
         var auth = props.Auth;
         var bus = EventBus.FromEventBusName(this, "Bus", "default");
@@ -68,7 +68,7 @@ public sealed class ApiStack : Stack
                 ["Storage__EvidenceBucket"] = storage.Evidence.BucketName,
                 ["Storage__DerivedBucket"] = storage.Derived.BucketName,
                 ["EventBus__BusName"] = bus.EventBusName,
-                ["EventBus__Source"] = "roomledger.api",
+                ["EventBus__Source"] = WorkflowStack.ApiSource,
             },
             // Không đặt ReservedConcurrentExecutions: giới hạn tài khoản là 10
         });

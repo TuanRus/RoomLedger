@@ -41,9 +41,9 @@ public sealed class WorkflowStackProps : StackProps
  */
 public sealed class WorkflowStack : Stack
 {
-    public const string FunctionsSource = "roomledger.functions";
+    public const string FunctionsSource = $"{Naming.Project}.functions";
     public const string PhotoReceived = "PhotoReceived";
-    public const string ApiSource = "roomledger.api";
+    public const string ApiSource = $"{Naming.Project}.api";
     public const string InspectionLocked = "InspectionLocked";
 
     public Function PhotoIngest { get; }
@@ -68,7 +68,7 @@ public sealed class WorkflowStack : Stack
         Function VpcFunction(string handlerClass, string shortName, double memory, Duration timeout) =>
             new(this, handlerClass, new FunctionProps
             {
-                FunctionName = $"roomledger-{props.Stage}-{shortName}",
+                FunctionName = Naming.Resource(props.Stage, shortName),
                 Runtime = Runtime.DOTNET_8,
                 Handler = $"RoomLedger.Functions::RoomLedger.Functions.{handlerClass}.Function::HandleAsync",
                 Code = code,

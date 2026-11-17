@@ -33,10 +33,10 @@ public sealed class DataStackProps : StackProps
  */
 public sealed class DataStack : Stack
 {
-    public const string DbName = "roomledger";
+    public const string DbName = Naming.Project;
     public const int DbPort = 5432;
     /** User ứng dụng (đăng nhập bằng IAM token), do Lambda migrate tạo và cấp quyền. */
-    public const string AppUser = "roomledger_app";
+    public const string AppUser = $"{Naming.Project}_app";
 
     public DatabaseInstance Db { get; }
     public Function Migrate { get; }
@@ -49,7 +49,7 @@ public sealed class DataStack : Stack
 
         Db = new DatabaseInstance(this, "Db", new DatabaseInstanceProps // không đổi id "Db" (sẽ tạo database mới)
         {
-            InstanceIdentifier = $"roomledger-{props.Stage}",
+            InstanceIdentifier = $"{Naming.Project}-{props.Stage}",
             Engine = engine,
             InstanceType = InstanceType.Of(InstanceClass.BURSTABLE4_GRAVITON, InstanceSize.MICRO),
             Vpc = props.Vpc,
@@ -76,7 +76,7 @@ public sealed class DataStack : Stack
 
         Migrate = new Function(this, "Migrate", new FunctionProps
         {
-            FunctionName = $"roomledger-{props.Stage}-migrate",
+            FunctionName = Naming.Resource(props.Stage, "migrate"),
             Runtime = Runtime.DOTNET_8,
             Handler = "RoomLedger.Functions::RoomLedger.Functions.Migrate.Function::HandleAsync",
             Code = Code.FromAsset(props.FunctionsAssetPath),
