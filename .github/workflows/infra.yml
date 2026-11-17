@@ -1,12 +1,13 @@
 name: infra
 
+# Functions và Api dùng chung Core, Infrastructure, Ai: đổi các project này cũng phải build và deploy lại gói Lambda.
 on:
   pull_request:
     branches: [develop, main]
-    paths: ["src/infra/**", "src/backend/src/RoomLedger.Functions/**", "src/backend/src/RoomLedger.Api/**"]
+    paths: [".github/workflows/infra.yml", "src/infra/**", "src/backend/src/RoomLedger.Functions/**", "src/backend/src/RoomLedger.Api/**", "src/backend/src/RoomLedger.Core/**", "src/backend/src/RoomLedger.Infrastructure/**", "src/backend/src/RoomLedger.Ai/**"]
   push:
     branches: [develop, main]
-    paths: ["src/infra/**", "src/backend/src/RoomLedger.Functions/**", "src/backend/src/RoomLedger.Api/**"]
+    paths: [".github/workflows/infra.yml", "src/infra/**", "src/backend/src/RoomLedger.Functions/**", "src/backend/src/RoomLedger.Api/**", "src/backend/src/RoomLedger.Core/**", "src/backend/src/RoomLedger.Infrastructure/**", "src/backend/src/RoomLedger.Ai/**"]
 
 # Mặc định chỉ đọc repo; chỉ job deploy được xin OIDC token.
 permissions:
