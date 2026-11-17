@@ -23,7 +23,7 @@ public record FileRules(IReadOnlyDictionary<string, string> Extensions, long Max
  * photo-ingest (S3 ObjectCreated) đổi sang RECEIVED khi file lên xong.
  *
  * @author Tuấn
- * @version 1.0
+ * @version 1.1
  */
 public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage storage)
 {

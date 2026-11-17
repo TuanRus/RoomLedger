@@ -4,7 +4,7 @@ namespace RoomLedger.Core.Common;
  * Loại sự kiện ghi vào audit_event (UPPER_SNAKE_CASE).
  *
  * @author Tuấn
- * @version 1.0
+ * @version 1.1
  */
 public static class AuditEventTypes
 {

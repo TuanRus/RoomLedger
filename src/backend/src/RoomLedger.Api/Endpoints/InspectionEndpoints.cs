@@ -8,7 +8,7 @@ namespace RoomLedger.Api.Endpoints;
  * Biên bản nhận phòng (MD-04). Chủ nhà hoặc người thuê của hợp đồng.
  *
  * @author Sang
- * @version 1.0
+ * @version 1.1
  */
 public static class InspectionEndpoints
 {

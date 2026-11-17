@@ -12,7 +12,7 @@ namespace RoomLedger.Infrastructure.Persistence;
  * - Enum lưu UPPER_SNAKE_CASE.
  *
  * @author Tuấn
- * @version 1.1
+ * @version 1.2
  */
 public class AppDbContext : DbContext
 {

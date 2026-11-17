@@ -11,7 +11,7 @@ namespace RoomLedger.Cdk.Tests;
  * S3 "Object Created" (bucket incoming) → photo-ingest → PhotoReceived → photo-derive.
  *
  * @author Sang
- * @version 1.0
+ * @version 1.1
  */
 public class WorkflowStackTests
 {

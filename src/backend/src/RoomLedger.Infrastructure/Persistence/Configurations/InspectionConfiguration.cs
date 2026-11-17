@@ -8,7 +8,7 @@ namespace RoomLedger.Infrastructure.Persistence.Configurations;
  * Cấu hình bảng inspection. Một biên bản mỗi loại cho mỗi hợp đồng.
  *
  * @author Tuấn
- * @version 1.0
+ * @version 1.1
  */
 public class InspectionConfiguration : IEntityTypeConfiguration<Inspection>
 {

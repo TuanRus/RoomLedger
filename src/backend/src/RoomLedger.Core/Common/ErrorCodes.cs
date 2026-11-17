@@ -4,7 +4,7 @@ namespace RoomLedger.Core.Common;
  * Bảng errorCode dùng chung giữa backend và frontend (tab 4, mục 9).
  *
  * @author Tuấn
- * @version 1.0
+ * @version 1.1
  */
 public static class ErrorCodes
 {
