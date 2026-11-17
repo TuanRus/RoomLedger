@@ -73,3 +73,16 @@ Nhánh `feature/md-06-move-out-compare`.
 - Ảnh đồng hồ: chưa Lambda nào chuyển `photo_status` của chỉ số khỏi PENDING_UPLOAD, nên lúc gửi biên bản chỉ số được tính khi ảnh đã tới **hoặc** đã có số. Cần luồng chỉ số MD-05 cập nhật `photo_status` khi ảnh tới.
 - `/src/infra/` do Phát duyệt (CODEOWNERS): thay đổi WorkflowStack cần Phát xem.
 - Chưa kiểm trên AWS.
+
+## Giám sát (ObservabilityStack, Sang, cập nhật 2026-11-17)
+
+Nhánh `feature/observability-stack` (dựa trên MD-06, mở PR sau khi MD-06 được merge).
+
+| Thành phần | Chi tiết |
+|---|---|
+| Topic SNS `roomledger-{stage}-alarms` | Mọi báo động gửi vào đây, kể cả hai báo động của WorkflowStack. **Chưa có người nhận**: Phát chọn email rồi thêm subscription |
+| Dashboard `roomledger-{stage}` | API (4xx/5xx, độ trễ), lỗi và throttle của từng Lambda, RDS (CPU, kết nối, dung lượng trống), so ảnh trả phòng (lần chạy, chỉ số `RoomLedger/Compare`), DLQ |
+| Báo động mới | `api-5xx` (≥ 5 lỗi/5 phút), `lambda-throttles` (bất kỳ throttle nào trong tài khoản), `rds-free-storage` (< 2 GB) |
+| Hạn giữ log | Lambda của WorkflowStack: 30 ngày (dev, demo), 90 ngày (prod). Lambda của Api/Auth/Data (Tuấn) chưa đặt |
+
+Tổng cộng 5 báo động và 1 dashboard: nằm trong free tier của CloudWatch. Chỉ số lấy theo tên `roomledger-{stage}-…`, không phụ thuộc output của stack khác (trừ topic, được WorkflowStack dùng).
