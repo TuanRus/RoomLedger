@@ -1,3 +1,4 @@
+using RoomLedger.Core.Domain.Enums;
 using RoomLedger.Core.Services;
 
 namespace RoomLedger.Core.Tests;
@@ -48,4 +49,18 @@ public class PhotoRulesTests
         Assert.Equal(id, PhotoRules.PhotoIdFromKey($"{Guid.NewGuid()}/{Guid.NewGuid()}/{Guid.NewGuid()}/{id}.heic"));
         Assert.Null(PhotoRules.PhotoIdFromKey("random/upload.jpg"));
     }
+
+    // K2 (Phát, 15/11): ảnh tới sau khi biên bản đã khóa hoặc đã gửi so sánh thì không được nhận
+    [Theory]
+    [InlineData(InspectionType.MoveIn, InspectionStatus.Open, true)]
+    [InlineData(InspectionType.MoveIn, InspectionStatus.AwaitingConfirm, true)]
+    [InlineData(InspectionType.MoveIn, InspectionStatus.Locked, false)]
+    [InlineData(InspectionType.MoveIn, InspectionStatus.Settled, false)]
+    [InlineData(InspectionType.MoveOut, InspectionStatus.Open, true)]
+    [InlineData(InspectionType.MoveOut, InspectionStatus.Comparing, false)]
+    [InlineData(InspectionType.MoveOut, InspectionStatus.Reviewing, false)]
+    [InlineData(InspectionType.MoveOut, InspectionStatus.AwaitingConfirm, false)]   // trả phòng: đã gửi người thuê
+    [InlineData(InspectionType.MoveOut, InspectionStatus.Settled, false)]
+    public void AcceptsPhotos_OnlyWhileTheInspectionIsStillOpenForPhotos(InspectionType type, InspectionStatus status, bool expected)
+        => Assert.Equal(expected, PhotoRules.AcceptsPhotos(type, status));
 }

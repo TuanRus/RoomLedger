@@ -1,3 +1,5 @@
+using RoomLedger.Core.Domain.Enums;
+
 namespace RoomLedger.Core.Services;
 
 /**
@@ -20,6 +22,17 @@ public static class PhotoRules
      */
     public static bool IsOldPhoto(DateTimeOffset? takenAt, DateTimeOffset receivedAt, int maxAgeDays) =>
         takenAt is { } taken && receivedAt - taken > TimeSpan.FromDays(maxAgeDays);
+
+    /**
+     * Biên bản còn nhận ảnh không (K2): nhận phòng khi OPEN hoặc AWAITING_CONFIRM; trả phòng chỉ khi OPEN (sau khi gửi
+     * so sánh là COMPARING trở đi). Dùng ở photo-ingest để chặn ảnh có URL cấp trước lúc khóa nhưng tải lên sau.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public static bool AcceptsPhotos(InspectionType type, InspectionStatus status) => type == InspectionType.MoveIn
+        ? status is InspectionStatus.Open or InspectionStatus.AwaitingConfirm
+        : status == InspectionStatus.Open;
 
     /** Bản xem JPEG trong bucket derived: cùng đường dẫn với key incoming, đuôi .jpg. */
     public static string ViewKey(string incomingKey) => WithoutExtension(incomingKey) + ".jpg";

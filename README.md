@@ -69,7 +69,7 @@ Chạy từ `src/infra/RoomLedger.Cdk`, region `ap-southeast-2`, bằng tài kho
 
 Dọn dẹp: `cdk destroy --all -c stage=<stage>`. Được giữ lại và phải xóa tay: bucket evidence (Object Lock, mọi stage), cả ba bucket ở stage demo, và OIDC provider (chỉ xóa khi không còn stage nào dùng).
 
-## Trạng thái MD-04 Biên bản nhận phòng (Sang, cập nhật 2026-11-08)
+## Trạng thái MD-04 Biên bản nhận phòng (Sang, cập nhật 2026-11-11)
 
 | Chức năng | Trạng thái | Ghi chú |
 |---|---|---|
@@ -77,7 +77,7 @@ Dọn dẹp: `cdk destroy --all -c stage=<stage>`. Được giữ lại và ph�
 | MD-04-FE-02 Gửi ảnh | ✅ Xong | Dùng `POST /uploads` của Tuấn (+ `captureSource`); photo-ingest, photo-derive (HEIC → JPEG, thumbnail, xóa GPS) |
 | MD-04-FE-03 Xóa ảnh trước khi khóa | ✅ Xong | `DELETE /photos/{id}`; chỉ người gửi, chỉ trước khi khóa (K1) |
 | MD-04-FE-04 Xác nhận và khóa, BR-18 RULE 1–4 | ✅ Xong | `POST /inspections/{id}/confirm`; khóa đúng một lần; evidence-seal chép ảnh sang bucket evidence (Object Lock), kiểm SHA-256 |
-| MD-04-FE-04 BR-18 RULE 5 Chỉ số điện nước ban đầu | ❌ **Chưa làm** | Cần nhóm quyết định: hai bên tự nhập số khi xác nhận, hay AI đọc từ ảnh đồng hồ (MD-05). Kèm cột `tenancy.opening_electricity`, `opening_water` |
+| MD-04-FE-04 BR-18 RULE 5 Chỉ số điện nước ban đầu | ✅ Xong | `PUT /inspections/{id}/opening-readings` (hai bên nhập, ghi `tenancy.opening_electricity` / `opening_water` của Tuấn ở #13); đổi số → hủy xác nhận; xác nhận cần đủ hai chỉ số (409 `INCOMPLETE_INSPECTION`). Nhập tay, AI đọc ảnh đồng hồ chưa làm |
 | MD-04-FE-04 BR-18 RULE 2 Email báo bên còn lại | ❌ **Chưa làm** | API đã phát sự kiện `InspectionConfirmed`; chưa có Lambda `notify` (SES) để gửi email |
 | MD-04-FE-05 Xuất PDF biên bản nhận phòng | ⬜ Stretch | Quyết định ngày 25/11 |
 
