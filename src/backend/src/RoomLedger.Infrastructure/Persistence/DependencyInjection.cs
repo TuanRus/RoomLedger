@@ -32,7 +32,7 @@ public static class DependencyInjection
         var builder = new NpgsqlDataSourceBuilder(connectionString);
         if (config.GetValue<bool>("Database:UseIamAuth"))
         {
-            builder.UseRdsIamAuth(config["AWS:Region"] ?? Environment.GetEnvironmentVariable("AWS_REGION") ?? "ap-southeast-1");
+            builder.UseRdsIamAuth(config["AWS:Region"] ?? Environment.GetEnvironmentVariable("AWS_REGION") ?? "ap-southeast-2");
         }
 
         var dataSource = builder.Build();
