@@ -285,6 +285,23 @@ public class SettlementTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await AssertError(await seed.S.TenantClient.PostAsync($"/api/v1/findings/{dismissed}/accept", null), HttpStatusCode.Conflict, "RECORD_LOCKED");
     }
 
+    [Fact]
+    public async Task PdfNotReadyYet_NoLink_ThenOnceRendered_BothPartiesGetADownloadLink()
+    {
+        var seed = await SeedAsync();
+        var settled = await (await seed.S.LandlordClient.PostAsync(Url(seed), null)).DataAsync();
+        Assert.Equal(JsonValueKind.Null, settled.GetProperty("pdfUrl").ValueKind);
+        var key = $"reports/{seed.S.TenancyId}/thanh-ly-{settled.GetProperty("settlementId").GetGuid()}.pdf";
+        await factory.WithDbAsync(db => db.Settlements.Where(x => x.TenancyId == seed.S.TenancyId)
+            .ExecuteUpdateAsync(x => x.SetProperty(s => s.PdfKey, key)));   // render-pdf đã chạy
+
+        foreach (var client in new[] { seed.S.LandlordClient, seed.S.TenantClient })
+        {
+            var data = await (await client.GetAsync(Url(seed))).DataAsync();
+            Assert.Equal($"https://derived.example/{key}", data.GetProperty("pdfUrl").GetString());
+        }
+    }
+
     // ---------- Quyền và trạng thái ----------
 
     [Fact]

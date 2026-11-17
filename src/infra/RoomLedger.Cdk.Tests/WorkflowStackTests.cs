@@ -21,6 +21,7 @@ public class WorkflowStackTests
     private const string PlanFn = "roomledger-dev-plan-compare";
     private const string PairsFn = "roomledger-dev-compare-pairs";
     private const string PersistFn = "roomledger-dev-persist-results";
+    private const string RenderFn = "roomledger-dev-render-pdf";
     private const string Sonnet = "au.anthropic.claude-sonnet-4-5-20250929-v1:0";
     private const string Haiku = "au.anthropic.claude-haiku-4-5-20251001-v1:0";
 
@@ -77,6 +78,7 @@ public class WorkflowStackTests
     [InlineData(SealFn, "RoomLedger.Functions::RoomLedger.Functions.EvidenceSeal.Function::HandleAsync")]
     [InlineData(PlanFn, "RoomLedger.Functions::RoomLedger.Functions.PlanCompare.Function::HandleAsync")]
     [InlineData(PersistFn, "RoomLedger.Functions::RoomLedger.Functions.PersistResults.Function::HandleAsync")]
+    [InlineData(RenderFn, "RoomLedger.Functions::RoomLedger.Functions.RenderPdf.Function::HandleAsync")]
     public void Functions_RunDotnet8_WithTheRightHandler_InsideTheVpc(string name, string handler)
     {
         var fn = Fn(name).Props;
@@ -188,6 +190,32 @@ public class WorkflowStackTests
                 }),
             })]),
         });
+
+    /** MD-06-FE-05: quyết toán xong → biên bản thanh lý PDF và niêm phong ảnh trả phòng (evidence-seal nhận inspectionId). */
+    [Fact]
+    public void TenancySettledFromTheApi_TriggersRenderPdf_AndSealsTheMoveOutPhotos()
+    {
+        var rule = Synth().FindResources("AWS::Events::Rule").Values.Select(PropsOf)
+            .Single(r => Json(r["EventPattern"]).Contains("\"TenancySettled\""));
+        Assert.Contains("roomledger.api", Json(rule["EventPattern"]));
+        var targets = Json(rule["Targets"]);
+        Assert.Contains(Fn(RenderFn).LogicalId, targets);
+        Assert.Contains(Fn(SealFn).LogicalId, targets);
+        Assert.Contains("DeadLetterConfig", targets);
+    }
+
+    [Fact]
+    public void RenderPdf_WritesOnlyDerivedReports_ReadsTheDatabase_NoEvidenceNoDeleteNoBedrock()
+    {
+        var policy = PolicyOf(Fn(RenderFn).LogicalId);
+        Assert.Contains("s3:PutObject", policy);
+        Assert.Contains("roomledger-dev-derived/reports/*", policy);
+        Assert.DoesNotContain("roomledger-dev-evidence", policy);
+        Assert.DoesNotContain("roomledger-dev-incoming", policy);
+        Assert.DoesNotContain("s3:DeleteObject", policy);
+        Assert.DoesNotContain("bedrock", policy);
+        Assert.Contains("rds-db:connect", policy);
+    }
 
     [Fact]
     public void Seal_ReadsIncoming_WritesAndReadsEvidence_CannotDeleteOrChangeRetention()
