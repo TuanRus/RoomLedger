@@ -24,6 +24,7 @@ public static class ErrorCodes
     public const string NoMoveInRecord = "NO_MOVE_IN_RECORD";             // Sang: BR-25 EXCEPTION 1
     public const string PendingFindings = "PENDING_FINDINGS";             // Sang: BR-27 EXCEPTION 1
     public const string AmountExceedsDeposit = "AMOUNT_EXCEEDS_DEPOSIT";  // Sang: BR-27 EXCEPTION 2
+    public const string FinalReadingMissing = "FINAL_READING_MISSING";    // Sang: BR-25 RULE 3, quyết định B2
     public const string PeriodClosed = "PERIOD_CLOSED";
     public const string InviteInvalid = "INVITE_INVALID";
     public const string Unauthorized = "UNAUTHORIZED";

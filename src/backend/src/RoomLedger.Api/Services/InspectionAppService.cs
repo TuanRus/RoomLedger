@@ -257,9 +257,10 @@ public class InspectionAppService(
      * (không thì 409 NO_MOVE_IN_RECORD). Khu vực chép nguyên bản sao của biên bản nhận phòng để so đúng khu vực cũ;
      * hợp đồng → MOVING_OUT trong cùng lần lưu. Đã có biên bản trả phòng → trả lại biên bản đó (200); hai request
      * cùng lúc: index unique (tenancy_id, type) chỉ cho một bản, bên thua rollback cả việc đổi trạng thái hợp đồng.
+     * 1.1: chốt kỳ trả phòng (finalPeriod, tháng giờ Việt Nam lúc mở; quyết định A3).
      *
      * @author Sang
-     * @version 1.0
+     * @version 1.1
      */
     public async Task<(InspectionResponse Inspection, bool Created)> OpenMoveOutAsync(Guid tenancyId, CancellationToken ct)
     {
@@ -285,6 +286,7 @@ public class InspectionAppService(
             Type = InspectionType.MoveOut,
             Status = InspectionStatus.Open,
             AreaSnapshotJson = moveIn!.AreaSnapshotJson,
+            FinalPeriod = InspectionService.FinalPeriod(clock.GetUtcNow()),   // A3: chốt kỳ lúc mở
         };
         db.Inspections.Add(inspection);
         tenancy.Status = TenancyStatus.MovingOut;
@@ -313,9 +315,11 @@ public class InspectionAppService(
      * UPDATE có điều kiện OPEN → COMPARING trước (giữ khóa dòng, nên xóa ảnh không chen vào), rồi kiểm mỗi khu vực
      * đủ ảnh READY (thiếu → rollback, 409 INCOMPLETE_INSPECTION). Sau commit phát MoveOutSubmitted để Step Functions
      * so ảnh (MD-06-FE-02). Đã COMPARING → 200, không phát lại; đã qua bước so sánh → 409 RECORD_LOCKED.
+     * 1.1: sau ảnh phòng, cần chỉ số điện và nước của kỳ trả phòng mà ảnh đồng hồ đã tới (quyết định B1);
+     * thiếu → rollback, 409 FINAL_READING_MISSING nêu đồng hồ còn thiếu (B2). Chưa cần chủ nhà xác nhận.
      *
      * @author Sang
-     * @version 1.0
+     * @version 1.1
      */
     public async Task<InspectionResponse> SubmitMoveOutAsync(Guid inspectionId, CancellationToken ct)
     {
@@ -353,6 +357,16 @@ public class InspectionAppService(
                 throw new ConflictException(ErrorCodes.IncompleteInspection, "Biên bản chưa đủ ảnh: " + string.Join(", ", missing));
             }
 
+            // B1, B2: ảnh đồng hồ điện và nước của kỳ trả phòng đã tới (chưa cần xác nhận)
+            var period = FinalPeriodOf(inspection);
+            var readings = await db.MeterReadings.Where(m => m.TenancyId == tenancy.Id && m.Period == period)
+                .Select(m => new { m.Kind, m.PhotoStatus, m.Status }).ToListAsync(ct);
+            var missingMeters = InspectionService.MissingFinalReadings(readings.Select(r => (r.Kind, r.PhotoStatus, r.Status)));
+            if (missingMeters.Count > 0)
+            {
+                throw new ConflictException(ErrorCodes.FinalReadingMissing, InspectionService.FinalReadingMissingMessage(missingMeters, period));
+            }
+
             db.Audit(AuditEventTypes.MoveOutSubmitted, nameof(Inspection), inspectionId);
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
@@ -388,8 +402,13 @@ public class InspectionAppService(
         return new InspectionResponse(inspection.Id, inspection.TenancyId, inspection.Type, inspection.Status,
             inspection.LandlordConfirmedAt, inspection.TenantConfirmedAt, areas,
             ReferenceInspectionId: reference,
-            OpeningElectricity: opening?.OpeningElectricity, OpeningWater: opening?.OpeningWater);
+            OpeningElectricity: opening?.OpeningElectricity, OpeningWater: opening?.OpeningWater,
+            FinalPeriod: inspection.Type == InspectionType.MoveOut ? FinalPeriodOf(inspection) : null);
     }
+
+    /** Kỳ trả phòng; biên bản mở trước khi có cột final_period thì lấy theo lúc mở (migration cũng điền sẵn). */
+    internal static string FinalPeriodOf(Inspection inspection) =>
+        inspection.FinalPeriod ?? InspectionService.FinalPeriod(inspection.CreatedAt);
 
     /**
      * Chỉ số điện nước ban đầu (MD-04-FE-04, BR-18 RULE 5). Hai bên nhập khi biên bản nhận phòng chưa khóa; ghi vào

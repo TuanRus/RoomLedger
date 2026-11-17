@@ -17,6 +17,7 @@ public class InspectionConfiguration : IEntityTypeConfiguration<Inspection>
         b.ConfigureAuditable();
         b.HasIndex(e => new { e.TenancyId, e.Type }).IsUnique().HasDatabaseName("ux_inspection_tenancy_id_type");
         b.Property(e => e.AreaSnapshotJson).HasColumnType("jsonb"); // bản sao khu vực lúc mở (BR-15 R2, Sang)
+        b.Property(e => e.FinalPeriod).HasMaxLength(7);             // kỳ trả phòng yyyy-MM (A3, Sang)
         b.HasOne(e => e.Tenancy).WithMany().HasForeignKey(e => e.TenancyId).OnDelete(DeleteBehavior.Restrict);
     }
 }

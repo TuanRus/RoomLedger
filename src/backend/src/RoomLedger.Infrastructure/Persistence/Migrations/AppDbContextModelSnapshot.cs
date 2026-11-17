@@ -337,6 +337,11 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<string>("FinalPeriod")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("final_period");
+
                     b.Property<DateTimeOffset?>("LandlordConfirmedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("landlord_confirmed_at");

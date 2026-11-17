@@ -6,9 +6,10 @@ namespace RoomLedger.Core.Services;
 
 /**
  * Quy tắc thuần của biên bản nhận/trả phòng (MD-04, MD-06), không đụng database.
+ * 1.1: kỳ trả phòng và chỉ số tháng cuối (MD-06-FE-05, quyết định A3, B1, B2).
  *
  * @author Sang
- * @version 1.0
+ * @version 1.1
  */
 public static class InspectionService
 {
@@ -59,15 +60,41 @@ public static class InspectionService
     public static IReadOnlyList<InspectionArea> ParseSnapshot(string? json) =>
         string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<InspectionArea>>(json, Json) ?? [];
 
-    /** Kỳ trả phòng (A3): tháng giờ Việt Nam của lúc mở biên bản trả phòng, dạng yyyy-MM. */
-    public static string FinalPeriod(DateTimeOffset utcNow) => throw new NotImplementedException();
+    /** Giờ Việt Nam (UTC+7, không có giờ mùa hè). */
+    public static readonly TimeSpan VietnamOffset = TimeSpan.FromHours(7);
 
-    /** Đồng hồ còn thiếu chỉ số tháng cuối (B1), điện trước nước; rỗng = đủ. */
+    /**
+     * Kỳ trả phòng (quyết định A3 của Tuấn, 17/11): tháng giờ Việt Nam của lúc mở biên bản trả phòng, dạng yyyy-MM.
+     * Chốt lúc mở chứ không lúc gửi, để mở 30/11 rồi gửi 01/12 vẫn là kỳ 11.
+     *
+     * @author Sang
+     * @version 1.0
+     */
+    public static string FinalPeriod(DateTimeOffset utcNow) =>
+        utcNow.ToOffset(VietnamOffset).ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
+
+    /**
+     * Đồng hồ còn thiếu chỉ số tháng cuối (quyết định B1): một chỉ số được tính khi ảnh đồng hồ đã tới (khác
+     * PENDING_UPLOAD), hoặc chỉ số đã qua bước PENDING_AI (đã có số, kể cả khi trạng thái ảnh chưa được cập nhật).
+     * Không cần chủ nhà xác nhận. Trả theo thứ tự điện, nước; rỗng = đủ.
+     *
+     * @author Sang
+     * @version 1.0
+     */
     public static IReadOnlyList<MeterKind> MissingFinalReadings(
-        IEnumerable<(MeterKind Kind, FileStatus? PhotoStatus, MeterReadingStatus Status)> readings) =>
-        throw new NotImplementedException();
+        IEnumerable<(MeterKind Kind, FileStatus? PhotoStatus, MeterReadingStatus Status)> readings)
+    {
+        var present = readings
+            .Where(r => r.PhotoStatus is not (null or FileStatus.PendingUpload) || r.Status != MeterReadingStatus.PendingAi)
+            .Select(r => r.Kind)
+            .ToHashSet();
+        return new[] { MeterKind.Electricity, MeterKind.Water }.Where(k => !present.Contains(k)).ToList();
+    }
 
-    /** Thông báo lỗi FINAL_READING_MISSING (B2). */
+    /** Thông báo lỗi FINAL_READING_MISSING (quyết định B2), ví dụ "Thiếu ảnh đồng hồ: điện, nước (kỳ 2026-11)". */
     public static string FinalReadingMissingMessage(IReadOnlyList<MeterKind> missing, string period) =>
-        throw new NotImplementedException();
+        $"Thiếu ảnh đồng hồ: {string.Join(", ", missing.Select(MeterName))} (kỳ {period})";
+
+    /** Tên đồng hồ trong thông báo tiếng Việt. */
+    public static string MeterName(MeterKind kind) => kind == MeterKind.Electricity ? "điện" : "nước";
 }
