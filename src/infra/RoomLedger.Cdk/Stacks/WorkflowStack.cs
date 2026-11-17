@@ -1,10 +1,12 @@
 using Amazon.CDK;
 using Amazon.CDK.AWS.CloudWatch;
+using Amazon.CDK.AWS.CloudWatch.Actions;
 using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.RDS;
 using Amazon.CDK.AWS.SQS;
 using Amazon.CDK.AWS.SSM;
@@ -45,12 +47,13 @@ public sealed class WorkflowStackProps : StackProps
  * persist-results (VPC, COMPARING → REVIEWING) → PutMetricData RoomLedger/Compare → sự kiện MoveOutCompared (notify).
  * Quyết toán (MD-06-FE-05): API TenancySettled → render-pdf (VPC, biên bản thanh lý PDF vào derived/reports/) và
  * evidence-seal (niêm phong ảnh biên bản trả phòng, detail có inspectionId).
+ * Log của mọi Lambda ở đây có hạn giữ (30 ngày, prod 90); hai báo động gửi vào topic của ObservabilityStack.
  * Lambda trong VPC đăng nhập roomledger_app bằng IAM token; quyền S3 / Bedrock tối thiểu. Mọi rule có DLQ chung,
  * báo động khi DLQ có tin hoặc state machine chạy lỗi (chưa gắn SNS: chờ chọn email nhận báo động).
  * Phụ trách: Sang.
  *
  * @author Sang
- * @version 1.2
+ * @version 1.3
  */
 public sealed class WorkflowStack : Stack
 {
@@ -66,7 +69,8 @@ public sealed class WorkflowStack : Stack
     public const int CompareConcurrency = 3;   // quota Bedrock của tài khoản mới thấp; Map chạy tối đa 3 cặp cùng lúc
 
     /** Hạn giữ log của Lambda theo stage. */
-    public static Amazon.CDK.AWS.Logs.RetentionDays LogRetentionFor(string stage) => throw new NotImplementedException();
+    public static RetentionDays LogRetentionFor(string stage) =>
+        stage == "prod" ? RetentionDays.THREE_MONTHS : RetentionDays.ONE_MONTH;
 
     public Function PhotoIngest { get; }
     public Function PhotoDerive { get; }
@@ -93,10 +97,19 @@ public sealed class WorkflowStack : Stack
             ["PHOTO_MAX_AGE_DAYS"] = "3",
         };
 
+        // Log group tạo sẵn với hạn giữ (không để Lambda tự tạo, vì log tự tạo giữ mãi mãi)
+        ILogGroup Logs(string handlerClass, string shortName) => new Amazon.CDK.AWS.Logs.LogGroup(this, $"{handlerClass}Logs", new Amazon.CDK.AWS.Logs.LogGroupProps
+        {
+            LogGroupName = $"/aws/lambda/roomledger-{props.Stage}-{shortName}",
+            Retention = LogRetentionFor(props.Stage),
+            RemovalPolicy = props.Stage == "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+        });
+
         Function VpcFunction(string handlerClass, string shortName, double memory, Duration timeout) =>
             new(this, handlerClass, new FunctionProps
             {
                 FunctionName = $"roomledger-{props.Stage}-{shortName}",
+                LogGroup = Logs(handlerClass, shortName),
                 Runtime = Runtime.DOTNET_8,
                 Handler = $"RoomLedger.Functions::RoomLedger.Functions.{handlerClass}.Function::HandleAsync",
                 Code = code,
@@ -167,6 +180,7 @@ public sealed class WorkflowStack : Stack
         ComparePairs = new Function(this, "ComparePairs", new FunctionProps
         {
             FunctionName = $"roomledger-{props.Stage}-compare-pairs",
+            LogGroup = Logs("ComparePairs", "compare-pairs"),
             Runtime = Runtime.DOTNET_8,
             Handler = "RoomLedger.Functions::RoomLedger.Functions.ComparePairs.Function::HandleAsync",
             Code = code,
@@ -378,7 +392,7 @@ public sealed class WorkflowStack : Stack
             },
         });
 
-        new Alarm(this, "WorkflowDlqNotEmpty", new AlarmProps
+        var dlqAlarm = new Alarm(this, "WorkflowDlqNotEmpty", new AlarmProps
         {
             AlarmName = $"roomledger-{props.Stage}-workflow-dlq-not-empty",
             AlarmDescription = "An EventBridge event could not be delivered to a workflow Lambda or state machine",
@@ -392,7 +406,7 @@ public sealed class WorkflowStack : Stack
             ComparisonOperator = ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             TreatMissingData = TreatMissingData.NOT_BREACHING,
         });
-        new Alarm(this, "MoveOutCompareFailed", new AlarmProps
+        var compareAlarm = new Alarm(this, "MoveOutCompareFailed", new AlarmProps
         {
             AlarmName = $"roomledger-{props.Stage}-move-out-compare-failed",
             AlarmDescription = "A move-out compare run failed; the inspection stays COMPARING",
@@ -402,6 +416,11 @@ public sealed class WorkflowStack : Stack
             ComparisonOperator = ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             TreatMissingData = TreatMissingData.NOT_BREACHING,
         });
+        if (props.AlarmTopic is not null)
+        {
+            dlqAlarm.AddAlarmAction(new SnsAction(props.AlarmTopic));
+            compareAlarm.AddAlarmAction(new SnsAction(props.AlarmTopic));
+        }
 
         new Rule(this, "PhotoUploaded", new RuleProps
         {

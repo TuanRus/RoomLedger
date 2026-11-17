@@ -83,8 +83,11 @@ new ApiStack(app, Id("api"), new ApiStackProps
     Auth = auth,
     ApiAssetPath = apiAsset,
 });
+// Observability trước Workflow: báo động của Workflow gửi vào topic của Observability
+var observability = new ObservabilityStack(app, Id("observability"), new ObservabilityStackProps { Env = env, Stage = stage });
 new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
 {
+    AlarmTopic = observability.AlarmTopic,
     Env = env,
     Stage = stage,
     Vpc = network.Vpc,
@@ -97,7 +100,6 @@ new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
 });
 // WAF cho CloudFront phải ở us-east-1, nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi. Cần cả nhóm quyết định.
 new EdgeStack(app, Id("edge"), new StackProps { Env = new Amazon.CDK.Environment { Region = "us-east-1" } });
-new ObservabilityStack(app, Id("observability"), new ObservabilityStackProps { Env = env, Stage = stage });
 
 Tags.Of(app).Add("Project", "RoomLedger");
 Tags.Of(app).Add("Stage", stage);
