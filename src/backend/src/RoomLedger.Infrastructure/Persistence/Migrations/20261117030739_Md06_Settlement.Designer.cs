@@ -13,7 +13,7 @@ using RoomLedger.Infrastructure.Persistence;
 namespace RoomLedger.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261117030116_Md06_Settlement")]
+    [Migration("20261117030739_Md06_Settlement")]
     partial class Md06_Settlement
     {
         /// <inheritdoc />
@@ -1065,9 +1065,6 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.HasIndex("InspectionId")
                         .HasDatabaseName("ix_settlement_inspection_id");
 
-                    b.HasIndex("SettledBy")
-                        .HasDatabaseName("ix_settlement_settled_by");
-
                     b.HasIndex("TenancyId")
                         .IsUnique()
                         .HasDatabaseName("ux_settlement_tenancy_id");
@@ -1503,13 +1500,6 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_settlement_inspection_inspection_id");
-
-                    b.HasOne("RoomLedger.Core.Domain.AppUser", null)
-                        .WithMany()
-                        .HasForeignKey("SettledBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_settlement_app_user_settled_by");
 
                     b.HasOne("RoomLedger.Core.Domain.Tenancy", "Tenancy")
                         .WithMany()

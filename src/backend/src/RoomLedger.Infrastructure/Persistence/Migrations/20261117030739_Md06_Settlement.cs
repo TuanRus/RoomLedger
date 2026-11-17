@@ -36,12 +36,6 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     table.CheckConstraint("ck_settlement_amounts", "deposit >= 0 AND deductions_total >= 0 AND unpaid_invoices_total >= 0");
                     table.CheckConstraint("ck_settlement_refund", "refund = deposit - deductions_total - unpaid_invoices_total");
                     table.ForeignKey(
-                        name: "fk_settlement_app_user_settled_by",
-                        column: x => x.settled_by,
-                        principalTable: "app_user",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
                         name: "fk_settlement_inspection_inspection_id",
                         column: x => x.inspection_id,
                         principalTable: "inspection",
@@ -59,11 +53,6 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                 name: "ix_settlement_inspection_id",
                 table: "settlement",
                 column: "inspection_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_settlement_settled_by",
-                table: "settlement",
-                column: "settled_by");
 
             migrationBuilder.CreateIndex(
                 name: "ux_settlement_tenancy_id",

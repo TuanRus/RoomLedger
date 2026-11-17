@@ -38,6 +38,15 @@ public static class CheckoutEndpoints
             ApiResults.Ok(await svc.DisputeAsync(findingId, req, ct), "Đã gửi khiếu nại")).RequireAuthorization(Policies.LandlordOrTenant);
         group.MapPost("/{findingId:guid}/respond", async (Guid findingId, RespondFindingDisputeRequest req, FindingAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.RespondAsync(findingId, req, ct), "Đã trả lời khiếu nại")).RequireAuthorization(Policies.LandlordOrTenant);
+
+        // MD-06-FE-05 (BR-29): xem trước và quyết toán; quyết toán chỉ chủ nhà (kiểm trong SettlementAppService)
+        api.MapGet("/tenancies/{tenancyId:guid}/settlement", async (Guid tenancyId, SettlementAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.GetAsync(tenancyId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
+        api.MapPost("/tenancies/{tenancyId:guid}/settlement", async (Guid tenancyId, SettlementAppService svc, CancellationToken ct) =>
+        {
+            var (settlement, created) = await svc.SettleAsync(tenancyId, ct);
+            return created ? ApiResults.Created(settlement, "Đã quyết toán") : ApiResults.Ok(settlement, "Đã quyết toán");
+        }).RequireAuthorization(Policies.LandlordOrTenant);
         return api;
     }
 }

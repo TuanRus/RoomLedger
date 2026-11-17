@@ -19,7 +19,7 @@ public class SettlementConfiguration : IEntityTypeConfiguration<Settlement>
         b.Property(e => e.PdfKey).HasMaxLength(300);
         b.HasOne(e => e.Tenancy).WithMany().HasForeignKey(e => e.TenancyId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Inspection>().WithMany().HasForeignKey(e => e.InspectionId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<AppUser>().WithMany().HasForeignKey(e => e.SettledBy).OnDelete(DeleteBehavior.Restrict);
+        // settled_by: id người dùng (sub Cognito), không khóa ngoại tới app_user, giống dispute.raised_by và tenancy.landlord_id
         b.ToTable(t =>
         {
             t.HasCheckConstraint("ck_settlement_amounts", "deposit >= 0 AND deductions_total >= 0 AND unpaid_invoices_total >= 0");

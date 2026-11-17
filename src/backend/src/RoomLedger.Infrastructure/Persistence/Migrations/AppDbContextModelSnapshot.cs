@@ -1062,9 +1062,6 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.HasIndex("InspectionId")
                         .HasDatabaseName("ix_settlement_inspection_id");
 
-                    b.HasIndex("SettledBy")
-                        .HasDatabaseName("ix_settlement_settled_by");
-
                     b.HasIndex("TenancyId")
                         .IsUnique()
                         .HasDatabaseName("ux_settlement_tenancy_id");
@@ -1500,13 +1497,6 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_settlement_inspection_inspection_id");
-
-                    b.HasOne("RoomLedger.Core.Domain.AppUser", null)
-                        .WithMany()
-                        .HasForeignKey("SettledBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_settlement_app_user_settled_by");
 
                     b.HasOne("RoomLedger.Core.Domain.Tenancy", "Tenancy")
                         .WithMany()
