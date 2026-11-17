@@ -38,7 +38,7 @@ public class UnitTests
     [Fact]
     public void PresignedPut_SignsChecksumHeader()
     {
-        var s3 = new AmazonS3Client(new BasicAWSCredentials("AKIDEXAMPLE", "secret"), RegionEndpoint.APSoutheast1);
+        var s3 = new AmazonS3Client(new BasicAWSCredentials("AKIDEXAMPLE", "secret"), RegionEndpoint.APSoutheast2);
         var storage = new S3Storage(s3, Options.Create(new StorageOptions { IncomingBucket = "roomledger-dev-incoming-123456789012" }));
         var upload = storage.CreateUploadUrl("l/t/i/f.jpg", "image/jpeg", "n4bQgYhMfWWaL+qgxVrQFaO/TxsrC4Is0V1sFbDwCgg=", TimeSpan.FromMinutes(5));
 
