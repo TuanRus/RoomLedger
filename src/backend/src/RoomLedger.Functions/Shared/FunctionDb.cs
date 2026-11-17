@@ -20,7 +20,7 @@ public static class FunctionDb
         var builder = new NpgsqlDataSourceBuilder(cs);
         if (!cs.Contains("Password=", StringComparison.OrdinalIgnoreCase))
         {
-            builder.UseRdsIamAuth(Environment.GetEnvironmentVariable("AWS_REGION") ?? "ap-southeast-1");
+            builder.UseRdsIamAuth(Environment.GetEnvironmentVariable("AWS_REGION") ?? "ap-southeast-2");
         }
 
         return builder.Build();
