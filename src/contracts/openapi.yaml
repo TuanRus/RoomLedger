@@ -1,11 +1,12 @@
 openapi: 3.0.3
 info:
   title: RoomLedger API
-  version: 0.3.0
+  version: 0.4.0
   description: |
     Hợp đồng API giữa Backend và Frontend (tab 4 "API cho FE").
     Phiên bản x.y.z: sửa chính tả, từ ngữ → z; thêm, bớt, đổi endpoint hoặc trường → y; làm lại lớn → x.
     0.3.0: thêm MD-04 (xóa ảnh, xác nhận biên bản, chỉ số điện nước ban đầu) và MD-06 (trả phòng, danh sách ảnh, gửi so sánh, mục so sánh, tính tiền, khiếu nại).
+    0.4.0: MD-06-FE-05 quyết toán (GET/POST /tenancies/{tenancyId}/settlement), finalPeriod trên biên bản trả phòng, gửi biên bản cần ảnh đồng hồ tháng cuối (FINAL_READING_MISSING).
     Bản này có đầy đủ MD-01, MD-02, MD-03, MD-05 và POST /uploads (Tuấn).
     Các endpoint MD-04, MD-06, MD-07 do Sang bổ sung.
     Mọi phản hồi thành công có dạng {success, message, data}; lỗi có dạng ApiError.
@@ -326,12 +327,12 @@ paths:
     post:
       tags: [MD-06]
       summary: Người thuê gửi biên bản trả phòng để so sánh (MD-06-FE-01, BR-25 RULE 4); OPEN → COMPARING
-      description: Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Phát sự kiện MoveOutSubmitted (inspectionId, tenancyId, moveInInspectionId) để so ảnh (MD-06-FE-02). Gửi lại khi đang COMPARING → 200, không khởi động lại. Sau khi gửi không thêm hoặc xóa ảnh được.
+      description: Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Cần chỉ số điện và nước của kỳ finalPeriod mà ảnh đồng hồ đã tải lên (hoặc chỉ số đã có số); chưa cần chủ nhà xác nhận (BR-25 RULE 3). Phát sự kiện MoveOutSubmitted (inspectionId, tenancyId, moveInInspectionId) để so ảnh (MD-06-FE-02). Gửi lại khi đang COMPARING → 200, không khởi động lại. Sau khi gửi không thêm hoặc xóa ảnh được.
       responses:
         "200": { $ref: "#/components/responses/Inspection" }
         "403": { description: FORBIDDEN (không phải người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: "INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước so sánh)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), FINAL_READING_MISSING (thiếu ảnh đồng hồ tháng cuối; message vd 'Thiếu ảnh đồng hồ: điện, nước (kỳ 2026-11)'), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước so sánh)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /inspections/{inspectionId}/opening-readings:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     put:
@@ -486,6 +487,26 @@ paths:
         "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
         "409": { description: INVALID_STATE (không có khiếu nại chờ trả lời) hoặc RECORD_LOCKED, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /tenancies/{tenancyId}/settlement:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    get:
+      tags: [MD-06]
+      summary: Xem quyết toán (MD-06-FE-05, BR-29); hai bên của hợp đồng
+      description: Chưa quyết toán → status PENDING, số tính tại thời điểm xem và blockers (điều kiện còn thiếu); canSettle = không còn blocker. Đã quyết toán → status SETTLED, số đã chốt. Chỉ xem được sau khi chủ nhà đã gửi danh sách trừ cọc cho người thuê.
+      responses:
+        "200": { $ref: "#/components/responses/Settlement" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: INVALID_STATE (chưa có biên bản trả phòng hoặc chưa gửi danh sách cho người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+    post:
+      tags: [MD-06]
+      summary: Chủ nhà quyết toán (MD-06-FE-05, BR-29); phát TenancySettled
+      description: "Kiểm theo thứ tự FINAL_READING_UNCONFIRMED (chỉ số điện nước kỳ finalPeriod chưa CONFIRMED) → FINAL_INVOICE_MISSING (chưa có hóa đơn kỳ finalPeriod) → OPEN_DISPUTES (mục trừ cọc hoặc hóa đơn đang khiếu nại) → PENDING_FINDINGS (người thuê chưa trả lời mục bị tính tiền). Thiếu → 409 với errorCode là điều kiện đầu tiên và details = mọi điều kiện chưa đạt ({code, message}). Đủ → ghi quyết toán: refund = deposit − deductionsTotal (mục ACCEPTED, RESOLVED) − unpaidInvoicesTotal (mọi hóa đơn chưa PAID), có thể âm; biên bản trả phòng và hợp đồng → SETTLED, phòng → VACANT. Đã quyết toán → 200 trả lại quyết toán đó."
+      responses:
+        "201": { $ref: "#/components/responses/Settlement" }
+        "200": { $ref: "#/components/responses/Settlement" }
+        "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "FINAL_READING_UNCONFIRMED, FINAL_INVOICE_MISSING, OPEN_DISPUTES, PENDING_FINDINGS (details liệt kê tất cả) hoặc INVALID_STATE", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
 
 components:
   securitySchemes:
@@ -535,6 +556,7 @@ components:
     InvoiceDetail: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvoiceDetailResponse" } } }] } } } }
     Dispute: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/DisputeResponse" } } }] } } } }
     Inspection: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InspectionResponse" } } }] } } } }
+    Settlement: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/SettlementResponse" } } }] } } } }
 
   schemas:
     Envelope:
@@ -1006,3 +1028,26 @@ components:
         referenceInspectionId: { type: string, format: uuid, nullable: true, description: Biên bản trả phòng → id biên bản nhận phòng; biên bản nhận phòng → null }
         openingElectricity: { type: integer, format: int64, nullable: true, description: Chỉ số điện ban đầu (BR-18 RULE 5); chỉ biên bản nhận phòng }
         openingWater: { type: integer, format: int64, nullable: true, description: Chỉ số nước ban đầu (BR-18 RULE 5); chỉ biên bản nhận phòng }
+        finalPeriod: { type: string, nullable: true, example: "2026-11", description: "Biên bản trả phòng: kỳ (yyyy-MM, giờ Việt Nam lúc mở) của chỉ số tháng cuối và hóa đơn cuối; biên bản nhận phòng → null" }
+    SettlementBlocker:
+      type: object
+      properties:
+        code: { type: string, enum: [FINAL_READING_UNCONFIRMED, FINAL_INVOICE_MISSING, OPEN_DISPUTES, PENDING_FINDINGS] }
+        message: { type: string, example: "Chưa xác nhận chỉ số tháng cuối: nước (kỳ 2026-11)" }
+    SettlementResponse:
+      type: object
+      properties:
+        tenancyId: { type: string, format: uuid }
+        inspectionId: { type: string, format: uuid, description: Biên bản trả phòng }
+        finalPeriod: { type: string, example: "2026-11" }
+        status: { type: string, enum: [PENDING, SETTLED] }
+        deposit: { type: integer, format: int64, description: Tiền cọc của phiên bản hợp đồng khóa mới nhất }
+        deductionsTotal: { type: integer, format: int64, description: Tổng mục ACCEPTED và RESOLVED }
+        unpaidInvoicesTotal: { type: integer, format: int64, description: Tổng mọi hóa đơn chưa PAID (gồm hóa đơn cuối) }
+        refund: { type: integer, format: int64, description: "deposit − deductionsTotal − unpaidInvoicesTotal; âm = người thuê còn nợ" }
+        canSettle: { type: boolean }
+        blockers: { type: array, items: { $ref: "#/components/schemas/SettlementBlocker" } }
+        settlementId: { type: string, format: uuid, nullable: true }
+        settledAt: { type: string, format: date-time, nullable: true }
+        settledBy: { type: string, format: uuid, nullable: true }
+        pdfUrl: { type: string, format: uri, nullable: true, description: "Link tải biên bản thanh lý (5 phút); null tới khi tạo xong" }
