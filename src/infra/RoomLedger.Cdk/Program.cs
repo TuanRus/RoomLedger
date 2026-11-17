@@ -1,13 +1,22 @@
 using Amazon.CDK;
+using RoomLedger.Cdk;
 using RoomLedger.Cdk.Stacks;
 
 var app = new App();
-var stage = (string?)app.Node.TryGetContext("stage") ?? "dev";   // dev | demo
+
+// Cấu hình triển khai chỉ nằm ở một nơi: khối "context" trong cdk.json (ghi đè bằng -c key=value).
+// Code không có giá trị mặc định, thiếu key thì báo lỗi ngay khi synth.
+string RequiredContext(string key) =>
+    app.Node.TryGetContext(key) as string is { Length: > 0 } value
+        ? value
+        : throw new InvalidOperationException($"Thiếu context '{key}' trong cdk.json (hoặc truyền -c {key}=...).");
+
+var stage = RequiredContext("stage");   // dev | demo
 // SCP của AWS Organization chỉ cho ap-southeast-2 (ap-southeast-1 và us-east-1 bị chặn, kiểm tra 2026-11-05).
-var region = (string?)app.Node.TryGetContext("region") ?? "ap-southeast-2";
+var region = RequiredContext("region");
 var env = new Amazon.CDK.Environment { Account = System.Environment.GetEnvironmentVariable("CDK_DEFAULT_ACCOUNT"), Region = region };
 StackProps P() => new() { Env = env };
-string Id(string name) => $"roomledger-{stage}-{name}";
+string Id(string name) => Naming.Resource(stage, name);
 
 // Lambda đã đóng gói. Chạy trước (từ thư mục gốc repo):
 //   dotnet lambda package --project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip
@@ -39,7 +48,7 @@ if (!File.Exists(apiAsset) && !Directory.Exists(apiAsset))
 // Tên S3 là duy nhất toàn cầu nên thêm hậu tố account (Aws.ACCOUNT_ID tự thay khi deploy, không cần biết trước).
 // Ghi đè bằng -c incomingBucket=... -c derivedBucket=... -c evidenceBucket=...
 string BucketName(string purpose) =>
-    (string?)app.Node.TryGetContext($"{purpose}Bucket") ?? $"roomledger-{stage}-{purpose}-{Aws.ACCOUNT_ID}";
+    (string?)app.Node.TryGetContext($"{purpose}Bucket") ?? $"{Naming.Resource(stage, purpose)}-{Aws.ACCOUNT_ID}";
 var incomingBucket = BucketName("incoming");
 var derivedBucket = BucketName("derived");
 var evidenceBucket = BucketName("evidence");
@@ -98,8 +107,10 @@ new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
     DerivedBucketName = derivedBucket,
     EvidenceBucketName = evidenceBucket,
 });
-// WAF cho CloudFront phải ở us-east-1, nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi. Cần cả nhóm quyết định.
-new EdgeStack(app, Id("edge"), new StackProps { Env = new Amazon.CDK.Environment { Region = "us-east-1" } });
+// WAF cho CloudFront phải ở us-east-1 (context edgeRegion), nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi.
+// Cần cả nhóm quyết định.
+var edgeRegion = RequiredContext("edgeRegion");
+new EdgeStack(app, Id("edge"), new StackProps { Env = new Amazon.CDK.Environment { Region = edgeRegion } });
 
 Tags.Of(app).Add("Project", "RoomLedger");
 Tags.Of(app).Add("Stage", stage);

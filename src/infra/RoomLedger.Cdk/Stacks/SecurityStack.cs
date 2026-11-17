@@ -8,7 +8,7 @@ namespace RoomLedger.Cdk.Stacks;
  * Tham số của SecurityStack: stage được truyền qua props như các stack khác (NetworkStack, DataStack, WorkflowStack).
  *
  * @author Phát
- * @version 1.1
+ * @version 1.2
  */
 public class SecurityStackProps : StackProps
 {
@@ -18,7 +18,7 @@ public class SecurityStackProps : StackProps
 
 /**
  * Bảo mật dùng chung: role deploy cho GitHub Actions qua OIDC (không lưu AWS key trong GitHub).
- * Role chỉ nhận token của đúng repo và nhánh (dev: develop, demo: main), và chỉ được assume ba role bootstrap của CDK:
+ * Role chỉ nhận token của đúng repo và nhánh (theo githubBranches trong cdk.json), và chỉ được assume ba role bootstrap của CDK:
  * deploy-role, file-publishing-role, lookup-role (đúng account, mọi region). Không có image-publishing-role vì chưa dùng image asset.
  *
  * OIDC provider: mỗi account chỉ có một provider cho mỗi URL, nên mặc định stack KHÔNG tạo provider mà tham chiếu
@@ -28,24 +28,19 @@ public class SecurityStackProps : StackProps
  * (provider được giữ lại khi xóa stack, nên cdk destroy không làm hỏng stage còn lại).
  * Provider phải tồn tại trước khi deploy stack này.
  *
- * Cấu hình qua context (-c), đều có mặc định: githubRepo (TuanRus/RoomLedger); githubSubjects (danh sách sub chính xác,
- * cách nhau bằng dấu phẩy; cần đổi nếu dùng GitHub Environment, khi đó sub có dạng repo:{repo}:environment:{tên});
- * cdkQualifier (hnb659fds); createGithubOidcProvider (false).
+ * Cấu hình qua context (cdk.json hoặc -c). Bắt buộc: githubRepo (owner/repo); githubBranches (object stage → nhánh,
+ * ví dụ { "dev": "develop", "demo": "main" }; stage không có trong object sẽ bị từ chối).
+ * Tùy chọn: githubSubjects (danh sách sub chính xác, cách nhau bằng dấu phẩy; cần đổi nếu dùng GitHub Environment,
+ * khi đó sub có dạng repo:{repo}:environment:{tên}); cdkQualifier (hnb659fds); createGithubOidcProvider (false).
  *
  * KMS, CloudTrail, GuardDuty, Budgets, Secrets Manager sẽ được thêm ở các PR sau.
  *
  * @author Phát
- * @version 1.1
+ * @version 1.2
  */
 public class SecurityStack : Stack
 {
     private const string GitHubIssuer = "token.actions.githubusercontent.com";
-
-    private static readonly Dictionary<string, string> BranchByStage = new()
-    {
-        ["dev"] = "develop",
-        ["demo"] = "main",
-    };
 
     /** Role mà GitHub Actions assume bằng OIDC (aws-actions/configure-aws-credentials, role-to-assume). */
     public Role GitHubDeployRole { get; }
@@ -53,14 +48,16 @@ public class SecurityStack : Stack
     public SecurityStack(Construct scope, string id, SecurityStackProps props) : base(scope, id, props)
     {
         var stage = props.Stage;
-        if (!BranchByStage.TryGetValue(stage, out var defaultBranch))
+        var branchByStage = BranchesFromContext();
+        if (!branchByStage.TryGetValue(stage, out var defaultBranch))
         {
             // Không đoán nhánh cho stage lạ (ví dụ Dev): sai chữ hoa thường sẽ làm role trỏ nhầm nhánh.
             throw new ArgumentException(
-                $"Stage '{stage}' không hợp lệ, chỉ nhận: {string.Join(", ", BranchByStage.Keys)}.", nameof(props));
+                $"Stage '{stage}' không hợp lệ, chỉ nhận: {string.Join(", ", branchByStage.Keys)}.", nameof(props));
         }
 
-        var repo = ContextValue("githubRepo") ?? "TuanRus/RoomLedger";
+        var repo = ContextValue("githubRepo")
+            ?? throw new ArgumentException("Thiếu context githubRepo (owner/repo) trong cdk.json.", nameof(props));
         var qualifier = ContextValue("cdkQualifier") ?? "hnb659fds";
         var subjects = (ContextValue("githubSubjects") ?? $"repo:{repo}:ref:refs/heads/{defaultBranch}")
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -91,7 +88,7 @@ public class SecurityStack : Stack
 
         GitHubDeployRole = new Role(this, "GitHubDeployRole", new RoleProps
         {
-            RoleName = $"roomledger-{stage}-github-deploy",
+            RoleName = Naming.Resource(stage, "github-deploy"),
             Description = "Role cho GitHub Actions deploy RoomLedger qua OIDC; chỉ assume được các role bootstrap của CDK",
             MaxSessionDuration = Duration.Hours(1),
             AssumedBy = new FederatedPrincipal(providerArn, new Dictionary<string, object>
@@ -119,7 +116,30 @@ public class SecurityStack : Stack
         _ = new CfnOutput(this, "GitHubDeployRoleArn", new CfnOutputProps { Value = GitHubDeployRole.RoleArn });
     }
 
-    private string? ContextValue(string key) => Node.TryGetContext(key) as string;
+    private string? ContextValue(string key) => Node.TryGetContext(key) as string is { Length: > 0 } v ? v : null;
+
+    /** Đọc githubBranches (object stage → nhánh) từ context; so khớp stage phân biệt hoa thường. */
+    private Dictionary<string, string> BranchesFromContext()
+    {
+        if (Node.TryGetContext("githubBranches") is not IDictionary<string, object> raw || raw.Count == 0)
+        {
+            throw new ArgumentException(
+                "Thiếu context githubBranches trong cdk.json, dạng { \"dev\": \"develop\", \"demo\": \"main\" }.");
+        }
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (stage, branch) in raw)
+        {
+            if (branch is not string name || string.IsNullOrWhiteSpace(name) || name.Contains('*') || name.Contains('?'))
+            {
+                throw new ArgumentException($"githubBranches.{stage} phải là tên nhánh cụ thể, không dùng ký tự đại diện.");
+            }
+
+            result[stage] = name;
+        }
+
+        return result;
+    }
 
     private bool ContextFlag(string key) =>
         string.Equals(Node.TryGetContext(key)?.ToString(), "true", StringComparison.OrdinalIgnoreCase);

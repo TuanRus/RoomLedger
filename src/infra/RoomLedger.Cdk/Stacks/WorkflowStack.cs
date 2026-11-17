@@ -57,9 +57,9 @@ public sealed class WorkflowStackProps : StackProps
  */
 public sealed class WorkflowStack : Stack
 {
-    public const string FunctionsSource = "roomledger.functions";
+    public const string FunctionsSource = $"{Naming.Project}.functions";
     public const string PhotoReceived = "PhotoReceived";
-    public const string ApiSource = "roomledger.api";
+    public const string ApiSource = $"{Naming.Project}.api";
     public const string InspectionLocked = "InspectionLocked";
     public const string MoveOutSubmitted = "MoveOutSubmitted";
     public const string MoveOutCompared = "MoveOutCompared";
@@ -100,7 +100,7 @@ public sealed class WorkflowStack : Stack
         // Log group tạo sẵn với hạn giữ (không để Lambda tự tạo, vì log tự tạo giữ mãi mãi)
         ILogGroup Logs(string handlerClass, string shortName) => new Amazon.CDK.AWS.Logs.LogGroup(this, $"{handlerClass}Logs", new Amazon.CDK.AWS.Logs.LogGroupProps
         {
-            LogGroupName = $"/aws/lambda/roomledger-{props.Stage}-{shortName}",
+            LogGroupName = $"/aws/lambda/{Naming.Resource(props.Stage, shortName)}",
             Retention = LogRetentionFor(props.Stage),
             RemovalPolicy = props.Stage == "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
         });
@@ -108,7 +108,7 @@ public sealed class WorkflowStack : Stack
         Function VpcFunction(string handlerClass, string shortName, double memory, Duration timeout) =>
             new(this, handlerClass, new FunctionProps
             {
-                FunctionName = $"roomledger-{props.Stage}-{shortName}",
+                FunctionName = Naming.Resource(props.Stage, shortName),
                 LogGroup = Logs(handlerClass, shortName),
                 Runtime = Runtime.DOTNET_8,
                 Handler = $"RoomLedger.Functions::RoomLedger.Functions.{handlerClass}.Function::HandleAsync",
@@ -130,7 +130,7 @@ public sealed class WorkflowStack : Stack
         // Sự kiện không giao được sau khi thử lại (Lambda lỗi, state machine không khởi động được) vào đây
         DeadLetterQueue = new Queue(this, "WorkflowDlq", new QueueProps
         {
-            QueueName = $"roomledger-{props.Stage}-workflow-dlq",
+            QueueName = Naming.Resource(props.Stage, "workflow-dlq"),
             RetentionPeriod = Duration.Days(14),
             Encryption = QueueEncryption.SQS_MANAGED,
         });
@@ -179,7 +179,7 @@ public sealed class WorkflowStack : Stack
         // Ngoài VPC: VPC không có NAT, Bedrock không có VPC endpoint. Không có ROOMLEDGER_DB, không đọc database.
         ComparePairs = new Function(this, "ComparePairs", new FunctionProps
         {
-            FunctionName = $"roomledger-{props.Stage}-compare-pairs",
+            FunctionName = Naming.Resource(props.Stage, "compare-pairs"),
             LogGroup = Logs("ComparePairs", "compare-pairs"),
             Runtime = Runtime.DOTNET_8,
             Handler = "RoomLedger.Functions::RoomLedger.Functions.ComparePairs.Function::HandleAsync",
@@ -368,7 +368,7 @@ public sealed class WorkflowStack : Stack
                 .Otherwise(new Sfn.Succeed(this, "NotComparing")));
         CompareStateMachine = new Sfn.StateMachine(this, "MoveOutCompare", new Sfn.StateMachineProps
         {
-            StateMachineName = $"roomledger-{props.Stage}-move-out-compare",
+            StateMachineName = Naming.Resource(props.Stage, "move-out-compare"),
             DefinitionBody = Sfn.DefinitionBody.FromChainable(definition),
             Timeout = Duration.Minutes(30),
         });
@@ -394,7 +394,7 @@ public sealed class WorkflowStack : Stack
 
         var dlqAlarm = new Alarm(this, "WorkflowDlqNotEmpty", new AlarmProps
         {
-            AlarmName = $"roomledger-{props.Stage}-workflow-dlq-not-empty",
+            AlarmName = Naming.Resource(props.Stage, "workflow-dlq-not-empty"),
             AlarmDescription = "An EventBridge event could not be delivered to a workflow Lambda or state machine",
             Metric = DeadLetterQueue.MetricApproximateNumberOfMessagesVisible(new MetricOptions
             {
@@ -408,7 +408,7 @@ public sealed class WorkflowStack : Stack
         });
         var compareAlarm = new Alarm(this, "MoveOutCompareFailed", new AlarmProps
         {
-            AlarmName = $"roomledger-{props.Stage}-move-out-compare-failed",
+            AlarmName = Naming.Resource(props.Stage, "move-out-compare-failed"),
             AlarmDescription = "A move-out compare run failed; the inspection stays COMPARING",
             Metric = CompareStateMachine.MetricFailed(new MetricOptions { Period = Duration.Minutes(5), Statistic = "Sum" }),
             Threshold = 1,

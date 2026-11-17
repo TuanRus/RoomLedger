@@ -3,6 +3,7 @@ using Amazon.CDK.AWS.CloudWatch;
 using Amazon.CDK.AWS.CloudWatch.Actions;
 using Amazon.CDK.AWS.SNS;
 using Constructs;
+using RoomLedger.Cdk;
 
 namespace RoomLedger.Cdk.Stacks;
 
@@ -18,7 +19,7 @@ public sealed class ObservabilityStackProps : StackProps
 }
 
 /**
- * Giám sát RoomLedger (Sang). Mọi chỉ số lấy theo tên tài nguyên roomledger-{stage}-… nên stack này không cần output
+ * Giám sát RoomLedger (Sang). Mọi chỉ số lấy theo tên tài nguyên (Naming.Resource) nên stack này không cần output
  * của stack khác và deploy được độc lập.
  * - Topic SNS roomledger-{stage}-alarms: mọi báo động gửi vào đây (kể cả hai báo động của WorkflowStack). Chưa có người
  *   nhận: Phát chọn email rồi thêm subscription.
@@ -28,11 +29,11 @@ public sealed class ObservabilityStackProps : StackProps
  *   WorkflowStack là 5, nằm trong free tier (10 báo động) của CloudWatch; một dashboard cũng trong free tier (3).
  *
  * @author Sang
- * @version 1.0
+ * @version 1.1
  */
 public class ObservabilityStack : Stack
 {
-    /** Tên ngắn của mọi Lambda (FunctionName = roomledger-{stage}-{tên}): Api, Auth, Data, Workflow. */
+    /** Tên ngắn của mọi Lambda (FunctionName = Naming.Resource(stage, tên)): Api, Auth, Data, Workflow. */
     public static readonly string[] FunctionShortNames =
     [
         "api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
@@ -50,9 +51,9 @@ public class ObservabilityStack : Stack
     public ObservabilityStack(Construct scope, string id, ObservabilityStackProps props) : base(scope, id, props)
     {
         var stage = props.Stage;
-        string Name(string n) => $"roomledger-{stage}-{n}";
+        string Name(string n) => Naming.Resource(stage, n);
         var apiName = Name("api");
-        var dbInstance = $"roomledger-{stage}";
+        var dbInstance = $"{Naming.Project}-{stage}";   // = DataStack InstanceIdentifier
         var stateMachineArn = $"arn:{Partition}:states:{Region}:{Account}:stateMachine:{Name("move-out-compare")}";
 
         AlarmTopic = new Topic(this, "AlarmTopic", new TopicProps
@@ -64,7 +65,7 @@ public class ObservabilityStack : Stack
         // ---- Dashboard ----
         var api = new Dictionary<string, string> { ["ApiName"] = apiName };
         var db = new Dictionary<string, string> { ["DBInstanceIdentifier"] = dbInstance };
-        var dashboard = new Dashboard(this, "Dashboard", new DashboardProps { DashboardName = $"roomledger-{stage}" });
+        var dashboard = new Dashboard(this, "Dashboard", new DashboardProps { DashboardName = $"{Naming.Project}-{stage}" });
         dashboard.AddWidgets(
             Graph("API: lỗi 4xx / 5xx",
                 M("AWS/ApiGateway", "4XXError", api, "Sum"), M("AWS/ApiGateway", "5XXError", api, "Sum")),
