@@ -1,9 +1,11 @@
 openapi: 3.0.3
 info:
   title: RoomLedger API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     Hợp đồng API giữa Backend và Frontend (tab 4 "API cho FE").
+    Phiên bản x.y.z: sửa chính tả, từ ngữ → z; thêm, bớt, đổi endpoint hoặc trường → y; làm lại lớn → x.
+    0.3.0: thêm MD-04 (xóa ảnh, xác nhận biên bản, chỉ số điện nước ban đầu) và MD-06 (trả phòng, danh sách ảnh, gửi so sánh, mục so sánh, tính tiền, khiếu nại).
     Bản này có đầy đủ MD-01, MD-02, MD-03, MD-05 và POST /uploads (Tuấn).
     Các endpoint MD-04, MD-06, MD-07 do Sang bổ sung.
     Mọi phản hồi thành công có dạng {success, message, data}; lỗi có dạng ApiError.
@@ -952,8 +954,8 @@ components:
         exifTakenAt: { type: string, format: date-time, nullable: true }
         oldPhotoWarning: { type: boolean, description: Ảnh chụp cách lúc gửi quá ngưỡng (mặc định 3 ngày) }
         uploadedAt: { type: string, format: date-time }
-        viewUrl: { type: string, format: uri, nullable: true, description: Presigned GET bản xem trong bucket derived, hạn 5 phút }
-        thumbnailUrl: { type: string, format: uri, nullable: true, description: Presigned GET thumbnail 400 px, hạn 5 phút }
+        viewUrl: { type: string, format: uri, nullable: true, description: "Presigned GET bản xem trong bucket derived, hạn 5 phút" }
+        thumbnailUrl: { type: string, format: uri, nullable: true, description: "Presigned GET thumbnail 400 px, hạn 5 phút" }
         canDelete: { type: boolean, description: Người gọi là người gửi và biên bản chưa khóa }
     FindingResponse:
       type: object
