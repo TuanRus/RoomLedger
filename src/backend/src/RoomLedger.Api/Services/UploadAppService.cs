@@ -151,6 +151,12 @@ public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage stora
         var inspection = await db.Inspections.Include(i => i.Tenancy)
             .FirstOrDefaultAsync(i => i.Id == req.TargetId, ct)
             ?? throw new NotFoundException("Không tìm thấy biên bản");
+        // Sang (BR-25, quyết định D4 của Tuấn 17/11): ảnh biên bản trả phòng chỉ người thuê gửi
+        if (inspection.Type == InspectionType.MoveOut && user.UserId != inspection.Tenancy!.TenantId)
+        {
+            throw new ForbiddenException("Chỉ người thuê mới gửi ảnh biên bản trả phòng");
+        }
+
         if (inspection.Status is InspectionStatus.Locked or InspectionStatus.Settled)
         {
             throw new RecordLockedException("Biên bản đã khóa, không gửi thêm ảnh được");
