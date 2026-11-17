@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using RoomLedger.Api.Tests.Infrastructure;
+using RoomLedger.Core.Domain;
 using RoomLedger.Core.Domain.Enums;
 
 namespace RoomLedger.Api.Tests;
@@ -27,6 +28,20 @@ public class MoveOutSubmitTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var moveInId = moveIn.GetProperty("inspectionId").GetGuid();
         await SetStatusAsync(moveInId, InspectionStatus.Locked);
         var moveOut = await (await s.TenantClient.PostAsync($"/api/v1/tenancies/{s.TenancyId}/inspections/move-out", null)).DataAsync();
+        // Ảnh đồng hồ tháng cuối đã tới (B1); trường hợp thiếu nằm ở MoveOutFinalReadingsTests
+        var period = moveOut.GetProperty("finalPeriod").GetString()!;
+        await factory.WithDbAsync(async db =>
+        {
+            foreach (var kind in new[] { MeterKind.Electricity, MeterKind.Water })
+            {
+                db.MeterReadings.Add(new MeterReading
+                {
+                    RoomId = s.RoomId, TenancyId = s.TenancyId, Period = period, Kind = kind,
+                    PhotoStatus = FileStatus.Received, PhotoKey = $"meters/{Guid.NewGuid():N}.jpg",
+                });
+            }
+            return await db.SaveChangesAsync();
+        });
         return new Seed(s, moveInId, moveOut.GetProperty("inspectionId").GetGuid(), moveOut.GetProperty("areas").Clone());
     }
 

@@ -58,4 +58,16 @@ public static class InspectionService
     /** Đọc bản sao; rỗng hoặc null → không có khu vực. */
     public static IReadOnlyList<InspectionArea> ParseSnapshot(string? json) =>
         string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<InspectionArea>>(json, Json) ?? [];
+
+    /** Kỳ trả phòng (A3): tháng giờ Việt Nam của lúc mở biên bản trả phòng, dạng yyyy-MM. */
+    public static string FinalPeriod(DateTimeOffset utcNow) => throw new NotImplementedException();
+
+    /** Đồng hồ còn thiếu chỉ số tháng cuối (B1), điện trước nước; rỗng = đủ. */
+    public static IReadOnlyList<MeterKind> MissingFinalReadings(
+        IEnumerable<(MeterKind Kind, FileStatus? PhotoStatus, MeterReadingStatus Status)> readings) =>
+        throw new NotImplementedException();
+
+    /** Thông báo lỗi FINAL_READING_MISSING (B2). */
+    public static string FinalReadingMissingMessage(IReadOnlyList<MeterKind> missing, string period) =>
+        throw new NotImplementedException();
 }
