@@ -32,6 +32,8 @@ public sealed class WorkflowStackProps : StackProps
     public required string IncomingBucketName { get; init; }
     public required string DerivedBucketName { get; init; }
     public required string EvidenceBucketName { get; init; }
+    /** Topic nhận báo động (ObservabilityStack); null → báo động không gửi đi đâu. */
+    public Amazon.CDK.AWS.SNS.ITopic? AlarmTopic { get; init; }
 }
 
 /**
@@ -62,6 +64,9 @@ public sealed class WorkflowStack : Stack
     public const string PrimaryModel = "au.anthropic.claude-sonnet-4-5-20250929-v1:0";
     public const string FallbackModel = "au.anthropic.claude-haiku-4-5-20251001-v1:0";
     public const int CompareConcurrency = 3;   // quota Bedrock của tài khoản mới thấp; Map chạy tối đa 3 cặp cùng lúc
+
+    /** Hạn giữ log của Lambda theo stage. */
+    public static Amazon.CDK.AWS.Logs.RetentionDays LogRetentionFor(string stage) => throw new NotImplementedException();
 
     public Function PhotoIngest { get; }
     public Function PhotoDerive { get; }
