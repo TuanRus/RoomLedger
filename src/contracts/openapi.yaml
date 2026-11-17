@@ -1,12 +1,13 @@
 openapi: 3.0.3
 info:
   title: RoomLedger API
-  version: 0.4.0
+  version: 0.4.1
   description: |
     Hợp đồng API giữa Backend và Frontend (tab 4 "API cho FE").
     Phiên bản x.y.z: sửa chính tả, từ ngữ → z; thêm, bớt, đổi endpoint hoặc trường → y; làm lại lớn → x.
     0.3.0: thêm MD-04 (xóa ảnh, xác nhận biên bản, chỉ số điện nước ban đầu) và MD-06 (trả phòng, danh sách ảnh, gửi so sánh, mục so sánh, tính tiền, khiếu nại).
     0.4.0: MD-06-FE-05 quyết toán (GET/POST /tenancies/{tenancyId}/settlement), finalPeriod trên biên bản trả phòng, gửi biên bản cần ảnh đồng hồ tháng cuối (FINAL_READING_MISSING).
+    0.4.1: POST /uploads ghi rõ 403 FORBIDDEN khi chủ nhà gửi ảnh vào biên bản trả phòng (BR-25); không đổi endpoint hay trường.
     Bản này có đầy đủ MD-01, MD-02, MD-03, MD-05 và POST /uploads (Tuấn).
     Các endpoint MD-04, MD-06, MD-07 do Sang bổ sung.
     Mọi phản hồi thành công có dạng {success, message, data}; lỗi có dạng ApiError.
@@ -173,6 +174,7 @@ paths:
       responses:
         "201": { $ref: "#/components/responses/UploadUrl" }
         "400": { description: INVALID_FILE hoặc VALIDATION_ERROR, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "403": { description: "FORBIDDEN: ảnh biên bản trả phòng chỉ người thuê gửi (BR-25); chủ nhà gửi vào biên bản trả phòng → 403", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "409": { description: "RECORD_LOCKED, INVALID_STATE hoặc PERIOD_CLOSED", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
 
   /properties/{propertyId}/meter-readings:

@@ -67,7 +67,7 @@ Nhánh `feature/md-06-move-out-compare`.
 
 **Cần biết:**
 - Bedrock thật chưa gọi được: tài khoản 479365371363 chưa gửi form use-case Anthropic (không phải do SCP). Test dùng Bedrock giả.
-- Chủ nhà vẫn tải được ảnh vào biên bản trả phòng qua `/uploads` (BR-25 chỉ cho người thuê); cần nhóm quyết định có chặn không.
+- Ảnh biên bản trả phòng chỉ người thuê gửi (BR-25, quyết định D4): chủ nhà gọi `/uploads` vào biên bản trả phòng → 403 `FORBIDDEN`.
 - Ngưỡng 6 mới kiểm trên ảnh dựng; cần chỉnh trên bộ ảnh thật (đổi trong SSM, không cần deploy).
 - Báo động chưa gắn SNS/email: cần chọn người nhận.
 - Ảnh đồng hồ: chưa Lambda nào chuyển `photo_status` của chỉ số khỏi PENDING_UPLOAD, nên lúc gửi biên bản chỉ số được tính khi ảnh đã tới **hoặc** đã có số. Cần luồng chỉ số MD-05 cập nhật `photo_status` khi ảnh tới.
