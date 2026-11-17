@@ -374,7 +374,7 @@ public class WorkflowStackTests
     public void EveryRuleTarget_HasADeadLetterQueue()
     {
         var rules = Synth().FindResources("AWS::Events::Rule").Values.Select(PropsOf).ToList();
-        Assert.Equal(4, rules.Count);
+        Assert.Equal(5, rules.Count);   // + TenancySettled (MD-06-FE-05)
         foreach (var target in rules.SelectMany(r => (object[])r["Targets"]).Cast<IDictionary<string, object>>())
         {
             Assert.True(target.ContainsKey("DeadLetterConfig"), Json(target));

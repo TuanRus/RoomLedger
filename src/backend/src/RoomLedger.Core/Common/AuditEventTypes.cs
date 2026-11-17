@@ -43,6 +43,7 @@ public static class AuditEventTypes
     public const string MoveOutSubmitted = "MOVE_OUT_SUBMITTED";   // Sang: BR-25 RULE 4
     public const string MoveOutCompared = "MOVE_OUT_COMPARED";   // Sang: BR-26 (persist-results)
     public const string TenancySettled = "TENANCY_SETTLED";      // Sang: BR-29 quyết toán
+    public const string SettlementPdfCreated = "SETTLEMENT_PDF_CREATED";   // Sang: BR-29 biên bản thanh lý (render-pdf)
     public const string OpeningReadingsSet = "OPENING_READINGS_SET";   // Sang: BR-18 RULE 5
     public const string EvidenceSealed = "EVIDENCE_SEALED";
     public const string EvidenceHashMismatch = "EVIDENCE_HASH_MISMATCH";

@@ -41,12 +41,14 @@ public sealed class WorkflowStackProps : StackProps
  * Trả phòng: API MoveOutSubmitted → state machine move-out-compare: đọc ngưỡng pHash và giới hạn gọi từ SSM →
  * plan-compare (VPC) → Map compare-pairs (ngoài VPC, Bedrock, tối đa 3 song song; lỗi → NOT_ANALYZED) →
  * persist-results (VPC, COMPARING → REVIEWING) → PutMetricData RoomLedger/Compare → sự kiện MoveOutCompared (notify).
+ * Quyết toán (MD-06-FE-05): API TenancySettled → render-pdf (VPC, biên bản thanh lý PDF vào derived/reports/) và
+ * evidence-seal (niêm phong ảnh biên bản trả phòng, detail có inspectionId).
  * Lambda trong VPC đăng nhập roomledger_app bằng IAM token; quyền S3 / Bedrock tối thiểu. Mọi rule có DLQ chung,
  * báo động khi DLQ có tin hoặc state machine chạy lỗi (chưa gắn SNS: chờ chọn email nhận báo động).
  * Phụ trách: Sang.
  *
  * @author Sang
- * @version 1.1
+ * @version 1.2
  */
 public sealed class WorkflowStack : Stack
 {
@@ -56,6 +58,7 @@ public sealed class WorkflowStack : Stack
     public const string InspectionLocked = "InspectionLocked";
     public const string MoveOutSubmitted = "MoveOutSubmitted";
     public const string MoveOutCompared = "MoveOutCompared";
+    public const string TenancySettled = "TenancySettled";
     public const string PrimaryModel = "au.anthropic.claude-sonnet-4-5-20250929-v1:0";
     public const string FallbackModel = "au.anthropic.claude-haiku-4-5-20251001-v1:0";
     public const int CompareConcurrency = 3;   // quota Bedrock của tài khoản mới thấp; Map chạy tối đa 3 cặp cùng lúc
@@ -66,6 +69,7 @@ public sealed class WorkflowStack : Stack
     public Function PlanCompare { get; }
     public Function ComparePairs { get; }
     public Function PersistResults { get; }
+    public Function RenderPdf { get; }
     public Sfn.StateMachine CompareStateMachine { get; }
     public Queue DeadLetterQueue { get; }
 
@@ -429,6 +433,31 @@ public sealed class WorkflowStack : Stack
                 DetailType = new[] { InspectionLocked },
             },
             Targets = new IRuleTarget[] { new LambdaFunction(EvidenceSeal, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }) },
+        });
+
+        // ---- MD-06-FE-05: quyết toán (Sang) ----
+        // render-pdf: QuestPDF + font Lato đi kèm gói; đọc RDS, chỉ được ghi derived/reports/ (không đọc ảnh, không evidence)
+        RenderPdf = VpcFunction("RenderPdf", "render-pdf", 1024, Duration.Minutes(1));
+        RenderPdf.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Actions = new[] { "s3:PutObject" },
+            Resources = new[] { $"arn:{Aws.PARTITION}:s3:::{props.DerivedBucketName}/reports/*" },
+        }));
+        props.Db.GrantConnect(RenderPdf, DataStack.AppUser);
+
+        new Rule(this, "TenancySettledRule", new RuleProps
+        {
+            Description = "Tenancy settled (API) -> render-pdf (termination record) + evidence-seal (move-out photos)",
+            EventPattern = new EventPattern
+            {
+                Source = new[] { ApiSource },
+                DetailType = new[] { TenancySettled },
+            },
+            Targets = new IRuleTarget[]
+            {
+                new LambdaFunction(RenderPdf, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }),
+                new LambdaFunction(EvidenceSeal, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }),
+            },
         });
     }
 }

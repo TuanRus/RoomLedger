@@ -16,12 +16,15 @@ namespace RoomLedger.Api.Services;
  * biên bản AWAITING_CONFIRM → SETTLED trước (giữ khóa dòng, lần bấm thứ hai chờ rồi thấy đã quyết toán), tính số và
  * kiểm điều kiện sau khóa (thiếu → rollback, 409 mã đầu tiên, details liệt kê tất cả), ghi settlement, hợp đồng
  * MOVING_OUT → SETTLED, phòng → VACANT, audit. Sau commit phát TenancySettled (biên bản PDF, niêm phong ảnh, email).
+ * 1.1: trả pdfUrl (link tải biên bản thanh lý do render-pdf tạo).
  *
  * @author Sang
- * @version 1.0
+ * @version 1.1
  */
-public class SettlementAppService(AppDbContext db, ICurrentUser user, TimeProvider clock, IEventPublisher events)
+public class SettlementAppService(AppDbContext db, ICurrentUser user, TimeProvider clock, IEventPublisher events, IStorage storage)
 {
+    private static readonly TimeSpan PdfLinkLifetime = TimeSpan.FromMinutes(5);
+
     private sealed record Figures(string Period, long Deposit, long Deductions, long Unpaid, IReadOnlyList<SettlementBlocker> Blockers)
     {
         public long Refund => SettlementService.Refund(Deposit, Deductions, Unpaid);
@@ -180,8 +183,10 @@ public class SettlementAppService(AppDbContext db, ICurrentUser user, TimeProvid
             SettlementService.Blockers(check));
     }
 
-    private static SettlementResponse ToResponse(Settlement s, InspectionView inspection) => new(
+    /** Số đã chốt; PdfUrl = link tải biên bản thanh lý 5 phút, null tới khi render-pdf ghi xong pdf_key. */
+    private SettlementResponse ToResponse(Settlement s, InspectionView inspection) => new(
         s.TenancyId, s.InspectionId, inspection.Period, SettlementResponse.Settled,
         s.Deposit, s.DeductionsTotal, s.UnpaidInvoicesTotal, s.Refund, CanSettle: false, Blockers: [],
-        SettlementId: s.Id, SettledAt: s.SettledAt, SettledBy: s.SettledBy);
+        SettlementId: s.Id, SettledAt: s.SettledAt, SettledBy: s.SettledBy,
+        PdfUrl: s.PdfKey is null ? null : storage.CreateDownloadUrl(StorageBucket.Derived, s.PdfKey, PdfLinkLifetime));
 }
