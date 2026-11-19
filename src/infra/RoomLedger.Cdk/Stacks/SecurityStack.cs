@@ -89,7 +89,7 @@ public class SecurityStack : Stack
         GitHubDeployRole = new Role(this, "GitHubDeployRole", new RoleProps
         {
             RoleName = Naming.Resource(stage, "github-deploy"),
-            Description = "Role cho GitHub Actions deploy RoomLedger qua OIDC; chỉ assume được các role bootstrap của CDK",
+            Description = "GitHub Actions deploy role for RoomLedger via OIDC; can only assume the CDK bootstrap roles",
             MaxSessionDuration = Duration.Hours(1),
             AssumedBy = new FederatedPrincipal(providerArn, new Dictionary<string, object>
             {
