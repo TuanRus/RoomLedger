@@ -8,7 +8,7 @@ namespace RoomLedger.Cdk.Stacks;
  * Tham số của StorageStack. Tên bucket do Program.cs truyền vào, dùng chung với WorkflowStack.
  *
  * @author Tuấn
- * @version 1.2
+ * @version 1.3
  */
 public sealed class StorageStackProps : StackProps
 {
@@ -16,8 +16,11 @@ public sealed class StorageStackProps : StackProps
     public required string IncomingBucketName { get; init; }
     public required string DerivedBucketName { get; init; }
     public required string EvidenceBucketName { get; init; }
-    /** Origin của web cho CORS PUT vào bucket incoming; mặc định "*" ở dev. */
-    public string WebOrigin { get; init; } = "*";
+    /**
+     * Origin của web cho CORS PUT vào bucket incoming, ví dụ https://demo.example.com.
+     * Bắt buộc ở stage khác dev (không được bỏ trống hay "*"); dev bỏ trống thì dùng "*".
+     */
+    public string? WebOrigin { get; init; }
 }
 
 /**
@@ -26,7 +29,7 @@ public sealed class StorageStackProps : StackProps
  * Phát rà soát và hoàn thiện bucket policy (StorageStack cần Phát duyệt).
  *
  * @author Tuấn
- * @version 1.2
+ * @version 1.3
  */
 public sealed class StorageStack : Stack
 {
@@ -37,6 +40,7 @@ public sealed class StorageStack : Stack
     public StorageStack(Construct scope, string id, StorageStackProps props) : base(scope, id, props)
     {
         var isDev = props.Stage == "dev";
+        var webOrigin = ResolveWebOrigin(props.Stage, props.WebOrigin);
 
         Incoming = NewBucket("Incoming", props.IncomingBucketName, isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN, new BucketProps
         {
@@ -47,7 +51,7 @@ public sealed class StorageStack : Stack
                 new CorsRule
                 {
                     AllowedMethods = [HttpMethods.PUT],
-                    AllowedOrigins = [props.WebOrigin],
+                    AllowedOrigins = [webOrigin],
                     AllowedHeaders = ["Content-Type", "x-amz-checksum-sha256", "x-amz-sdk-checksum-algorithm"],
                     MaxAge = 300,
                 },
@@ -80,6 +84,22 @@ public sealed class StorageStack : Stack
         new CfnOutput(this, "IncomingBucket", new CfnOutputProps { Value = Incoming.BucketName });
         new CfnOutput(this, "EvidenceBucket", new CfnOutputProps { Value = Evidence.BucketName });
         new CfnOutput(this, "DerivedBucket", new CfnOutputProps { Value = Derived.BucketName });
+    }
+
+    /**
+     * dev: bỏ trống thì dùng "*". Stage khác phải có origin cụ thể, thiếu thì lỗi ngay lúc synth
+     * để bucket incoming của demo không nhận PUT từ mọi trang web.
+     */
+    private static string ResolveWebOrigin(string stage, string? webOrigin)
+    {
+        var origin = webOrigin?.Trim();
+        if (stage == "dev")
+            return string.IsNullOrEmpty(origin) ? "*" : origin;
+        if (string.IsNullOrEmpty(origin) || origin == "*")
+            throw new ArgumentException(
+                $"Stage '{stage}' cần origin cụ thể cho CORS của bucket incoming: -c stage={stage} -c webOrigin=https://<domain web>",
+                nameof(webOrigin));
+        return origin;
     }
 
     private Bucket NewBucket(string id, string name, RemovalPolicy removal, BucketProps extra) =>
