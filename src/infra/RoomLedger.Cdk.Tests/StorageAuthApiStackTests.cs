@@ -197,4 +197,23 @@ public class StorageAuthApiStackTests
         Assert.DoesNotContain("ReservedConcurrentExecutions", fn); // giới hạn tài khoản là 10
         Assert.Contains("rds-db:connect", Json(Templates.Value.Api.FindResources("AWS::IAM::Policy")));
     }
+
+    /** D1 (BR-17): API xóa được ảnh ở incoming và bản xem *.jpg ở derived; không xóa được evidence hay PDF thanh lý. */
+    [Fact]
+    public void Api_CanDeleteOnlyIncomingAndDerivedJpg_NeverEvidenceNorReports()
+    {
+        var statements = Templates.Value.Api.FindResources("AWS::IAM::Policy").Values
+            .Select(r => (IDictionary<string, object>)r["Properties"])
+            .Select(p => (IDictionary<string, object>)p["PolicyDocument"])
+            .SelectMany(d => ((object[])d["Statement"]).Cast<IDictionary<string, object>>())
+            .ToList();
+
+        var json = Json(Assert.Single(statements, s => Json(s).Contains("s3:DeleteObject")));
+
+        Assert.Contains("Incoming", json);
+        Assert.Contains("Derived", json);
+        Assert.Contains("/*.jpg", json);
+        Assert.DoesNotContain("Evidence", json);
+        Assert.DoesNotContain("reports", json);
+    }
 }
