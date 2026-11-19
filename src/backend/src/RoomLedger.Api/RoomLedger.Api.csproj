@@ -2,6 +2,7 @@
   <PropertyGroup>
     <AWSProjectType>Lambda</AWSProjectType>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <UserSecretsId>78d0def9-7567-45fd-88b4-7f15ae37216b</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\RoomLedger.Core\RoomLedger.Core.csproj" />

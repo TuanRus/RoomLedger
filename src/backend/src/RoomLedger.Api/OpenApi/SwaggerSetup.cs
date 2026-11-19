@@ -63,17 +63,21 @@ public static class SwaggerSetup
     }
 
     /**
-     * Phát OpenAPI JSON tại /swagger/v1/swagger.json và giao diện tại /swagger.
+     * Phát OpenAPI JSON tại /api/swagger/v1/swagger.json và giao diện tại /api/swagger.
      *
-     * @author Tuấn
-     * @version 1.0
+     * @author Kiru
+     * @version 1.1
      */
     public static WebApplication UseRoomLedgerSwagger(this WebApplication app)
     {
-        app.UseSwagger();
+        app.UseSwagger(o =>
+        {
+            o.RouteTemplate = "api/swagger/{documentName}/swagger.json";
+        });
         app.UseSwaggerUI(o =>
         {
-            o.SwaggerEndpoint("/swagger/v1/swagger.json", "RoomLedger API v1");
+            o.RoutePrefix = "api/swagger";
+            o.SwaggerEndpoint("/api/swagger/v1/swagger.json", "RoomLedger API v1");
             o.DocumentTitle = "RoomLedger API";
         });
         return app;
