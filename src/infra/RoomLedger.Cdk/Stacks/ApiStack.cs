@@ -2,6 +2,7 @@ using Amazon.CDK;
 using Amazon.CDK.AWS.APIGateway;
 using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.Events;
+using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.RDS;
 using Constructs;
@@ -42,7 +43,7 @@ public sealed class ApiStack : Stack
 
     public ApiStack(Construct scope, string id, ApiStackProps props) : base(scope, id, props)
     {
-        string Name(string n) => $"roomledger-{props.Stage}-{n}";
+        string Name(string n) => Naming.Resource(props.Stage, n);
         var storage = props.Storage;
         var auth = props.Auth;
         var bus = EventBus.FromEventBusName(this, "Bus", "default");
@@ -68,7 +69,7 @@ public sealed class ApiStack : Stack
                 ["Storage__EvidenceBucket"] = storage.Evidence.BucketName,
                 ["Storage__DerivedBucket"] = storage.Derived.BucketName,
                 ["EventBus__BusName"] = bus.EventBusName,
-                ["EventBus__Source"] = "roomledger.api",
+                ["EventBus__Source"] = WorkflowStack.ApiSource,
             },
             // Không đặt ReservedConcurrentExecutions: giới hạn tài khoản là 10
         });
@@ -81,6 +82,16 @@ public sealed class ApiStack : Stack
         storage.Derived.GrantRead(ApiFunction);
         bus.GrantPutEventsTo(ApiFunction);
 
+        // D1 (BR-17): xóa ảnh trước khi khóa. Chỉ incoming và ảnh chuyển đổi trong derived (*.jpg gồm .thumb.jpg).
+        // Không có quyền xóa trên evidence; PDF thanh lý (derived/reports/*.pdf) không khớp *.jpg nên không xóa được.
+        ApiFunction.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Sid = "DeleteUnlockedPhotoObjects",
+            Effect = Effect.ALLOW,
+            Actions = ["s3:DeleteObject"],
+            Resources = [storage.Incoming.ArnForObjects("*"), storage.Derived.ArnForObjects("*.jpg")],
+        }));
+        
         Api = new RestApi(this, "Rest", new RestApiProps
         {
             RestApiName = Name("api"),

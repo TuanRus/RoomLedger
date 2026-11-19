@@ -45,7 +45,7 @@ public sealed class NetworkStack : Stack
         LambdaSg = new SecurityGroup(this, "LambdaSg", new SecurityGroupProps
         {
             Vpc = Vpc,
-            SecurityGroupName = $"roomledger-{props.Stage}-lambda-sg",
+            SecurityGroupName = Naming.Resource(props.Stage, "lambda-sg"),
             Description = "RoomLedger Lambdas inside the VPC",
             AllowAllOutbound = true,
         });

@@ -12,7 +12,7 @@ namespace RoomLedger.Infrastructure.Persistence;
  * - Enum lưu UPPER_SNAKE_CASE.
  *
  * @author Tuấn
- * @version 1.1
+ * @version 1.2
  */
 public class AppDbContext : DbContext
 {
@@ -45,9 +45,11 @@ public class AppDbContext : DbContext
     public DbSet<Invite> Invites => Set<Invite>();
     public DbSet<Inspection> Inspections => Set<Inspection>();
     public DbSet<Photo> Photos => Set<Photo>();
+    public DbSet<Finding> Findings => Set<Finding>();
     public DbSet<MeterReading> MeterReadings => Set<MeterReading>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<Dispute> Disputes => Set<Dispute>();
+    public DbSet<Settlement> Settlements => Set<Settlement>();   // Sang: MD-06-FE-05
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
     /** Thời điểm hiện tại theo đồng hồ của context (test thay được). */
@@ -118,12 +120,16 @@ public class AppDbContext : DbContext
             || v.Tenancy!.LandlordId == _userId || v.Tenancy.TenantId == _userId);
         b.Entity<Inspection>().HasQueryFilter(i => _isSystem
             || i.Tenancy!.LandlordId == _userId || i.Tenancy.TenantId == _userId);
+        b.Entity<Finding>().HasQueryFilter(f => _isSystem
+            || f.Inspection!.Tenancy!.LandlordId == _userId || f.Inspection.Tenancy.TenantId == _userId);
         b.Entity<MeterReading>().HasQueryFilter(m => _isSystem
             || m.Tenancy!.LandlordId == _userId || m.Tenancy.TenantId == _userId);
         b.Entity<Invoice>().HasQueryFilter(i => _isSystem
             || i.Tenancy!.LandlordId == _userId || i.Tenancy.TenantId == _userId);
         b.Entity<Dispute>().HasQueryFilter(d => _isSystem
             || d.Tenancy!.LandlordId == _userId || d.Tenancy.TenantId == _userId);
+        b.Entity<Settlement>().HasQueryFilter(s => _isSystem
+            || s.Tenancy!.LandlordId == _userId || s.Tenancy.TenantId == _userId);
         b.Entity<Invite>().HasQueryFilter(i => _isSystem || i.Tenancy!.LandlordId == _userId);
         b.Entity<AppUser>().HasQueryFilter(u => _isSystem || u.Id == _userId);
     }

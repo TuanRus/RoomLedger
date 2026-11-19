@@ -24,8 +24,10 @@ public record InspectionResponse(
     DateTimeOffset? LandlordConfirmedAt,
     DateTimeOffset? TenantConfirmedAt,
     IReadOnlyList<InspectionAreaResponse> Areas,
+    Guid? ReferenceInspectionId = null,   // biên bản trả phòng: id biên bản nhận phòng để hiện ảnh đối chiếu
     long? OpeningElectricity = null,   // BR-18 RULE 5: chỉ số ban đầu (chỉ biên bản nhận phòng)
-    long? OpeningWater = null);
+    long? OpeningWater = null,
+    string? FinalPeriod = null);   // biên bản trả phòng: kỳ chỉ số tháng cuối và hóa đơn cuối (A3)
 
 /**
  * Body POST /inspections/{id}/confirm: agreed = người dùng đã tích ô cam kết (BR-18 TRIGGER).
@@ -34,6 +36,28 @@ public record InspectionResponse(
  * @version 1.0
  */
 public record ConfirmInspectionRequest(bool? Agreed);
+
+/**
+ * Một ảnh của biên bản cho FE. URL là presigned GET tới bucket derived (5 phút); không có khóa S3 hay SHA-256.
+ * viewUrl/thumbnailUrl null khi ảnh đang xử lý (RECEIVED). canDelete: người gọi là người gửi và biên bản chưa khóa.
+ *
+ * @author Sang
+ * @version 1.0
+ */
+public record InspectionPhotoResponse(
+    Guid PhotoId,
+    Guid AreaId,
+    string FileName,
+    FileStatus Status,
+    UserRole UploaderRole,
+    bool UploadedByMe,
+    CaptureSource CaptureSource,
+    DateTimeOffset? ExifTakenAt,
+    bool OldPhotoWarning,
+    DateTimeOffset UploadedAt,
+    string? ViewUrl,
+    string? ThumbnailUrl,
+    bool CanDelete);
 
 /** Chỉ số điện nước ban đầu (BR-18 RULE 5): số nguyên từ 0, bắt buộc cả hai. */
 public record OpeningReadingsRequest(long? Electricity, long? Water);

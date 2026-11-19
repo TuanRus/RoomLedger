@@ -20,7 +20,10 @@ public static class FunctionDb
         var builder = new NpgsqlDataSourceBuilder(cs);
         if (!cs.Contains("Password=", StringComparison.OrdinalIgnoreCase))
         {
-            builder.UseRdsIamAuth(Environment.GetEnvironmentVariable("AWS_REGION") ?? "ap-southeast-1");
+            // Lambda luôn có AWS_REGION; không đoán region để tránh ký token IAM cho nhầm region.
+            var region = Environment.GetEnvironmentVariable("AWS_REGION")
+                ?? throw new InvalidOperationException("Thiếu biến môi trường AWS_REGION (cần cho RDS IAM auth)");
+            builder.UseRdsIamAuth(region);
         }
 
         return builder.Build();

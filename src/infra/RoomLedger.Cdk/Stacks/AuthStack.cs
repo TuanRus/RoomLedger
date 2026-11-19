@@ -41,7 +41,7 @@ public sealed class AuthStack : Stack
 
     public AuthStack(Construct scope, string id, AuthStackProps props) : base(scope, id, props)
     {
-        string Name(string n) => $"roomledger-{props.Stage}-{n}";
+        string Name(string n) => Naming.Resource(props.Stage, n);
         var removal = props.Stage == "dev" ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN;
 
         var passwordPolicy = new PasswordPolicy

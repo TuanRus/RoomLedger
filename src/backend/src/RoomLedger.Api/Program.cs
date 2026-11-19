@@ -54,6 +54,8 @@ builder.Services.AddScoped<TenancyAppService>();
 builder.Services.AddScoped<AccountAppService>();
 builder.Services.AddScoped<UploadAppService>();
 builder.Services.AddScoped<InspectionAppService>();
+builder.Services.AddScoped<FindingAppService>();
+builder.Services.AddScoped<SettlementAppService>();   // Sang: MD-06-FE-05
 builder.Services.AddScoped<MeterAppService>();
 builder.Services.AddScoped<InvoiceAppService>();
 

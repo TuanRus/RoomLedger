@@ -19,9 +19,22 @@ public class SecurityStackTests
     private const string Region = "ap-southeast-2";
     private const string Issuer = "token.actions.githubusercontent.com";
 
-    private static Template Build(string stage = "dev", Dictionary<string, object>? context = null)
+    /** Giống khối context trong cdk.json; test truyền thêm key để ghi đè, giá trị null để bỏ key. */
+    private static Dictionary<string, object> BaseContext() => new()
     {
-        var app = new App(new AppProps { Context = context ?? new Dictionary<string, object>() });
+        ["githubRepo"] = "TuanRus/RoomLedger",
+        ["githubBranches"] = new Dictionary<string, object> { ["dev"] = "develop", ["demo"] = "main" },
+    };
+
+    private static Template Build(string stage = "dev", Dictionary<string, object?>? context = null)
+    {
+        var merged = BaseContext();
+        foreach (var (key, value) in context ?? new Dictionary<string, object?>())
+        {
+            if (value is null) merged.Remove(key); else merged[key] = value;
+        }
+
+        var app = new App(new AppProps { Context = merged });
         var stack = new SecurityStack(app, "TestSecurity", new SecurityStackProps
         {
             Stage = stage,
@@ -45,7 +58,7 @@ public class SecurityStackTests
     [Fact]
     public void Creates_and_retains_provider_only_when_flag_is_set()
     {
-        var t = Build(context: new Dictionary<string, object> { ["createGithubOidcProvider"] = "true" });
+        var t = Build(context: new Dictionary<string, object?> { ["createGithubOidcProvider"] = "true" });
         t.HasResourceProperties("AWS::IAM::OIDCProvider", new Dictionary<string, object>
         {
             ["Url"] = $"https://{Issuer}",
@@ -98,12 +111,29 @@ public class SecurityStackTests
         => Assert.Throws<ArgumentException>(() => Build(stage));
 
     [Theory]
+    [InlineData("githubRepo")]
+    [InlineData("githubBranches")]
+    public void Requires_repo_and_branch_mapping_from_context_instead_of_hard_coded_defaults(string key)
+        => Assert.Throws<ArgumentException>(() => Build(context: new Dictionary<string, object?> { [key] = null }));
+
+    [Fact]
+    public void Branch_mapping_comes_from_context()
+    {
+        var json = Json(Build(context: new Dictionary<string, object?>
+        {
+            ["githubBranches"] = new Dictionary<string, object> { ["dev"] = "feature-x", ["demo"] = "main" },
+        }));
+        Assert.Contains("repo:TuanRus/RoomLedger:ref:refs/heads/feature-x", json);
+        Assert.DoesNotContain("refs/heads/develop", json);
+    }
+
+    [Theory]
     [InlineData("repo:TuanRus/RoomLedger:*")]
     [InlineData("repo:TuanRus/RoomLedger:ref:refs/heads/*")]
     [InlineData("repo:Someone/Else:ref:refs/heads/develop")]
     public void Rejects_subjects_with_wildcards_or_from_another_repo(string subject)
         => Assert.Throws<ArgumentException>(
-            () => Build(context: new Dictionary<string, object> { ["githubSubjects"] = subject }));
+            () => Build(context: new Dictionary<string, object?> { ["githubSubjects"] = subject }));
 
     [Fact]
     public void Role_can_only_assume_deploy_file_publishing_and_lookup_roles_of_this_account()

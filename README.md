@@ -32,6 +32,43 @@ RoomLedger/
 | Lambda concurrency | Account limit is **10** (increase requested) | Don't set reserved concurrency until it's raised |
 | Toolchain check | `bash scripts/verify-toolchain.sh` must end with `T0 RESULT: GREEN` | Checks SDK 8, dotnet-ef 8 and that no project resolves EF/Npgsql 9.x |
 
+## Deploy lần đầu (làm một lần cho mỗi AWS account)
+
+Chạy từ `src/infra/RoomLedger.Cdk`, region `ap-southeast-2`, bằng tài khoản có quyền admin (chỉ lần đầu; sau đó GitHub Actions deploy qua OIDC, không lưu AWS key trong GitHub).
+
+1. Bootstrap CDK:
+
+   ```bash
+   cdk bootstrap aws://<ACCOUNT_ID>/ap-southeast-2
+   ```
+
+2. Tạo GitHub OIDC provider. Mỗi account chỉ có **một** provider cho URL `token.actions.githubusercontent.com`, dùng chung cho dev và demo. `SecurityStack` mặc định không tạo provider mà tham chiếu provider có sẵn, nên provider phải có trước khi deploy. Chọn **một** trong hai cách, chỉ làm một lần:
+
+   - Tạo tay (khuyên dùng, không gắn với stage nào):
+
+     ```bash
+     aws iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com --client-id-list sts.amazonaws.com
+     ```
+
+   - Hoặc để CDK tạo khi deploy **một** stage duy nhất (provider được giữ lại khi `cdk destroy`):
+
+     ```bash
+     cdk deploy roomledger-dev-security -c stage=dev -c createGithubOidcProvider=true
+     ```
+
+   Không truyền `createGithubOidcProvider=true` cho stage thứ hai: CloudFormation sẽ báo provider đã tồn tại. Kiểm tra: `aws iam list-open-id-connect-providers`.
+
+3. Deploy stage. Stage `demo` bắt buộc có `webOrigin` (origin của web, dùng cho CORS của bucket incoming); thiếu, bỏ trống hoặc `*` thì `cdk synth` báo lỗi. Stage `dev` không truyền thì dùng `*`.
+
+   ```bash
+   cdk deploy --all -c stage=dev
+   cdk deploy --all -c stage=demo -c webOrigin=https://<domain web demo>
+   ```
+
+4. Lấy ARN role `roomledger-{stage}-github-deploy` từ output của `SecurityStack`, gắn vào bước `aws-actions/configure-aws-credentials` (`role-to-assume`) trong `.github/workflows/infra.yml`.
+
+Dọn dẹp: `cdk destroy --all -c stage=<stage>`. Được giữ lại và phải xóa tay: bucket evidence (Object Lock, mọi stage), cả ba bucket ở stage demo, và OIDC provider (chỉ xóa khi không còn stage nào dùng).
+
 ## Trạng thái MD-04 Biên bản nhận phòng (Sang, cập nhật 2026-11-11)
 
 | Chức năng | Trạng thái | Ghi chú |
@@ -45,3 +82,31 @@ RoomLedger/
 | MD-04-FE-05 Xuất PDF biên bản nhận phòng | ⬜ Stretch | Quyết định ngày 25/11 |
 
 **Chưa kiểm trên AWS (T13):** chưa deploy. Cần Network + Data, StorageStack (bucket `roomledger-{stage}-incoming`, `-derived`, `-evidence` có versioning + Object Lock, bật EventBridge cho incoming) và Api/Auth.
+
+## Trạng thái MD-06 Trả phòng và quyết toán (Sang, cập nhật 2026-11-17)
+
+Nhánh `feature/md-06-move-out-compare`.
+
+| Chức năng | Trạng thái | Ghi chú |
+|---|---|---|
+| Danh sách ảnh biên bản | ✅ Xong | `GET /inspections/{id}/photos`: URL xem và thumbnail 5 phút (bucket derived), `canDelete`; dùng cho màn MD-04 và ảnh đối chiếu MD-06 |
+| MD-06-FE-01 Mở biên bản trả phòng (BR-25 RULE 1–2) | ✅ Xong | `POST /tenancies/{id}/inspections/move-out`: chỉ người thuê; cần biên bản nhận phòng LOCKED (không thì 409 `NO_MOVE_IN_RECORD`); chép khu vực của biên bản nhận phòng; hợp đồng → MOVING_OUT; `referenceInspectionId` để hiện ảnh nhận phòng |
+| MD-06-FE-01 Gửi để so sánh (BR-25 RULE 4) | ✅ Xong | `POST /inspections/{id}/submit`: đủ ảnh → COMPARING đúng một lần, phát sự kiện `MoveOutSubmitted`; biên bản trả phòng không dùng được `confirm` |
+| MD-06-FE-01 Ảnh đồng hồ tháng cuối (BR-25 RULE 3) | ✅ Xong | Mở biên bản trả phòng chốt `finalPeriod` (tháng giờ Việt Nam lúc mở, cột `inspection.final_period`); gửi biên bản cần chỉ số điện và nước của kỳ đó mà ảnh đồng hồ đã tới (hoặc đã có số), thiếu → 409 `FINAL_READING_MISSING`. Ảnh đồng hồ vẫn tải qua luồng chỉ số MD-05 của Tuấn |
+| MD-06-FE-02 Lọc và ghép cặp ảnh (BR-26 RULE 1–2) | ✅ Xong | Perceptual hash DCT 64 bit; ghép ảnh cùng khu vực gần nhất; dưới ngưỡng (6) → SKIPPED; giới hạn số lần gọi (30) chia đều giữa các khu vực, vượt → NOT_ANALYZED |
+| MD-06-FE-02 So ảnh bằng Bedrock (BR-26 RULE 3, EXCEPTION 2) | ✅ Xong | Prompt và schema `compareRoomPhotos`; Sonnet 4.5 → Haiku 4.5 dự phòng; cả hai lỗi → NOT_ANALYZED |
+| MD-06-FE-02 Step Functions, lưu kết quả, chỉ số (BR-26) | ✅ Xong (chưa chạy trên AWS) | State machine `roomledger-{stage}-move-out-compare` chạy khi có `MoveOutSubmitted`: đọc ngưỡng (`/roomledger/{stage}/compare/phash-threshold` = 6) và giới hạn (`.../max-calls` = 30) từ SSM → `plan-compare` (VPC, pHash trên thumbnail) → Map `compare-pairs` (ngoài VPC, Bedrock, 3 cặp song song; lỗi → NOT_ANALYZED) → `persist-results` (VPC: dòng `finding` SUGGESTED / SKIPPED / NOT_ANALYZED, COMPARING → REVIEWING, audit `MOVE_OUT_COMPARED`) → chỉ số CloudWatch `RoomLedger/Compare` → sự kiện `MoveOutCompared`. Mọi rule EventBridge có DLQ chung; báo động khi DLQ có tin hoặc lần chạy lỗi |
+| MD-06-FE-02 Giải thích gợi ý (`explainFinding`, BR-26 RULE 4) và email chủ nhà (RULE 5) | ⬜ Chưa làm | `explainFinding` chờ Tuấn quyết (đề xuất bỏ); email chờ `notify` nghe `MoveOutCompared` |
+| MD-06-FE-03 Chủ nhà duyệt gợi ý (BR-27) | ✅ Xong | Bảng `finding` (thiết kế của Sang, chờ Tuấn duyệt; migration `Md06_Finding`). `GET/POST /inspections/{id}/findings`, `POST /findings/{id}/charge`, `/dismiss`, `POST /inspections/{id}/send-to-tenant`; tổng tiền ≤ tiền cọc (`AMOUNT_EXCEEDS_DEPOSIT`); còn gợi ý chưa xử lý → `PENDING_FINDINGS` |
+| MD-06-FE-04 Người thuê đồng ý hoặc khiếu nại (BR-28) | ✅ Xong | `POST /findings/{id}/accept`, `/dispute` (lý do ≥ 10 ký tự, tạo `dispute` FINDING), `/respond` (chủ nhà: CORRECTED / KEPT / REMOVED); người thuê đồng ý lại → RESOLVED. Email báo hai bên chờ `notify` |
+| MD-06-FE-05 Quyết toán (BR-29) | ✅ Xong | `GET /tenancies/{id}/settlement` (hai bên xem trước: cọc, tiền trừ ACCEPTED + RESOLVED, hóa đơn chưa trả, tiền trả lại có thể âm, điều kiện còn thiếu); `POST` (chủ nhà): kiểm `FINAL_READING_UNCONFIRMED` → `FINAL_INVOICE_MISSING` → `OPEN_DISPUTES` → `PENDING_FINDINGS` (details liệt kê tất cả), ghi bảng `settlement`, biên bản trả phòng và hợp đồng → SETTLED, phòng → VACANT, phát `TenancySettled`; quyết toán hai lần chỉ ghi một lần. Thiết kế đã được Tuấn duyệt 17/11 (A2, A3, B1–B5) |
+| MD-06-FE-05 Biên bản thanh lý PDF và niêm phong ảnh trả phòng | ✅ Xong (chưa chạy trên AWS) | Rule `TenancySettled` → Lambda `render-pdf` (VPC, QuestPDF với font Lato đi kèm gói, đủ dấu tiếng Việt): hai bên, phòng, kỳ, từng khoản trừ cọc, hóa đơn chưa trả, tổng kết (âm → "Người thuê còn phải trả"); ghi `derived/reports/{tenancyId}/thanh-ly-{settlementId}.pdf`, điền `settlement.pdf_key`, API trả `pdfUrl` (5 phút). Cùng rule gọi evidence-seal để niêm phong ảnh biên bản trả phòng. Thay đổi `WorkflowStack.cs` cần Phát duyệt |
+
+**Cần biết:**
+- Bedrock thật chưa gọi được: tài khoản 479365371363 chưa gửi form use-case Anthropic (không phải do SCP). Test dùng Bedrock giả.
+- Ảnh biên bản trả phòng chỉ người thuê gửi (BR-25, quyết định D4): chủ nhà gọi `/uploads` vào biên bản trả phòng → 403 `FORBIDDEN`.
+- Ngưỡng 6 mới kiểm trên ảnh dựng; cần chỉnh trên bộ ảnh thật (đổi trong SSM, không cần deploy).
+- Báo động chưa gắn SNS/email: cần chọn người nhận.
+- Ảnh đồng hồ: chưa Lambda nào chuyển `photo_status` của chỉ số khỏi PENDING_UPLOAD, nên lúc gửi biên bản chỉ số được tính khi ảnh đã tới **hoặc** đã có số. Cần luồng chỉ số MD-05 cập nhật `photo_status` khi ảnh tới.
+- `/src/infra/` do Phát duyệt (CODEOWNERS): thay đổi WorkflowStack cần Phát xem.
+- Chưa kiểm trên AWS.
