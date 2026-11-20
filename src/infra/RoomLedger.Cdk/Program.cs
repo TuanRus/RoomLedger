@@ -92,8 +92,11 @@ new ApiStack(app, Id("api"), new ApiStackProps
     Auth = auth,
     ApiAssetPath = apiAsset,
 });
+// Observability trước Workflow: báo động của Workflow gửi vào topic của Observability
+var observability = new ObservabilityStack(app, Id("observability"), new ObservabilityStackProps { Env = env, Stage = stage });
 new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
 {
+    AlarmTopic = observability.AlarmTopic,
     Env = env,
     Stage = stage,
     Vpc = network.Vpc,
@@ -108,7 +111,6 @@ new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
 // Cần cả nhóm quyết định.
 var edgeRegion = RequiredContext("edgeRegion");
 new EdgeStack(app, Id("edge"), new StackProps { Env = new Amazon.CDK.Environment { Region = edgeRegion } });
-new ObservabilityStack(app, Id("observability"), P());
 
 Tags.Of(app).Add("Project", "RoomLedger");
 Tags.Of(app).Add("Stage", stage);

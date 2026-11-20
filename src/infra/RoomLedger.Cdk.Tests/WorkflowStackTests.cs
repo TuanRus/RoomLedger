@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Amazon.CDK;
 using Amazon.CDK.Assertions;
+using Amazon.CDK.AWS.Logs;
 using RoomLedger.Cdk.Stacks;
 using Xunit;
 
@@ -11,7 +12,7 @@ namespace RoomLedger.Cdk.Tests;
  * S3 "Object Created" (bucket incoming) → photo-ingest → PhotoReceived → photo-derive.
  *
  * @author Sang
- * @version 1.1
+ * @version 1.2
  */
 public class WorkflowStackTests
 {
@@ -41,8 +42,10 @@ public class WorkflowStackTests
         {
             Stage = "dev", Env = env, Vpc = network.Vpc, LambdaSg = network.LambdaSg, FunctionsAssetPath = asset,
         });
+        var observability = new ObservabilityStack(app, "TestObservability", new ObservabilityStackProps { Stage = "dev", Env = env });
         var workflow = new WorkflowStack(app, "TestWorkflow", new WorkflowStackProps
         {
+            AlarmTopic = observability.AlarmTopic,
             Stage = "dev",
             Env = env,
             Vpc = network.Vpc,
@@ -215,6 +218,42 @@ public class WorkflowStackTests
         Assert.DoesNotContain("s3:DeleteObject", policy);
         Assert.DoesNotContain("bedrock", policy);
         Assert.Contains("rds-db:connect", policy);
+    }
+
+    /** Báo động của WorkflowStack gửi vào topic chung của ObservabilityStack (người nhận do Phát chọn). */
+    [Theory]
+    [InlineData("roomledger-dev-workflow-dlq-not-empty")]
+    [InlineData("roomledger-dev-move-out-compare-failed")]
+    public void WorkflowAlarms_NotifyTheSharedAlarmTopic(string alarmName)
+    {
+        var alarm = Synth().FindResources("AWS::CloudWatch::Alarm").Values.Select(PropsOf)
+            .Single(a => a["AlarmName"] as string == alarmName);
+        Assert.Contains("ImportValue", Json(alarm["AlarmActions"]));   // tham chiếu topic của stack observability
+        Assert.Contains("AlarmTopic", Json(alarm["AlarmActions"]));
+    }
+
+    /** Log của mọi Lambda trong WorkflowStack có hạn giữ (dev 30 ngày), không giữ mãi mãi. */
+    [Fact]
+    public void EveryWorkflowLambda_LogsToAGroupWithRetention()
+    {
+        var names = new[] { Ingest, Derive, SealFn, PlanFn, PairsFn, PersistFn, RenderFn };
+        var groups = Synth().FindResources("AWS::Logs::LogGroup").Values.Select(PropsOf).ToList();
+        Assert.Equal(names.Length, groups.Count);
+        foreach (var name in names)
+        {
+            var group = groups.Single(g => g["LogGroupName"] as string == $"/aws/lambda/{name}");
+            Assert.Equal(30d, Convert.ToDouble(group["RetentionInDays"]));
+            Assert.True(Fn(name).Props.ContainsKey("LoggingConfig"), name);
+        }
+    }
+
+    [Theory]
+    [InlineData("dev", RetentionDays.ONE_MONTH)]
+    [InlineData("demo", RetentionDays.ONE_MONTH)]
+    [InlineData("prod", RetentionDays.THREE_MONTHS)]
+    public void LogRetention_IsAMonthOutsideProd_ThreeMonthsInProd(string stage, RetentionDays expected)
+    {
+        Assert.Equal(expected, WorkflowStack.LogRetentionFor(stage));
     }
 
     [Fact]
