@@ -71,7 +71,11 @@
               "buildTarget": "roomledger-web:build:development"
             }
           },
-          "defaultConfiguration": "development"
+          "defaultConfiguration": "development",
+          "options": {
+            "allowedHosts": ["roomledger-dev.kiruaaaa.io.vn"],
+            "proxyConfig": "proxy.conf.json"
+          }
         },
         "test": {
           "builder": "@angular/build:unit-test"

@@ -1,15 +1,18 @@
 export const environment = {
   production: false,
 
-  apiBaseUrl: 'http://localhost:5000',
+  apiBaseUrl: '/api',
 
   cognito: {
-    authority: 'https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_BK6jzrSDY',
-
-    clientId: '7odedlbgg49qnr71e2hjq4cpdk',
-
-    hostedUiDomain: 'https://ap-southeast-2bk6jzrsdy.auth.ap-southeast-2.amazoncognito.com',
-
+    region: 'ap-southeast-2',
+    userPoolId: 'ap-southeast-2_lstmpdxwI',
+    authority: 'https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_lstmpdxwI',
+    jwksUri:
+      'https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_lstmpdxwI/.well-known/jwks.json',
+    hostedUiDomain: 'https://auth.roomledger-dev.kiruaaaa.io.vn',
+    clientId: '3sl18d6o0sutnc4fet474kfam4',
     scope: 'openid email',
+    redirectUrl: 'https://roomledger-dev.kiruaaaa.io.vn/auth/callback',
+    postLogoutRedirectUri: 'https://roomledger-dev.kiruaaaa.io.vn/',
   },
 };
