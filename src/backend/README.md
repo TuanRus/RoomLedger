@@ -25,6 +25,10 @@ dotnet run --project src/RoomLedger.Api
 
 Chạy API local cần `Cognito__Authority` (vd. `https://cognito-idp.ap-southeast-2.amazonaws.com/<userPoolId>`) và `Cognito__ClientId` của User Pool dev để kiểm ID token. Trên Lambda, Cognito authorizer của API Gateway đã kiểm token.
 
+### Swagger (test API local)
+
+Chạy với `ASPNETCORE_ENVIRONMENT=Development` rồi mở `http://localhost:<port>/swagger` (JSON: `/swagger/v1/swagger.json`). Nút **Authorize** nhận ID token Cognito. Môi trường khác (Lambda, Testing) mặc định tắt; bật/tắt rõ bằng `OpenApi__Enabled=true|false`. Hợp đồng chính thức với FE vẫn là `src/contracts/openapi.yaml`.
+
 Test tích hợp đọc `ROOMLEDGER_TEST_DB` (mặc định `Host=localhost;Port=5432;Username=postgres;Password=postgres`).
 
 ## Migration

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using RoomLedger.Api.Auth;
 using RoomLedger.Api.Endpoints;
 using RoomLedger.Api.Middleware;
+using RoomLedger.Api.OpenApi;
 using RoomLedger.Api.Services;
 using RoomLedger.Core.Abstractions;
 using RoomLedger.Infrastructure.Persistence;
@@ -59,9 +60,16 @@ builder.Services.AddScoped<SettlementAppService>();   // Sang: MD-06-FE-05
 builder.Services.AddScoped<MeterAppService>();
 builder.Services.AddScoped<InvoiceAppService>();
 
+// Swagger chỉ để test: bật ở Development hoặc khi OpenApi__Enabled=true, production mặc định tắt
+var swaggerEnabled = builder.IsSwaggerEnabled();
+if (swaggerEnabled)
+    builder.Services.AddRoomLedgerSwagger();
+
 var app = builder.Build();
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
+if (swaggerEnabled)
+    app.UseRoomLedgerSwagger();
 app.UseAuthentication();
 app.UseAuthorization();
 

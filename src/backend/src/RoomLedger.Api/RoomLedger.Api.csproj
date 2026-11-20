@@ -2,6 +2,7 @@
   <PropertyGroup>
     <AWSProjectType>Lambda</AWSProjectType>
     <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <UserSecretsId>78d0def9-7567-45fd-88b4-7f15ae37216b</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\RoomLedger.Core\RoomLedger.Core.csproj" />
@@ -10,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="1.7.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10" PrivateAssets="all" />
   </ItemGroup>
 </Project>
