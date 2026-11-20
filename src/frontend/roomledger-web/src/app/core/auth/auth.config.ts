@@ -2,14 +2,19 @@ import { provideAuth, withAppInitializerAuthCheck } from 'angular-auth-oidc-clie
 
 import { environment } from '../../../environments/environment';
 
+const postLogoutRedirectUri =
+  (environment.cognito as { postLogoutRedirectUri?: string; postLogoutRedirectUrl?: string })
+    .postLogoutRedirectUri ?? window.location.origin;
+
 export const authConfig = provideAuth(
   {
     config: {
       authority: environment.cognito.authority,
       clientId: environment.cognito.clientId,
 
-      redirectUrl: window.location.origin,
-      postLogoutRedirectUri: window.location.origin,
+      redirectUrl: environment.cognito.redirectUrl,
+      postLogoutRedirectUri,
+      postLoginRoute: '/',
 
       scope: environment.cognito.scope,
       responseType: 'code',
