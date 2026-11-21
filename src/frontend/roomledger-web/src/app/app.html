@@ -1,15 +1,15 @@
-@if (isAuthenticated$ | async; as authState) {
-  @if (authState.isAuthenticated) {
-    <h2>Authenticated</h2>
-
-    <pre>{{ userData$ | async | json }}</pre>
-
-    <button (click)="auth.logout()">Logout</button>
-  } @else {
-    <h2>Not authenticated</h2>
-
-    <button (click)="auth.login()">Login with Cognito</button>
+<header>
+  @if (isAuthenticated$ | async; as authState) {
+    @if (authState.isAuthenticated) {
+      <span>Authenticated</span>
+      <button (click)="auth.logout()">Logout</button>
+    } @else {
+      <span>Not authenticated</span>
+      <button (click)="auth.login()">Login with Cognito</button>
+    }
   }
-}
+</header>
 
-<router-outlet />
+<main>
+  <router-outlet />
+</main>

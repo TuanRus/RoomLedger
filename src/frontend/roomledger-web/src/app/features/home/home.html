@@ -1,0 +1,10 @@
+@if (session.loading()) {
+  <p>Loading your account...</p>
+} @else if (session.error()) {
+  <p>Unable to load your account.</p>
+} @else if (session.user(); as user) {
+  <h1>Welcome!</h1>
+  <pre>{{ user | json }}</pre>
+} @else {
+  <p>No account information available.</p>
+}
