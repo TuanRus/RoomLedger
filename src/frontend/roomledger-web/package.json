@@ -7,7 +7,10 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "api:generate": "openapi-typescript ../../contracts/openapi.yaml -o src/app/generated/api-types.ts"
+    "api:generate": "openapi-typescript ../../contracts/openapi.yaml -o src/app/generated/api-types.ts",
+    "clean": "rm -rf dist .angular",
+    "clean:node": "rm -rf node_modules",
+    "start:fresh": "pnpm clean && pnpm install && pnpm build && pnpm start"
   },
   "private": true,
   "packageManager": "pnpm@12.18.0",
