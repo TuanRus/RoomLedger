@@ -1,7 +1,7 @@
 export const environment = {
   production: true,
 
-  apiBaseUrl: '/api',
+  apiBaseUrl: '/api/v1',
 
   cognito: {
     authority: 'https://cognito-idp.ap-southeast-2.amazonaws.com/ap-southeast-2_lstmpdxwI',

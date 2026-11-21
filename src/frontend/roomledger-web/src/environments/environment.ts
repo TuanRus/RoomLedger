@@ -1,7 +1,7 @@
 export const environment = {
   production: false,
 
-  apiBaseUrl: '/api',
+  apiBaseUrl: '/api/v1',
 
   cognito: {
     region: 'ap-southeast-2',
