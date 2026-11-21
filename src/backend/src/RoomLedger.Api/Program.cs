@@ -26,16 +26,42 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 // Chạy local thì cấu hình Cognito:Authority (User Pool dev) để JwtBearer tự kiểm ID token.
 // Không đặt scheme mặc định trên Lambda để giữ nguyên HttpContext.User do API Gateway truyền vào.
 var authority = builder.Configuration["Cognito:Authority"];
-var authentication = builder.Services.AddAuthentication();
-if (!string.IsNullOrEmpty(authority))
+var clientId  = builder.Configuration["Cognito:ClientId"];
+
+if (!string.IsNullOrWhiteSpace(authority))
 {
-    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme);
-    authentication.AddJwtBearer(o =>
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
         {
-            o.Authority = authority;
-            o.MapInboundClaims = false;
-            o.TokenValidationParameters.ValidateAudience = !string.IsNullOrEmpty(builder.Configuration["Cognito:ClientId"]);
-            o.TokenValidationParameters.ValidAudience = builder.Configuration["Cognito:ClientId"];
+            options.Authority = authority;
+            options.MapInboundClaims = false;
+
+            options.TokenValidationParameters.ValidateAudience = !string.IsNullOrWhiteSpace(clientId);
+            options.TokenValidationParameters.ValidAudience = clientId;
+
+            options.Events = new JwtBearerEvents
+            {
+                OnTokenValidated = context =>
+                {
+                    var tokenUse = context.Principal?.FindFirst("token_use")?.Value;
+                    if (!string.Equals(tokenUse, "id", StringComparison.Ordinal))
+                    {
+                        context.Fail("Expected a Cognito ID token (token_use=id).");
+                    }
+                    return Task.CompletedTask;
+                },
+
+                OnChallenge = async context =>
+                {
+                    context.HandleResponse(); // suppress default WWW-Authenticate / empty body
+                    await ErrorHandlingMiddleware.WriteErrorAsync(
+                        context.HttpContext,
+                        401,
+                        RoomLedger.Core.Common.ErrorCodes.Unauthorized,
+                        "Unauthorized");
+                }
+            };
         });
 }
 
