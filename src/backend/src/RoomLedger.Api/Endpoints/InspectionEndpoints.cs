@@ -40,9 +40,9 @@ public static class InspectionEndpoints
         group.MapGet("/{inspectionId:guid}/photos", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.ListPhotosAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
 
-        // MD-06-FE-01 RULE 4: người thuê gửi biên bản trả phòng để so sánh
+        // MD-06-FE-01 RULE 4: người thuê gửi biên bản trả phòng cho chủ nhà duyệt
         group.MapPost("/{inspectionId:guid}/submit", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
-            ApiResults.Ok(await svc.SubmitMoveOutAsync(inspectionId, ct), "Đã gửi biên bản để so sánh"))
+            ApiResults.Ok(await svc.SubmitMoveOutAsync(inspectionId, ct), "Đã gửi biên bản cho chủ nhà duyệt"))
             .RequireAuthorization(Policies.LandlordOrTenant);
 
         // MD-04-FE-04 BR-18 RULE 5: chỉ số điện nước ban đầu

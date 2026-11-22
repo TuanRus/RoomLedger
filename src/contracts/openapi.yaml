@@ -328,13 +328,13 @@ paths:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     post:
       tags: [MD-06]
-      summary: Người thuê gửi biên bản trả phòng để so sánh (MD-06-FE-01, BR-25 RULE 4); OPEN → COMPARING
-      description: Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Cần chỉ số điện và nước của kỳ finalPeriod mà ảnh đồng hồ đã tải lên (hoặc chỉ số đã có số); chưa cần chủ nhà xác nhận (BR-25 RULE 3). Phát sự kiện MoveOutSubmitted (inspectionId, tenancyId, moveInInspectionId) để so ảnh (MD-06-FE-02). Gửi lại khi đang COMPARING → 200, không khởi động lại. Sau khi gửi không thêm hoặc xóa ảnh được.
+      summary: Người thuê gửi biên bản trả phòng cho chủ nhà duyệt (MD-06-FE-01, BR-25 RULE 4); OPEN → REVIEWING
+      description: Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Cần chỉ số điện và nước của kỳ finalPeriod mà ảnh đồng hồ đã tải lên (hoặc chỉ số đã có số); chưa cần chủ nhà xác nhận (BR-25 RULE 3). Phát sự kiện MoveOutSubmitted (inspectionId, tenancyId, moveInInspectionId) để báo chủ nhà; không còn AI so ảnh, chủ nhà xem ảnh và tự ghi khoản trừ cọc. Gửi lại khi đang REVIEWING → 200, không phát lại. Sau khi gửi không thêm hoặc xóa ảnh được.
       responses:
         "200": { $ref: "#/components/responses/Inspection" }
         "403": { description: FORBIDDEN (không phải người thuê), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
         "404": { $ref: "#/components/responses/Error" }
-        "409": { description: "INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), FINAL_READING_MISSING (thiếu ảnh đồng hồ tháng cuối; message vd 'Thiếu ảnh đồng hồ: điện, nước (kỳ 2026-11)'), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước so sánh)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { description: "INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), FINAL_READING_MISSING (thiếu ảnh đồng hồ tháng cuối; message vd 'Thiếu ảnh đồng hồ: điện, nước (kỳ 2026-11)'), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước duyệt)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
   /inspections/{inspectionId}/opening-readings:
     parameters: [{ $ref: "#/components/parameters/InspectionId" }]
     put:

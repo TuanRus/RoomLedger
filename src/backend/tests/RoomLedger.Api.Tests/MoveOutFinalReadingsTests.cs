@@ -144,7 +144,7 @@ public class MoveOutFinalReadingsTests(ApiFactory factory) : IClassFixture<ApiFa
         var res = await seed.S.TenantClient.PostAsync(SubmitUrl(seed.MoveOutId), null);
 
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        Assert.Equal(InspectionStatus.Comparing, await StatusAsync(seed.MoveOutId));
+        Assert.Equal(InspectionStatus.Reviewing, await StatusAsync(seed.MoveOutId));
         Assert.Equal(1, SubmittedEvents(seed.MoveOutId));
     }
 

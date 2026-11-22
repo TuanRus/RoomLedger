@@ -8,13 +8,13 @@ using RoomLedger.Core.Domain.Enums;
 namespace RoomLedger.Api.Tests;
 
 /**
- * Gửi biên bản trả phòng để so sánh (MD-06-FE-01, BR-25 RULE 4, US-25 AC1).
+ * Gửi biên bản trả phòng cho chủ nhà duyệt (MD-06-FE-01, BR-25 RULE 4, US-25 AC1).
  * POST /inspections/{id}/submit: chỉ người thuê, chỉ biên bản trả phòng OPEN; mỗi khu vực đủ ảnh READY
- * (không thì 409 INCOMPLETE_INSPECTION); OPEN → COMPARING đúng một lần; phát MoveOutSubmitted để Step Functions
- * so ảnh (MD-06-FE-02). Sau khi gửi: không thêm/xóa ảnh. Biên bản trả phòng không đi qua confirm/lock của MD-04.
+ * (không thì 409 INCOMPLETE_INSPECTION); OPEN → REVIEWING đúng một lần; phát MoveOutSubmitted (notify báo chủ nhà).
+ * Không còn AI so ảnh. Sau khi gửi: không thêm/xóa ảnh. Biên bản trả phòng không đi qua confirm/lock của MD-04.
  *
  * @author Sang
- * @version 1.0
+ * @version 1.1
  */
 public class MoveOutSubmitTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
@@ -90,7 +90,7 @@ public class MoveOutSubmitTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task AllAreasHaveEnoughPhotos_TenantSubmits_Comparing_AndTheCompareIsStarted()
+    public async Task AllAreasHaveEnoughPhotos_TenantSubmits_Reviewing_AndTheEventIsPublished()
     {
         var seed = await SeedAsync();
         await FillAllAreasAsync(seed);
@@ -98,8 +98,8 @@ public class MoveOutSubmitTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var res = await seed.S.TenantClient.PostAsync(SubmitUrl(seed.MoveOutId), null);
 
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
-        Assert.Equal("COMPARING", (await res.DataAsync()).GetProperty("status").GetString());
-        Assert.Equal(InspectionStatus.Comparing, await StatusAsync(seed.MoveOutId));
+        Assert.Equal("REVIEWING", (await res.DataAsync()).GetProperty("status").GetString());
+        Assert.Equal(InspectionStatus.Reviewing, await StatusAsync(seed.MoveOutId));
         Assert.Equal(1, SubmittedEvents(seed.MoveOutId));
         var detail = factory.Events.Last("MoveOutSubmitted");
         Assert.Equal(seed.S.TenancyId, detail.GetProperty("tenancyId").GetGuid());
@@ -132,7 +132,7 @@ public class MoveOutSubmitTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task SubmittedTwice_Returns200_ButStartsTheCompareOnce()
+    public async Task SubmittedTwice_Returns200_ButPublishesOnce()
     {
         var seed = await SeedAsync();
         await FillAllAreasAsync(seed);
@@ -145,7 +145,7 @@ public class MoveOutSubmitTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task TwoSubmitsAtOnce_StartTheCompareOnce()
+    public async Task TwoSubmitsAtOnce_PublishOnce()
     {
         var seed = await SeedAsync();
         await FillAllAreasAsync(seed);
@@ -159,10 +159,10 @@ public class MoveOutSubmitTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task AlreadyReviewing_Gets409_RecordLocked()
+    public async Task AlreadySentToTenant_Gets409_RecordLocked()
     {
         var seed = await SeedAsync();
-        await SetStatusAsync(seed.MoveOutId, InspectionStatus.Reviewing);
+        await SetStatusAsync(seed.MoveOutId, InspectionStatus.AwaitingConfirm);
 
         await AssertError(await seed.S.TenantClient.PostAsync(SubmitUrl(seed.MoveOutId), null), HttpStatusCode.Conflict, "RECORD_LOCKED");
         Assert.Equal(0, SubmittedEvents(seed.MoveOutId));

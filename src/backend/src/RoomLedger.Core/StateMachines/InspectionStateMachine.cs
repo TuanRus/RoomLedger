@@ -67,7 +67,7 @@ public static class InspectionStateMachine
     }
 
     /**
-     * Xác nhận và khóa hai bên chỉ dành cho biên bản nhận phòng; biên bản trả phòng đi qua so sánh và quyết toán.
+     * Xác nhận và khóa hai bên chỉ dành cho biên bản nhận phòng; biên bản trả phòng đi qua bước chủ nhà duyệt và quyết toán.
      *
      * @author Sang
      * @version 1.0
@@ -76,12 +76,12 @@ public static class InspectionStateMachine
     {
         if (type != InspectionType.MoveIn)
         {
-            throw new InvalidStateException("Biên bản trả phòng không xác nhận theo cách này; hãy gửi để so sánh");
+            throw new InvalidStateException("Biên bản trả phòng không xác nhận theo cách này; hãy gửi cho chủ nhà duyệt");
         }
     }
 
     /**
-     * Gửi so sánh (BR-25 RULE 4): chỉ biên bản trả phòng.
+     * Gửi duyệt (BR-25 RULE 4): chỉ biên bản trả phòng.
      *
      * @author Sang
      * @version 1.0
@@ -90,7 +90,7 @@ public static class InspectionStateMachine
     {
         if (type != InspectionType.MoveOut)
         {
-            throw new InvalidStateException("Chỉ gửi so sánh được biên bản trả phòng");
+            throw new InvalidStateException("Chỉ gửi duyệt được biên bản trả phòng");
         }
     }
 
