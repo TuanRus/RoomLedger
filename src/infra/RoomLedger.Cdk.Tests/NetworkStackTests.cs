@@ -14,6 +14,8 @@ public class NetworkStackTests
     // Synth is slow (jsii); build the dev template once and share it (templates are read-only).
     private static readonly Lazy<Template> DevTemplate = new(() => Build("dev"));
 
+    private static readonly Lazy<Template> ProdTemplate = new(() => Build("prod"));
+
     private static Template Synth(string stage = "dev") => stage == "dev" ? DevTemplate.Value : Build(stage);
 
     private static Template Build(string stage)
@@ -77,6 +79,27 @@ public class NetworkStackTests
         Assert.Equal("Interface", ep["VpcEndpointType"]);
         Assert.True((bool)ep["PrivateDnsEnabled"]);
         Assert.Single((object[])ep["SubnetIds"]); // 1 AZ in dev to save cost (D10)
+    }
+
+    [Theory]
+    [InlineData("events", 2)]          // sơ đồ v8.5.2: mỗi AZ một endpoint EventBridge
+    [InlineData("secretsmanager", 1)]  // tạm giữ cho migrate
+    [InlineData("cognito-idp", 1)]     // tạm giữ cho post-confirmation
+    public void Prod_interface_endpoints_follow_the_diagram(string service, int subnets)
+    {
+        var ep = Assert.Single(PropsOf(ProdTemplate.Value, "AWS::EC2::VPCEndpoint")
+            .Where(p => p.TryGetValue("ServiceName", out var s) && s as string == $"com.amazonaws.{Region}.{service}"));
+        Assert.Equal(subnets, ((object[])ep["SubnetIds"]).Length);
+    }
+
+    [Fact]
+    public void Prod_has_no_ssm_or_xray_endpoint()
+    {
+        var names = PropsOf(ProdTemplate.Value, "AWS::EC2::VPCEndpoint")
+            .Select(p => p.TryGetValue("ServiceName", out var s) ? s as string : null).ToList();
+        Assert.DoesNotContain($"com.amazonaws.{Region}.ssm", names);
+        Assert.DoesNotContain($"com.amazonaws.{Region}.xray", names);
+        Assert.Equal(4, names.Count);   // S3 gateway + 3 interface
     }
 
     [Fact]

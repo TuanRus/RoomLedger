@@ -58,16 +58,17 @@ Chạy từ `src/infra/RoomLedger.Cdk`, region `ap-southeast-2`, bằng tài kho
 
    Không truyền `createGithubOidcProvider=true` cho stage thứ hai: CloudFormation sẽ báo provider đã tồn tại. Kiểm tra: `aws iam list-open-id-connect-providers`.
 
-3. Deploy stage. Stage `demo` bắt buộc có `webOrigin` (origin của web, dùng cho CORS của bucket incoming); thiếu, bỏ trống hoặc `*` thì `cdk synth` báo lỗi. Stage `dev` không truyền thì dùng `*`.
+3. Deploy stage. Stage `demo` và `prod` bắt buộc có `webOrigin` (origin của web, dùng cho CORS của bucket incoming); thiếu, bỏ trống hoặc `*` thì `cdk synth` báo lỗi. Stage `dev` không truyền thì dùng `*`.
 
    ```bash
    cdk deploy --all -c stage=dev
    cdk deploy --all -c stage=demo -c webOrigin=https://<domain web demo>
+   cdk deploy --all -c stage=prod -c webOrigin=https://<domain web prod>
    ```
 
 4. Lấy ARN role `roomledger-{stage}-github-deploy` từ output của `SecurityStack`, gắn vào bước `aws-actions/configure-aws-credentials` (`role-to-assume`) trong `.github/workflows/infra.yml`.
 
-Dọn dẹp: `cdk destroy --all -c stage=<stage>`. Được giữ lại và phải xóa tay: bucket evidence (Object Lock, mọi stage), cả ba bucket ở stage demo, và OIDC provider (chỉ xóa khi không còn stage nào dùng).
+Dọn dẹp: `cdk destroy --all -c stage=<stage>`. Được giữ lại và phải xóa tay: bucket evidence (Object Lock, mọi stage), cả ba bucket ở stage demo và prod, và OIDC provider (chỉ xóa khi không còn stage nào dùng).
 
 ## Trạng thái MD-04 Biên bản nhận phòng (Sang, cập nhật 2026-11-11)
 

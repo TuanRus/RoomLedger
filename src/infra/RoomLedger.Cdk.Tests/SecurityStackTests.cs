@@ -103,6 +103,17 @@ public class SecurityStackTests
         Assert.DoesNotContain("refs/heads/develop", json);
     }
 
+    [Fact]
+    public void Prod_stage_from_cdk_json_trusts_main_branch_only()
+    {
+        var json = Json(Build("prod", new Dictionary<string, object?>
+        {
+            ["githubBranches"] = new Dictionary<string, object> { ["dev"] = "develop", ["demo"] = "main", ["prod"] = "main" },
+        }));
+        Assert.Contains("repo:TuanRus/RoomLedger:ref:refs/heads/main", json);
+        Assert.DoesNotContain("refs/heads/develop", json);
+    }
+
     [Theory]
     [InlineData("Dev")]
     [InlineData("prod")]
