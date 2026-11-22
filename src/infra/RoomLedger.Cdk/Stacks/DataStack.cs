@@ -56,7 +56,7 @@ public sealed class DataStack : Stack
             VpcSubnets = isolated,
             DatabaseName = DbName,
             Port = DbPort, // ghi rõ: token IAM được ký cho cổng này
-            MultiAz = false,
+            MultiAz = props.Stage == "prod",   // sơ đồ v8.5.2: standby ở AZ thứ hai cho production; dev/demo một AZ cho rẻ
             AllocatedStorage = 20,
             StorageEncrypted = true,
             IamAuthentication = true,
