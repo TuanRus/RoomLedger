@@ -116,7 +116,7 @@ public sealed class WorkflowStack : Stack
         PhotoIngest = VpcFunction("PhotoIngest", "photo-ingest", 512, Duration.Seconds(60));
         PhotoDerive = VpcFunction("PhotoDerive", "photo-derive", 2048, Duration.Minutes(2), "HandleQueueAsync"); // HEIC 12 MP ≈ 50 MB điểm ảnh
         // Biên bản tối đa ~20 ảnh/khu vực × vài khu vực; mỗi ảnh ≤ 25 MB đọc 2 lần để băm
-        EvidenceSeal = VpcFunction("EvidenceSeal", "evidence-seal", 1024, Duration.Minutes(5));
+        EvidenceSeal = VpcFunction("EvidenceSeal", "evidence-seal", 512, Duration.Minutes(5));
 
         // Sự kiện không giao được sau khi thử lại (Lambda lỗi, state machine không khởi động được) vào đây
         DeadLetterQueue = new Queue(this, "WorkflowDlq", new QueueProps
@@ -240,7 +240,7 @@ public sealed class WorkflowStack : Stack
 
         // ---- MD-06-FE-05: quyết toán (Sang) ----
         // render-pdf: QuestPDF + font Lato đi kèm gói; đọc RDS, chỉ được ghi derived/reports/ (không đọc ảnh, không evidence)
-        RenderPdf = VpcFunction("RenderPdf", "render-pdf", 1024, Duration.Minutes(1));
+        RenderPdf = VpcFunction("RenderPdf", "render-pdf", 512, Duration.Minutes(1));
         RenderPdf.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
         {
             Actions = new[] { "s3:PutObject" },
