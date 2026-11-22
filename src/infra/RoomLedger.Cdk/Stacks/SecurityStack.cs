@@ -12,7 +12,7 @@ namespace RoomLedger.Cdk.Stacks;
  */
 public class SecurityStackProps : StackProps
 {
-    /** Stage triển khai, chỉ nhận dev hoặc demo. */
+    /** Stage triển khai, chỉ nhận stage có trong githubBranches (dev, demo, prod). */
     public string Stage { get; set; } = "";
 }
 

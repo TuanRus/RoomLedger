@@ -62,6 +62,13 @@ public class DataStackTests
         Assert.Equal("roomledger-dev", db["DBInstanceIdentifier"]);
     }
 
+    [Theory]
+    [InlineData("dev", false)]
+    [InlineData("demo", false)]
+    [InlineData("prod", true)]
+    public void Db_is_multi_az_only_in_prod(string stage, bool multiAz)
+        => Assert.Equal(multiAz, (bool)PropsOf(Single(Synth(stage), "AWS::RDS::DBInstance"))["MultiAZ"]);
+
     [Fact]
     public void Db_is_private_encrypted_and_uses_iam_auth()
     {

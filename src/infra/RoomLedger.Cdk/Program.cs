@@ -11,7 +11,7 @@ string RequiredContext(string key) =>
         ? value
         : throw new InvalidOperationException($"Thiếu context '{key}' trong cdk.json (hoặc truyền -c {key}=...).");
 
-var stage = RequiredContext("stage");   // dev | demo
+var stage = RequiredContext("stage");   // dev | demo | prod (prod dựng theo sơ đồ v8.5.2)
 // SCP của AWS Organization chỉ cho ap-southeast-2 (ap-southeast-1 và us-east-1 bị chặn, kiểm tra 2026-11-05).
 var region = RequiredContext("region");
 var env = new Amazon.CDK.Environment { Account = System.Environment.GetEnvironmentVariable("CDK_DEFAULT_ACCOUNT"), Region = region };
