@@ -66,11 +66,7 @@ public class ObservabilityStackTests
     [InlineData("CPUUtilization", "roomledger-dev")]        // RDS
     [InlineData("FreeStorageSpace", "roomledger-dev")]
     [InlineData("DatabaseConnections", "roomledger-dev")]
-    [InlineData("ExecutionsFailed", "stateMachine:roomledger-dev-move-out-compare")]
     [InlineData("ApproximateNumberOfMessagesVisible", "roomledger-dev-workflow-dlq")]
-    [InlineData("PairsAnalyzed", "RoomLedger/Compare")]     // chỉ số so ảnh trả phòng
-    [InlineData("NotAnalyzed", "RoomLedger/Compare")]
-    [InlineData("FallbackUsed", "RoomLedger/Compare")]
     public void Dashboard_ShowsTheKeyMetrics(string metric, string resource)
     {
         var body = DashboardBody();
@@ -90,7 +86,7 @@ public class ObservabilityStackTests
         }
         Assert.Equal(
             ["api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
-             "plan-compare", "compare-pairs", "persist-results", "render-pdf"],
+             "render-pdf"],
             ObservabilityStack.FunctionShortNames);
     }
 

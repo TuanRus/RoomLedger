@@ -311,15 +311,16 @@ public class InspectionAppService(
     }
 
     /**
-     * Gửi biên bản trả phòng để so sánh (MD-06-FE-01, BR-25 RULE 4). Chỉ người thuê. Trong một transaction:
-     * UPDATE có điều kiện OPEN → COMPARING trước (giữ khóa dòng, nên xóa ảnh không chen vào), rồi kiểm mỗi khu vực
-     * đủ ảnh READY (thiếu → rollback, 409 INCOMPLETE_INSPECTION). Sau commit phát MoveOutSubmitted để Step Functions
-     * so ảnh (MD-06-FE-02). Đã COMPARING → 200, không phát lại; đã qua bước so sánh → 409 RECORD_LOCKED.
+     * Gửi biên bản trả phòng cho chủ nhà duyệt (MD-06-FE-01, BR-25 RULE 4). Chỉ người thuê. Trong một transaction:
+     * UPDATE có điều kiện OPEN → REVIEWING trước (giữ khóa dòng, nên xóa ảnh không chen vào), rồi kiểm mỗi khu vực
+     * đủ ảnh READY (thiếu → rollback, 409 INCOMPLETE_INSPECTION). Sau commit phát MoveOutSubmitted (notify báo chủ nhà).
+     * Không còn AI so ảnh (kiến trúc v8.5.2): chủ nhà xem ảnh nhận và trả phòng rồi tự ghi khoản trừ cọc (mục tay).
+     * Đã REVIEWING → 200, không phát lại; đã qua bước duyệt → 409 RECORD_LOCKED.
      * 1.1: sau ảnh phòng, cần chỉ số điện và nước của kỳ trả phòng mà ảnh đồng hồ đã tới (quyết định B1);
      * thiếu → rollback, 409 FINAL_READING_MISSING nêu đồng hồ còn thiếu (B2). Chưa cần chủ nhà xác nhận.
      *
      * @author Sang
-     * @version 1.1
+     * @version 1.2
      */
     public async Task<InspectionResponse> SubmitMoveOutAsync(Guid inspectionId, CancellationToken ct)
     {
@@ -336,16 +337,16 @@ public class InspectionAppService(
         await using (var tx = await db.Database.BeginTransactionAsync(ct))
         {
             var rows = await db.Inspections.Where(i => i.Id == inspectionId && i.Status == InspectionStatus.Open)
-                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, InspectionStatus.Comparing)
+                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, InspectionStatus.Reviewing)
                     .SetProperty(i => i.UpdatedAt, clock.GetUtcNow()), ct);
             if (rows == 0)
             {
                 var current = await db.Inspections.Where(i => i.Id == inspectionId).Select(i => i.Status).SingleAsync(ct);
-                if (current == InspectionStatus.Comparing)
+                if (current == InspectionStatus.Reviewing)
                 {
-                    return await GetAsync(inspectionId, ct);   // gửi lại (bấm hai lần): không khởi động so sánh lần nữa
+                    return await GetAsync(inspectionId, ct);   // gửi lại (bấm hai lần): không phát sự kiện lần nữa
                 }
-                throw new RecordLockedException("Biên bản trả phòng đã qua bước so sánh");
+                throw new RecordLockedException("Biên bản trả phòng đã qua bước duyệt");
             }
 
             var photos = await db.Photos.Where(p => p.InspectionId == inspectionId)

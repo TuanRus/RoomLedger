@@ -21,15 +21,15 @@ public sealed class ObservabilityStackProps : StackProps
 /**
  * Giám sát RoomLedger (Sang). Mọi chỉ số lấy theo tên tài nguyên (Naming.Resource) nên stack này không cần output
  * của stack khác và deploy được độc lập.
- * - Topic SNS roomledger-{stage}-alarms: mọi báo động gửi vào đây (kể cả hai báo động của WorkflowStack). Chưa có người
+ * - Topic SNS roomledger-{stage}-alarms: mọi báo động gửi vào đây (kể cả báo động DLQ của WorkflowStack). Chưa có người
  *   nhận: Phát chọn email rồi thêm subscription.
  * - Dashboard roomledger-{stage}: API (lỗi, độ trễ), lỗi và throttle của từng Lambda, RDS (CPU, kết nối, dung lượng
- *   trống), Step Functions so ảnh trả phòng, chỉ số RoomLedger/Compare, DLQ.
- * - Ba báo động: API 5xx, Lambda bị throttle (toàn tài khoản), RDS sắp hết dung lượng. Cộng hai báo động của
- *   WorkflowStack là 5, nằm trong free tier (10 báo động) của CloudWatch; một dashboard cũng trong free tier (3).
+ *   trống), DLQ.
+ * - Ba báo động: API 5xx, Lambda bị throttle (toàn tài khoản), RDS sắp hết dung lượng. Cộng báo động DLQ của
+ *   WorkflowStack là 4, nằm trong free tier (10 báo động) của CloudWatch; một dashboard cũng trong free tier (3).
  *
  * @author Sang
- * @version 1.1
+ * @version 1.2
  */
 public class ObservabilityStack : Stack
 {
@@ -37,12 +37,8 @@ public class ObservabilityStack : Stack
     public static readonly string[] FunctionShortNames =
     [
         "api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
-        "plan-compare", "compare-pairs", "persist-results", "render-pdf",
+        "render-pdf",
     ];
-
-    /** Chỉ số persist-results ghi qua Step Functions (WorkflowStack, namespace RoomLedger/Compare, chiều Stage). */
-    private static readonly string[] CompareMetrics =
-        ["PairsAnalyzed", "PairsSkipped", "PairsNotAnalyzed", "FallbackUsed", "FindingsSuggested"];
 
     private static readonly Duration Period = Duration.Minutes(5);
 
@@ -54,7 +50,6 @@ public class ObservabilityStack : Stack
         string Name(string n) => Naming.Resource(stage, n);
         var apiName = Name("api");
         var dbInstance = $"{Naming.Project}-{stage}";   // = DataStack InstanceIdentifier
-        var stateMachineArn = $"arn:{Partition}:states:{Region}:{Account}:stateMachine:{Name("move-out-compare")}";
 
         AlarmTopic = new Topic(this, "AlarmTopic", new TopicProps
         {
@@ -80,12 +75,7 @@ public class ObservabilityStack : Stack
             Graph("RDS: CPU (%) và số kết nối",
                 M("AWS/RDS", "CPUUtilization", db, "Average"), M("AWS/RDS", "DatabaseConnections", db, "Maximum")),
             Graph("RDS: dung lượng trống (byte)", M("AWS/RDS", "FreeStorageSpace", db, "Minimum")));
-        var sfn = new Dictionary<string, string> { ["StateMachineArn"] = stateMachineArn };
         dashboard.AddWidgets(
-            Graph("So ảnh trả phòng: lần chạy",
-                M("AWS/States", "ExecutionsSucceeded", sfn, "Sum"), M("AWS/States", "ExecutionsFailed", sfn, "Sum")),
-            Graph("So ảnh trả phòng: cặp ảnh và gợi ý", CompareMetrics
-                .Select(m => M("RoomLedger/Compare", m, new() { ["Stage"] = stage }, "Sum")).ToArray()),
             Graph("DLQ: sự kiện không giao được",
                 M("AWS/SQS", "ApproximateNumberOfMessagesVisible", new() { ["QueueName"] = Name("workflow-dlq") }, "Maximum")));
 

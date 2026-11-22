@@ -25,7 +25,7 @@ public static class PhotoRules
 
     /**
      * Biên bản còn nhận ảnh không (K2): nhận phòng khi OPEN hoặc AWAITING_CONFIRM; trả phòng chỉ khi OPEN (sau khi gửi
-     * so sánh là COMPARING trở đi). Dùng ở photo-ingest để chặn ảnh có URL cấp trước lúc khóa nhưng tải lên sau.
+     * duyệt là REVIEWING trở đi). Dùng ở photo-ingest để chặn ảnh có URL cấp trước lúc khóa nhưng tải lên sau.
      *
      * @author Sang
      * @version 1.0

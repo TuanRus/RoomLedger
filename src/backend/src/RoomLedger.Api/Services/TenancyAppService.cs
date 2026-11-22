@@ -13,7 +13,7 @@ namespace RoomLedger.Api.Services;
 
 /**
  * Nghiệp vụ hợp đồng phía API (MD-03): tạo hợp đồng nháp, phiên bản, điều khoản, lời mời, xác nhận.
- * Đọc điều khoản bằng AI (read-document, Bedrock) do Sang làm; API chỉ đọc kết quả trong AiTermsJson.
+ * Hợp đồng chỉ lưu bản scan, không dùng AI đọc (kiến trúc v8.5.2); chủ nhà nhập điều khoản. AiTermsJson để trống.
  *
  * @author Tuấn
  * @version 1.0

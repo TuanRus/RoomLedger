@@ -149,7 +149,7 @@ public class PhotoLambdaTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture>
 
     [Theory]
     [InlineData(InspectionType.MoveIn, InspectionStatus.Locked)]
-    [InlineData(InspectionType.MoveOut, InspectionStatus.Comparing)]
+    [InlineData(InspectionType.MoveOut, InspectionStatus.Reviewing)]
     public async Task Ingest_PhotoArrivingAfterTheLock_IsNotReceived_NoEvent_AndAudited(InspectionType type, InspectionStatus status)
     {
         var photo = await db.SeedPhotoAsync(FileStatus.PendingUpload);
@@ -163,7 +163,7 @@ public class PhotoLambdaTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture>
         await using var ctx = db.NewDb();
         var detail = await ctx.AuditEvents.Where(a => a.TargetId == photo.Id && a.EventType == "PHOTO_INGEST_REJECTED")
             .Select(a => a.DetailJson).SingleAsync();
-        Assert.Contains(status == InspectionStatus.Locked ? "LOCKED" : "COMPARING", detail);
+        Assert.Contains(status == InspectionStatus.Locked ? "LOCKED" : "REVIEWING", detail);
     }
 
     [Fact]
