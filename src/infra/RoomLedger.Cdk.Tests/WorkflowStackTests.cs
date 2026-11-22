@@ -72,7 +72,7 @@ public class WorkflowStackTests
 
     [Theory]
     [InlineData(Ingest, "RoomLedger.Functions::RoomLedger.Functions.PhotoIngest.Function::HandleAsync")]
-    [InlineData(Derive, "RoomLedger.Functions::RoomLedger.Functions.PhotoDerive.Function::HandleAsync")]
+    [InlineData(Derive, "RoomLedger.Functions::RoomLedger.Functions.PhotoDerive.Function::HandleQueueAsync")]
     [InlineData(SealFn, "RoomLedger.Functions::RoomLedger.Functions.EvidenceSeal.Function::HandleAsync")]
     [InlineData(RenderFn, "RoomLedger.Functions::RoomLedger.Functions.RenderPdf.Function::HandleAsync")]
     public void Functions_RunDotnet8_WithTheRightHandler_InsideTheVpc(string name, string handler)
@@ -130,7 +130,7 @@ public class WorkflowStackTests
         });
 
     [Fact]
-    public void PhotoReceived_TriggersDerive()
+    public void PhotoReceived_GoesToThePhotoQueue()
         => Synth().HasResourceProperties("AWS::Events::Rule", new Dictionary<string, object>
         {
             ["EventPattern"] = Match.ObjectLike(new Dictionary<string, object>
@@ -142,9 +142,53 @@ public class WorkflowStackTests
             {
                 ["Arn"] = Match.ObjectLike(new Dictionary<string, object>
                 {
-                    ["Fn::GetAtt"] = Match.ArrayWith([Fn(Derive).LogicalId]),
+                    ["Fn::GetAtt"] = Match.ArrayWith([QueueId("roomledger-dev-photo-queue"), "Arn"]),
                 }),
             })]),
+        });
+
+    private static string QueueId(string name) =>
+        Synth().FindResources("AWS::SQS::Queue").Single(r => (string)PropsOf(r.Value)["QueueName"] == name).Key;
+
+    [Fact]
+    public void PhotoQueue_RedrivesToTheDlqAfter3Tries_AndOutlastsDeriveTimeout()
+        => Synth().HasResourceProperties("AWS::SQS::Queue", new Dictionary<string, object>
+        {
+            ["QueueName"] = "roomledger-dev-photo-queue",
+            ["VisibilityTimeout"] = 720,
+            ["SqsManagedSseEnabled"] = true,
+            ["RedrivePolicy"] = new Dictionary<string, object>
+            {
+                ["deadLetterTargetArn"] = new Dictionary<string, object> { ["Fn::GetAtt"] = new[] { QueueId("roomledger-dev-workflow-dlq"), "Arn" } },
+                ["maxReceiveCount"] = 3,
+            },
+        });
+
+    [Fact]
+    public void PhotoQueue_FeedsDerive_WithPartialBatchFailures_AndCappedConcurrency()
+        => Synth().HasResourceProperties("AWS::Lambda::EventSourceMapping", new Dictionary<string, object>
+        {
+            ["FunctionName"] = new Dictionary<string, object> { ["Ref"] = Fn(Derive).LogicalId },
+            ["EventSourceArn"] = new Dictionary<string, object> { ["Fn::GetAtt"] = new[] { QueueId("roomledger-dev-photo-queue"), "Arn" } },
+            ["BatchSize"] = 5,
+            ["FunctionResponseTypes"] = new[] { "ReportBatchItemFailures" },
+            ["ScalingConfig"] = new Dictionary<string, object> { ["MaximumConcurrency"] = 2 },
+        });
+
+    [Fact]
+    public void Events_CanSendToThePhotoQueue()
+        => Synth().HasResourceProperties("AWS::SQS::QueuePolicy", new Dictionary<string, object>
+        {
+            ["Queues"] = Match.ArrayWith([new Dictionary<string, object> { ["Ref"] = QueueId("roomledger-dev-photo-queue") }]),
+            ["PolicyDocument"] = Match.ObjectLike(new Dictionary<string, object>
+            {
+                ["Statement"] = Match.ArrayWith([Match.ObjectLike(new Dictionary<string, object>
+                {
+                    ["Action"] = Match.ArrayWith(["sqs:SendMessage"]),
+                    ["Condition"] = Match.ObjectLike(new Dictionary<string, object> { ["ArnEquals"] = Match.AnyValue() }),
+                    ["Principal"] = new Dictionary<string, object> { ["Service"] = "events.amazonaws.com" },
+                })]),
+            }),
         });
 
     [Fact]

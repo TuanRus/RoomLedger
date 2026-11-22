@@ -6,6 +6,7 @@ using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.Events.Targets;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
+using Amazon.CDK.AWS.Lambda.EventSources;
 using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.RDS;
 using Amazon.CDK.AWS.SQS;
@@ -37,7 +38,8 @@ public sealed class WorkflowStackProps : StackProps
 
 /**
  * EventBridge + Lambda xử lý ảnh (T12). Sau này thêm read-document (AI đọc đồng hồ điện nước), notify.
- * Luồng upload: S3 "Object Created" (incoming) → photo-ingest → PhotoReceived → photo-derive.
+ * Luồng upload: S3 "Object Created" (incoming) → photo-ingest → PhotoReceived → SQS photo-queue → photo-derive
+ * (sơ đồ v8.5.2: hàng đợi đỡ đợt ảnh dồn dập, giới hạn số photo-derive chạy cùng lúc; lỗi 3 lần → DLQ).
  * Khóa biên bản: API InspectionLocked → evidence-seal (chép sang bucket evidence Object Lock, BR-18 RULE 4).
  * Trả phòng: không còn AI so ảnh (kiến trúc v8.5.2); API chuyển biên bản sang REVIEWING, chủ nhà xem ảnh và tự ghi
  * khoản trừ cọc. Sự kiện MoveOutSubmitted vẫn được phát để notify báo chủ nhà sau này.
@@ -69,6 +71,7 @@ public sealed class WorkflowStack : Stack
     public Function EvidenceSeal { get; }
     public Function RenderPdf { get; }
     public Queue DeadLetterQueue { get; }
+    public Queue PhotoQueue { get; }
 
     public WorkflowStack(Construct scope, string id, WorkflowStackProps props) : base(scope, id, props)
     {
@@ -93,13 +96,13 @@ public sealed class WorkflowStack : Stack
             RemovalPolicy = props.Stage == "prod" ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
         });
 
-        Function VpcFunction(string handlerClass, string shortName, double memory, Duration timeout) =>
+        Function VpcFunction(string handlerClass, string shortName, double memory, Duration timeout, string method = "HandleAsync") =>
             new(this, handlerClass, new FunctionProps
             {
                 FunctionName = Naming.Resource(props.Stage, shortName),
                 LogGroup = Logs(handlerClass, shortName),
                 Runtime = Runtime.DOTNET_8,
-                Handler = $"RoomLedger.Functions::RoomLedger.Functions.{handlerClass}.Function::HandleAsync",
+                Handler = $"RoomLedger.Functions::RoomLedger.Functions.{handlerClass}.Function::{method}",
                 Code = code,
                 MemorySize = memory,
                 Timeout = timeout,
@@ -111,7 +114,7 @@ public sealed class WorkflowStack : Stack
             });
 
         PhotoIngest = VpcFunction("PhotoIngest", "photo-ingest", 512, Duration.Seconds(60));
-        PhotoDerive = VpcFunction("PhotoDerive", "photo-derive", 2048, Duration.Minutes(2)); // HEIC 12 MP ≈ 50 MB điểm ảnh
+        PhotoDerive = VpcFunction("PhotoDerive", "photo-derive", 2048, Duration.Minutes(2), "HandleQueueAsync"); // HEIC 12 MP ≈ 50 MB điểm ảnh
         // Biên bản tối đa ~20 ảnh/khu vực × vài khu vực; mỗi ảnh ≤ 25 MB đọc 2 lần để băm
         EvidenceSeal = VpcFunction("EvidenceSeal", "evidence-seal", 1024, Duration.Minutes(5));
 
@@ -122,6 +125,24 @@ public sealed class WorkflowStack : Stack
             RetentionPeriod = Duration.Days(14),
             Encryption = QueueEncryption.SQS_MANAGED,
         });
+
+        // Hàng đợi ảnh trước photo-derive. Visibility = 6 × timeout của hàm (khuyến nghị của AWS cho SQS → Lambda).
+        // Lambda service tự poll SQS nên hàm trong VPC không cần VPC endpoint cho SQS.
+        PhotoQueue = new Queue(this, "PhotoQueue", new QueueProps
+        {
+            QueueName = Naming.Resource(props.Stage, "photo-queue"),
+            VisibilityTimeout = Duration.Minutes(12),
+            RetentionPeriod = Duration.Days(4),
+            Encryption = QueueEncryption.SQS_MANAGED,
+            DeadLetterQueue = new DeadLetterQueue { Queue = DeadLetterQueue, MaxReceiveCount = 3 },
+        });
+        PhotoDerive.AddEventSource(new SqsEventSource(PhotoQueue, new SqsEventSourceProps
+        {
+            BatchSize = 5,
+            MaxBatchingWindow = Duration.Seconds(5),
+            ReportBatchItemFailures = true,
+            MaxConcurrency = 2,   // giới hạn số photo-derive cùng lúc (RDS t4g.micro, account concurrency 10)
+        }));
 
         var incomingObjects = $"arn:{Aws.PARTITION}:s3:::{props.IncomingBucketName}/*";
         var derivedObjects = $"arn:{Aws.PARTITION}:s3:::{props.DerivedBucketName}/*";
@@ -197,13 +218,13 @@ public sealed class WorkflowStack : Stack
 
         new Rule(this, "PhotoReceivedRule", new RuleProps
         {
-            Description = "photo-ingest done -> photo-derive",
+            Description = "photo-ingest done -> photo-queue (SQS) -> photo-derive",
             EventPattern = new EventPattern
             {
                 Source = new[] { FunctionsSource },
                 DetailType = new[] { PhotoReceived },
             },
-            Targets = new IRuleTarget[] { new LambdaFunction(PhotoDerive, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }) },
+            Targets = new IRuleTarget[] { new SqsQueue(PhotoQueue, new SqsQueueProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }) },
         });
 
         new Rule(this, "InspectionLockedRule", new RuleProps

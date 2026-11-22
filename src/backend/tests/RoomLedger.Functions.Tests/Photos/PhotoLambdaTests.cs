@@ -1,4 +1,5 @@
 using Amazon.Lambda.CloudWatchEvents;
+using Amazon.Lambda.SQSEvents;
 using Amazon.Lambda.TestUtilities;
 using ImageMagick;
 using Microsoft.EntityFrameworkCore;
@@ -135,6 +136,33 @@ public class PhotoLambdaTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture>
 
         Assert.Equal(FileStatus.PendingUpload, (await db.ReloadAsync(photo.Id)).Status);
         Assert.Empty(_store.Objects);
+    }
+
+    // ---------- SQS photo-queue → photo-derive (sơ đồ v8.5.2) ----------
+
+    /** Body của tin SQS khi EventBridge đẩy sự kiện PhotoReceived vào hàng đợi: nguyên sự kiện dạng JSON. */
+    private static SQSEvent.SQSMessage QueueMessage(string id, string body) => new() { MessageId = id, Body = body };
+
+    private static string ReceivedJson(Guid photoId) => $$$"""
+        {"version":"0","id":"{{{Guid.NewGuid()}}}","detail-type":"PhotoReceived","source":"roomledger.functions",
+         "account":"123456789012","time":"2026-11-08T03:00:00Z","region":"ap-southeast-2","resources":[],
+         "detail":{"photoId":"{{{photoId}}}"}}
+        """;
+
+    [Fact]
+    public async Task DeriveFromQueue_ProcessesEachMessage_AndReportsOnlyTheBadOne()
+    {
+        var photo = await db.SeedPhotoAsync(FileStatus.Received);
+        _store.Objects[(StorageBucket.Incoming, photo.IncomingKey)] = (SampleImages.Heic(), "image/heic");
+
+        var response = await NewDerive().HandleQueueAsync(new SQSEvent
+        {
+            Records = [QueueMessage("ok", ReceivedJson(photo.Id)), QueueMessage("bad", "not json")],
+        }, new TestLambdaContext());
+
+        Assert.Equal(FileStatus.Ready, (await db.ReloadAsync(photo.Id)).Status);
+        var failure = Assert.Single(response.BatchItemFailures);
+        Assert.Equal("bad", failure.ItemIdentifier);
     }
 
     // ---------- K2 (Phát, 15/11): ảnh tới sau khi khóa ----------
