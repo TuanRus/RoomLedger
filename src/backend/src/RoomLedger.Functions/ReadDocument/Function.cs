@@ -2,7 +2,7 @@ using Amazon.Lambda.Core;
 
 namespace RoomLedger.Functions.ReadDocument;
 
-/// <summary>Đọc đồng hồ điện nước và điều khoản hợp đồng (ngoài VPC)</summary>
+/// <summary>AI đọc đồng hồ điện nước (ngoài VPC). Hợp đồng không dùng AI.</summary>
 public class Function
 {
     public Task HandleAsync(object input, ILambdaContext context)
