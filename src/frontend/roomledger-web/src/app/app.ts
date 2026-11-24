@@ -1,20 +1,9 @@
-import { Component, inject } from '@angular/core';
-import { AsyncPipe, JsonPipe } from '@angular/common';
-import { OidcSecurityService } from 'angular-auth-oidc-client';
-
-import { AuthService } from './core/auth/auth.service';
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
-  imports: [AsyncPipe, JsonPipe],
-  templateUrl: './app.html',
-  styleUrl: './app.scss',
+  imports: [RouterOutlet],
+  template: '<router-outlet />',
 })
-export class App {
-  protected readonly auth = inject(AuthService);
-  protected readonly oidc = inject(OidcSecurityService);
-
-  protected readonly isAuthenticated$ = this.oidc.isAuthenticated$;
-
-  protected readonly userData$ = this.oidc.userData$;
-}
+export class App {}

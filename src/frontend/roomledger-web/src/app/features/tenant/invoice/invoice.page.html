@@ -1,0 +1,83 @@
+@if (invoice(); as inv) {
+  @let p = payment();
+
+  <ng-template #copyLabel let-target>
+    @if (copied() === target) { <app-icon name="i-check" size="sm" />Đã sao chép } @else { Sao chép }
+  </ng-template>
+
+  @if (!viewport.isPhone()) {
+    <div class="top"><div><h1>Hóa đơn kỳ {{ inv.period | period }}</h1><p class="sub">Gửi {{ inv.sentAt | stamp }} · hạn thanh toán {{ dueDate() }}</p></div></div>
+    <div class="pay3">
+      <nav aria-label="Các kỳ hóa đơn">
+        <ul class="periods">
+          @for (h of history(); track h.invoiceId) {
+            <li [class.on]="h.invoiceId === inv.invoiceId">
+              <a [routerLink]="['..', h.invoiceId]" [attr.aria-current]="h.invoiceId === inv.invoiceId ? 'page' : null">
+                <span><b>Kỳ {{ h.period | period }}</b>{{ h.total | vnd }}</span>
+                <app-status-chip [invoice]="h.status" [text]="h.status === 'PAID' ? 'Đã trả' : 'Chưa trả'" />
+              </a>
+            </li>
+          }
+        </ul>
+      </nav>
+      <div>
+        <app-receipt [invoice]="inv" (photo)="openPhoto($event)" />
+        <button type="button" class="btn sec dispute"><app-icon name="i-talk" />Khiếu nại hóa đơn này</button>
+      </div>
+      <aside class="panel" aria-labelledby="pay-title">
+        <h2 id="pay-title">Chuyển khoản</h2>
+        @if (p.qrImageUrl) {
+          <p class="small muted">Mở ứng dụng ngân hàng trên điện thoại và quét mã. Số tiền và nội dung đã điền sẵn.</p>
+          <img class="qr" [ngSrc]="p.qrImageUrl" width="200" height="200" [alt]="'Mã QR chuyển khoản ' + (inv.total | vnd) + ' tới ' + p.accountHolder + ', nội dung ' + p.transferNote">
+        }
+        <dl class="bank">
+          <div><dt>Ngân hàng</dt><dd>{{ p.bankName }}</dd></div>
+          <div class="stack"><dt>Số tài khoản</dt><dd><b>{{ p.accountNumber }}</b><button type="button" class="btn sec sm" (click)="copy('account')" aria-label="Sao chép số tài khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'account' }" /></button></dd></div>
+          <div><dt>Chủ tài khoản</dt><dd>{{ p.accountHolder }}</dd></div>
+          <div class="stack"><dt>Nội dung</dt><dd><b>{{ p.transferNote }}</b><button type="button" class="btn sec sm" (click)="copy('note')" aria-label="Sao chép nội dung chuyển khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'note' }" /></button></dd></div>
+          <div><dt>Số tiền</dt><dd><b>{{ inv.total | vnd }}</b></dd></div>
+        </dl>
+        <p class="small muted">Chủ nhà đánh dấu “Đã thanh toán” khi nhận được tiền. Bạn sẽ thấy trạng thái ở đây.</p>
+      </aside>
+    </div>
+  } @else {
+    <div class="m-head">
+      <a class="iconbtn" routerLink="/tenant/home" aria-label="Về trang chủ"><app-icon name="i-back" /></a>
+      <h1>Hóa đơn kỳ {{ inv.period | period }}</h1>
+    </div>
+    <app-receipt [invoice]="inv" (photo)="openPhoto($event)" />
+    <section class="m-pay" aria-labelledby="m-pay-title">
+      <h2 id="m-pay-title">Chuyển khoản</h2>
+      <dl class="bank">
+        <div><dt>Ngân hàng</dt><dd>{{ p.bankName }}</dd></div>
+        <div><dt>Số tài khoản</dt><dd><b>{{ p.accountNumber }}</b></dd></div>
+        <div><dt>Chủ tài khoản</dt><dd>{{ p.accountHolder }}</dd></div>
+        <div><dt>Nội dung</dt><dd><b>{{ p.transferNote }}</b></dd></div>
+      </dl>
+      <button type="button" class="btn lg block" (click)="copy('account')">
+        @if (copied() === 'account') { <app-icon name="i-check" />Đã sao chép số tài khoản } @else { <app-icon name="i-doc" />Sao chép số tài khoản }
+      </button>
+      <p class="small muted">Dán vào ứng dụng ngân hàng và ghi nội dung {{ p.transferNote }}.</p>
+    </section>
+    <button type="button" class="btn sec block dispute"><app-icon name="i-talk" />Khiếu nại hóa đơn này</button>
+  }
+
+  <span class="sr" aria-live="polite">{{ copied() ? 'Đã sao chép' : '' }}</span>
+
+  <dialog #photoDialog class="photo-dialog" (close)="photoKind.set(null)" [attr.aria-label]="photoLine()?.name">
+    @if (photoLine(); as pl) {
+      <div class="pd-head">
+        <h2>{{ pl.name }} · kỳ {{ inv.period | period }}</h2>
+        <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
+      </div>
+      <img [ngSrc]="pl.line.photoUrl!" width="640" height="480" [alt]="'Ảnh gốc ' + pl.name.toLowerCase() + ' ' + inv.roomCode + ', chỉ số ' + pl.line.current + ' ' + pl.unit">
+      <p class="small muted">Chủ nhà chụp và duyệt. Ảnh lưu nguyên bản, không ai sửa được sau khi tải lên. Chỉ số: {{ pl.line.previous }} → {{ pl.line.current }} {{ pl.unit }}.</p>
+    }
+  </dialog>
+} @else {
+  <div class="missing">
+    <h1>Không tìm thấy hóa đơn</h1>
+    <p class="muted">Hóa đơn này không tồn tại hoặc không thuộc phòng của bạn.</p>
+    <a class="btn sec" routerLink="/tenant/home">Về trang chủ</a>
+  </div>
+}

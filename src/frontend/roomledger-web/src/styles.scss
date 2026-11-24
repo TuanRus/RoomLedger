@@ -1,1 +1,18 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global styles: the RoomLedger design system (tokens + shared component classes). */
+@use 'styles/rl';
+
+html,
+body {
+  min-height: 100%;
+}
+
+/* Desktop and phone breakpoint used across shells and pages: 768px (see core/layout/viewport.ts). */
+
+/* Undo toast shared by bulk actions (approve readings, mark paid). Sits above the phone bottom bar. */
+.rl-toast {
+  position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); z-index: 20;
+  display: flex; align-items: center; gap: 12px; background: var(--ink); color: #fff; border-radius: 14px;
+  padding: 8px 8px 8px 16px; font-size: 15px; box-shadow: 0 20px 40px -16px rgb(0 0 0 / .45); max-width: calc(100vw - 24px);
+}
+.rl-toast svg.i { color: #9fd3b4; }
+@media (max-width: 767px) { .rl-toast { bottom: 172px; } }

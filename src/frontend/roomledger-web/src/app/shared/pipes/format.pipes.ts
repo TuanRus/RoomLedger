@@ -1,0 +1,39 @@
+import { Pipe, PipeTransform } from '@angular/core';
+
+const vnd = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+
+/** 3245000 -> "3.245.000 đ" (PRODUCT.md money format). */
+@Pipe({ name: 'vnd' })
+export class VndPipe implements PipeTransform {
+  transform(value: number | null | undefined): string {
+    return value == null ? '—' : `${vnd.format(value)} đ`;
+  }
+}
+
+/** 1284 -> "1.284" (plain readings and usage, no unit). */
+@Pipe({ name: 'num' })
+export class NumPipe implements PipeTransform {
+  transform(value: number | null | undefined): string {
+    return value == null ? '—' : vnd.format(value);
+  }
+}
+
+/** "2026-11" -> "11/2026" (PRODUCT.md period format, used after "Kỳ"). */
+@Pipe({ name: 'period' })
+export class PeriodPipe implements PipeTransform {
+  transform(value: string | null | undefined): string {
+    if (!value) return '—';
+    const [year, month] = value.split('-');
+    return `${month}/${year}`;
+  }
+}
+
+/** ISO date-time -> "08:02, 01/12/2026" without depending on the browser locale. */
+@Pipe({ name: 'stamp' })
+export class StampPipe implements PipeTransform {
+  transform(value: string | null | undefined): string {
+    if (!value) return '—';
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(value);
+    return m ? `${m[4]}:${m[5]}, ${m[3]}/${m[2]}/${m[1]}` : value;
+  }
+}

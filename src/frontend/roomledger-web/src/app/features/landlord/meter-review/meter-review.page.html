@@ -1,0 +1,179 @@
+@let counts = store.counts();
+@let kind = store.kind();
+
+<ng-template #kindSwitch>
+  <div class="seg" role="group" aria-label="Loại đồng hồ">
+    <button type="button" [class.on]="kind === 'ELECTRICITY'" [attr.aria-pressed]="kind === 'ELECTRICITY'" (click)="setKind('ELECTRICITY')"><app-icon name="i-bolt" />Điện</button>
+    <button type="button" [class.on]="kind === 'WATER'" [attr.aria-pressed]="kind === 'WATER'" (click)="setKind('WATER')"><app-icon name="i-drop" />Nước</button>
+  </div>
+</ng-template>
+
+<ng-template #filterPills>
+  <div class="pills" role="group" aria-label="Lọc theo trạng thái">
+    @for (f of filters; track f.id) {
+      <button type="button" class="pill" [class.on]="filter() === f.id" [attr.aria-pressed]="filter() === f.id" (click)="filter.set(f.id)">
+        {{ f.label }} <b>{{ f.id === 'all' ? store.rows().length : counts[f.id] }}</b>
+      </button>
+    }
+  </div>
+</ng-template>
+
+<ng-template #detail let-row>
+  @let r = row.reading;
+  <div class="row between">
+    <h2>{{ row.roomCode }} · {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }}</h2>
+    <app-status-chip [review]="stateOf(row)" />
+  </div>
+  <p class="small muted sub">{{ row.tenantName }}@if (row.capturedAt) { · bạn chụp {{ row.capturedAt | stamp }} }</p>
+  @if (r) {
+    <div class="photo"><img [ngSrc]="r.photoUrl" width="400" height="300" [alt]="'Ảnh gốc đồng hồ ' + row.roomCode + (r.aiValue != null ? ', hiển thị ' + r.aiValue : ', ảnh mờ')"><span class="tag">Ảnh gốc · bạn chụp</span></div>
+    @if (stateOf(row) !== 'approved') {
+      <div class="field">
+        <label [for]="'v-' + row.roomId">Chỉ số {{ r.aiValue != null ? 'AI đọc' : 'đúng (tự nhập)' }}</label>
+        <div class="input lcd-input">
+          <input [id]="'v-' + row.roomId" class="value-input" inputmode="numeric" autocomplete="off" [value]="editValue() ?? ''" (input)="onValueInput($event)" [attr.aria-describedby]="'h-' + row.roomId">
+          <span class="unit">{{ unit() }}</span>
+          <app-icon name="i-edit" />
+        </div>
+        <span class="help" [id]="'h-' + row.roomId">
+          @if (r.aiConfidence != null) { AI khá chắc chắn ({{ confidence(r.aiConfidence) }}). Sửa nếu khác với ảnh. } @else { AI không đọc được số. Nhìn ảnh và nhập số trên đồng hồ. }
+        </span>
+      </div>
+    } @else {
+      <div class="approved-val"><app-meter-digits [kind]="kind" [value]="r.value" size="lg" /><span class="muted">{{ unit() }}</span></div>
+    }
+    <div class="hist-wrap">
+      <span class="small muted">Tiêu thụ 4 kỳ gần nhất ({{ unit() }})</span>
+      <div class="hist">
+        @for (h of row.history; track h.period; let last = $last) {
+          <div [class.now]="last && stateOf(row) === 'abnormal'">T{{ +h.period.slice(5) }}<b>{{ last ? (usageOf(row) | num) : (h.usage | num) }}</b></div>
+        }
+      </div>
+    </div>
+    @if (stateOf(row) === 'abnormal') {
+      <div class="banner warn"><app-icon name="i-alert" /><span>Tăng {{ percent(row) }} so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }}). Kiểm tra số trên ảnh trước khi duyệt.</span></div>
+    }
+    @if (stateOf(row) !== 'approved') {
+      <div class="actions">
+        <button type="button" class="btn block" [disabled]="editValue() == null" (click)="approveSelected()"><app-icon name="i-check" />Duyệt {{ editValue() | num }} {{ unit() }}</button>
+        <button type="button" class="btn sec block"><app-icon name="i-camera" />Cần chụp lại</button>
+      </div>
+    }
+  } @else {
+    <div class="empty-state">
+      <app-icon name="i-camera" />
+      <p>Chưa có ảnh kỳ {{ store.period | period }}. Chụp đồng hồ trên điện thoại khi đi ghi chỉ số.</p>
+    </div>
+  }
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top">
+    <div><h1>Duyệt chỉ số</h1><p class="sub">Kỳ {{ store.period | period }} · <b class="ink">{{ attention() }} cần xử lý</b> · {{ counts.unrecorded }} phòng chưa ghi</p></div>
+    <div class="acts"><ng-container [ngTemplateOutlet]="kindSwitch" /></div>
+  </div>
+  <div class="split review">
+    <div>
+      <ng-container [ngTemplateOutlet]="filterPills" />
+      @if (checked().size > 0) {
+        <div class="bulk" role="region" aria-label="Duyệt hàng loạt">
+          <span>Đã chọn <b>{{ checked().size }}</b> chỉ số chờ duyệt trong khoảng ±10% so với 3 kỳ. Bất thường và không đọc được thì xem từng phòng.</span>
+          <button type="button" class="btn ghost inv-ghost sm" (click)="clearChecked()">Bỏ chọn</button>
+          <button type="button" class="btn inv sm" (click)="approveChecked()"><app-icon name="i-check" size="sm" />Duyệt {{ checked().size }} chỉ số</button>
+        </div>
+      }
+      <div class="tablewrap">
+        <table class="table">
+          <caption class="sr">Chỉ số {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }} kỳ {{ store.period | period }}</caption>
+          <thead><tr><th scope="col"><span class="sr">Chọn</span></th><th scope="col">Phòng</th><th scope="col">Số trên ảnh</th><th scope="col" class="num">Kỳ trước</th><th scope="col" class="num">AI đọc</th><th scope="col" class="num">Tiêu thụ</th><th scope="col" class="num">So với 3 kỳ</th><th scope="col">Trạng thái</th></tr></thead>
+          <tbody>
+            @for (row of visibleRows(); track row.roomId) {
+              @let r = row.reading;
+              <tr [class.sel]="selectedRoomId() === row.roomId" (click)="selectedRoomId.set(row.roomId)">
+                <td>
+                  @if (stateOf(row) === 'pending') {
+                    <input type="checkbox" class="cb" [checked]="checked().has(r!.readingId)" (click)="$event.stopPropagation()" (change)="toggle(r!.readingId)" [attr.aria-label]="'Chọn ' + row.roomCode">
+                  }
+                </td>
+                <td><button type="button" class="room" (click)="selectedRoomId.set(row.roomId)"><b>{{ row.roomCode }}</b><span class="who-s">{{ row.tenantName }}</span></button></td>
+                <td>
+                  @if (row.digitCropUrl) {
+                    <img class="digits" [ngSrc]="row.digitCropUrl" width="88" height="35" [alt]="'Số trên ảnh ' + row.roomCode">
+                  } @else {
+                    <span class="thumb none" aria-hidden="true"><app-icon name="i-camera" /></span>
+                  }
+                </td>
+                <td class="num">{{ r?.previousValue | num }}</td>
+                <td class="num">@if (r?.value != null) { <app-meter-digits [kind]="kind" [value]="r!.value!" size="sm" /> } @else { <span class="muted">—</span> }</td>
+                <td class="num">@if (usageOf(row) != null) { {{ usageOf(row) | num }} {{ unit() }} } @else { <span class="muted">—</span> }</td>
+                <td class="num" [class.delta-up]="stateOf(row) === 'abnormal'">{{ percent(row) }}</td>
+                <td><app-status-chip [review]="stateOf(row)" /></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="8" class="muted empty-row">Không có phòng nào ở trạng thái này.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <aside class="panel detail" aria-live="polite">
+      @if (selected(); as row) {
+        <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: row }" />
+      } @else {
+        <p class="muted">Chọn một phòng để xem ảnh và duyệt.</p>
+      }
+    </aside>
+  </div>
+} @else {
+  @if (selected(); as row) {
+    <div class="m-head">
+      <button type="button" class="iconbtn" aria-label="Quay lại danh sách" (click)="selectedRoomId.set(null)"><app-icon name="i-back" /></button>
+    </div>
+    <section class="m-detail" [attr.aria-label]="'Chi tiết ' + row.roomCode">
+      <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: row }" />
+    </section>
+  } @else {
+    <div class="m-head"><h1>Duyệt chỉ số</h1><span class="muted small">Kỳ {{ store.period | period }}</span></div>
+    <ng-container [ngTemplateOutlet]="kindSwitch" />
+    <div class="m-pills"><ng-container [ngTemplateOutlet]="filterPills" /></div>
+    <ul class="list m-list">
+      @for (row of visibleRows(); track row.roomId) {
+        @let r = row.reading;
+        <li class="mrow" [class.warn]="stateOf(row) === 'abnormal'">
+          @if (stateOf(row) === 'pending') {
+            <input type="checkbox" class="cb" [checked]="checked().has(r!.readingId)" (change)="toggle(r!.readingId)" [attr.aria-label]="'Chọn ' + row.roomCode">
+          } @else {
+            <span class="cb-gap" aria-hidden="true"></span>
+          }
+          <button type="button" class="m-open" (click)="selectedRoomId.set(row.roomId)">
+            @if (row.digitCropUrl) {
+              <img class="digits" [ngSrc]="row.digitCropUrl" width="84" height="34" [alt]="'Số trên ảnh ' + row.roomCode">
+            } @else {
+              <span class="thumb none" aria-hidden="true"><app-icon name="i-camera" /></span>
+            }
+            <span class="m-text"><b>{{ row.roomCode }}</b><span class="small muted">{{ row.tenantName }}</span></span>
+            <span class="m-val">
+              @if (usageOf(row) != null) { <b>{{ usageOf(row) | num }} {{ unit() }}</b><span class="small" [class.muted]="stateOf(row) !== 'abnormal'">{{ percent(row) }}</span> }
+              @else { <app-status-chip [review]="stateOf(row)" /> }
+            </span>
+          </button>
+        </li>
+      } @empty {
+        <li class="mrow muted">Không có phòng nào ở trạng thái này.</li>
+      }
+    </ul>
+    @if (checked().size > 0) {
+      <div class="m-sticky" role="region" aria-label="Duyệt hàng loạt">
+        <span>Đã chọn <b>{{ checked().size }}</b> chỉ số bình thường</span>
+        <button type="button" class="btn inv sm" (click)="approveChecked()">Duyệt {{ checked().size }}</button>
+      </div>
+    }
+  }
+}
+
+@if (toast(); as t) {
+  <div class="rl-toast" role="status">
+    <app-icon name="i-check-c" /><span>Đã duyệt <b>{{ t.count }} chỉ số</b>. Hóa đơn chưa được tạo.</span>
+    <button type="button" class="btn sm ghost inv-ghost" (click)="undo()">Hoàn tác · {{ t.seconds }} giây</button>
+  </div>
+}

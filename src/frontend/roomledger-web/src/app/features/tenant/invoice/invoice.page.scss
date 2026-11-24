@@ -1,0 +1,42 @@
+:host { display: block; }
+
+.pay3 { display: grid; grid-template-columns: 260px minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+
+.periods { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+.periods li + li { border-top: 1px solid var(--line); }
+.periods a { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 14px 16px; font-size: var(--t-14); text-decoration: none; color: var(--ink-2); min-height: 64px; }
+.periods a:hover { background: var(--soft); }
+.periods li.on a { background: var(--soft); }
+.periods b { display: block; font-weight: 500; font-size: var(--t-16); color: var(--ink); }
+
+.dispute { margin-top: 16px; }
+
+.panel h2 { margin-bottom: 4px; }
+.qr { display: block; width: 200px; height: 200px; margin: 12px auto 0; border-radius: 12px; border: 1px solid var(--line); }
+
+.bank { margin: 16px 0 12px; }
+.bank > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); font-size: var(--t-14); }
+.bank dt { color: var(--ink-3); }
+.bank dd { margin: 0; display: flex; align-items: center; gap: 10px; text-align: right; }
+.bank dd b { font-weight: 600; font-size: var(--t-16); }
+.bank .btn.sm { height: 36px; min-width: 96px; }
+.bank > div.stack { flex-direction: column; align-items: stretch; gap: 2px; }
+.bank > div.stack dd { justify-content: space-between; }
+.bank dd b { white-space: nowrap; }
+
+/* Phone (TN-09) */
+.m-head { display: flex; align-items: center; gap: 4px; min-height: 56px; margin: 0 -8px 8px; }
+.m-head h1 { font-size: var(--t-18); font-weight: 600; }
+.m-pay { margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; }
+.m-pay h2 { font-size: var(--t-18); }
+.m-pay .bank { margin: 8px 0 14px; }
+.m-pay .small { margin-top: 10px; }
+
+.photo-dialog { border: 0; border-radius: var(--r-lg); padding: 16px; max-width: min(680px, calc(100vw - 24px)); width: 100%; box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); }
+.photo-dialog::backdrop { background: rgb(20 19 17 / .55); }
+.pd-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.pd-head h2 { font-size: var(--t-18); }
+.photo-dialog img { width: 100%; height: auto; border-radius: 12px; display: block; }
+.photo-dialog p { margin-top: 10px; }
+
+.missing { display: grid; gap: 12px; justify-items: start; padding: 48px 0; }
