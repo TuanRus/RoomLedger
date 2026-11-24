@@ -14,8 +14,16 @@ body {
   display: flex; align-items: center; gap: 12px; background: var(--ink); color: #fff; border-radius: 14px;
   padding: 8px 8px 8px 16px; font-size: 15px; box-shadow: 0 20px 40px -16px rgb(0 0 0 / .45); max-width: calc(100vw - 24px);
 }
-.rl-toast svg.i { color: #9fd3b4; }
-@media (max-width: 767px) { .rl-toast { bottom: 172px; } }
+.rl-toast svg.i { color: #9fd3b4; flex: none; }
+.rl-toast .acts { display: flex; gap: 8px; flex: none; }
+.rl-toast a.btn.ghost.inv-ghost { text-decoration: none; }
+/* Phone: full width above the bottom bar (centring with translateX capped it at half the screen); actions on their own row. */
+@media (max-width: 767px) {
+  .rl-toast { left: 12px; right: 12px; bottom: 172px; transform: none; max-width: none; flex-wrap: wrap; padding: 12px 12px 12px 16px; }
+  .rl-toast > span { flex: 1 1 calc(100% - 40px); }
+  .rl-toast .acts { flex: 1 1 100%; justify-content: flex-end; }
+  .rl-toast > .btn { margin-left: auto; }
+}
 
 /* PRODUCT.md: touch targets on a phone are at least 44px, including small buttons and filter pills. */
 @media (max-width: 767px) {

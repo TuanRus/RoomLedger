@@ -1,5 +1,6 @@
 import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, computed, inject, linkedSignal, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { MeterKind, ReviewRow, ReviewState } from '../../../core/data/models';
 import { MeterReviewStore, deltaOf, stateOf, usageOf } from '../../../core/data/meter-review.store';
@@ -25,7 +26,7 @@ const UNDO_SECONDS = 10;
 /** LL-04 (computer) and LM-01/LM-02 (phone): review the meter readings of one period. */
 @Component({
   selector: 'app-meter-review-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, Icon, MeterDigits, StatusChip, NumPipe, PeriodPipe, StampPipe],
+  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, MeterDigits, StatusChip, NumPipe, PeriodPipe, StampPipe],
   templateUrl: './meter-review.page.html',
   styleUrl: './meter-review.page.scss',
 })

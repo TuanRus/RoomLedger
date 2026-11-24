@@ -1,6 +1,9 @@
 import { ShellConfig } from './app-shell';
 
-/** Sidebar order is array order; `phone` is the position in the phone bottom bar (omit to hide there). */
+/**
+ * Sidebar order is array order; `phone` is the position in the phone bottom bar. Items without one
+ * go in the phone "Thêm" sheet when the bar has a free slot (landlord), otherwise they are hidden there.
+ */
 export const LANDLORD_SHELL: ShellConfig = {
   role: 'landlord',
   navLabel: 'Chủ nhà',
@@ -8,12 +11,13 @@ export const LANDLORD_SHELL: ShellConfig = {
   person: { initials: 'LL', name: 'Lê Thị Lan', role: 'Chủ nhà' },
   nav: [
     { path: 'overview', icon: 'i-grid', label: 'Tổng quan', phone: 1 },
-    { path: 'rooms', icon: 'i-door', label: 'Phòng', phone: 5 },
+    { path: 'meter-capture', icon: 'i-camera', label: 'Ghi chỉ số', phone: 3, fab: true },
     { path: 'meter-readings', icon: 'i-meter', label: 'Duyệt chỉ số', short: 'Duyệt', phone: 2 },
-    { path: 'meter-capture', icon: 'i-camera', label: 'Ghi chỉ số: chụp đồng hồ', phone: 3, fab: true },
     { path: 'invoices', icon: 'i-bill', label: 'Hóa đơn', phone: 4 },
-    { path: 'contracts', icon: 'i-doc', label: 'Hợp đồng' },
+    // Not in the phone bar: reached from the "Thêm" sheet.
     { path: 'disputes', icon: 'i-talk', label: 'Khiếu nại' },
+    { path: 'rooms', icon: 'i-door', label: 'Phòng' },
+    { path: 'contracts', icon: 'i-doc', label: 'Hợp đồng' },
     { path: 'settings', icon: 'i-settings', label: 'Đơn giá và kỳ thu' },
   ],
 };

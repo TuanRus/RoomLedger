@@ -1,6 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, ElementRef, afterRenderEffect, computed, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, afterRenderEffect, computed, inject, input, signal } from '@angular/core';
 
+import { MeterKind } from '../../../core/data/models';
 import { Viewport } from '../../../core/layout/viewport';
 import { PeriodPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
@@ -30,7 +31,7 @@ const PILLS: { id: RoomGroup; label: string }[] = [
   styleUrl: './meter-capture.page.scss',
   host: { '(keydown.escape)': 'store.close()' },
 })
-export class MeterCapturePage {
+export class MeterCapturePage implements OnInit {
   protected readonly store = inject(MeterCaptureStore);
   protected readonly viewport = inject(Viewport);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -39,6 +40,10 @@ export class MeterCapturePage {
   protected readonly period = CAPTURE_PERIOD;
   protected readonly roundDate = ROUND_DATE;
   protected readonly filter = signal<RoomGroup>('todo');
+
+  /** `?room=r-204&meter=WATER` opens that room's capture step, e.g. from "Cần chụp lại" in meter review. */
+  readonly room = input<string>();
+  readonly meter = input<MeterKind>();
 
   protected readonly visible = computed(() => this.store.groups()[this.filter()]);
   protected readonly percent = computed(() => Math.round((this.store.recordedCount() / this.store.total()) * 100));
@@ -67,6 +72,13 @@ export class MeterCapturePage {
         this.lastRoomId = null;
       }
     });
+  }
+  ngOnInit(): void {
+    const roomId = this.room();
+    if (!roomId) return;
+    this.store.open(roomId, this.meter());
+    const room = this.store.active() ? this.store.rooms().find((r) => r.roomId === roomId) : undefined;
+    if (room) this.filter.set(this.store.groupOf(room));
   }
 
   protected isActive(room: CaptureRoom): boolean {
