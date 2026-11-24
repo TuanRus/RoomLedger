@@ -1,0 +1,33 @@
+:host { display: block; }
+
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); gap: 24px; align-items: start; }
+.side { position: sticky; top: 24px; display: grid; gap: 16px; }
+
+.scan { all: unset; box-sizing: border-box; display: block; position: relative; cursor: zoom-in; border-radius: var(--r-lg); overflow: hidden; background: var(--soft); border: 1px solid var(--line); }
+.scan:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.scan img { display: block; width: 100%; height: auto; }
+.scan .tag { position: absolute; left: 10px; top: 10px; background: rgb(255 255 255 / .94); border-radius: 8px; padding: 5px 9px; font: 500 13px var(--sans); color: var(--ink); }
+
+.terms { font-size: var(--t-16); }
+.btns { display: flex; gap: 8px; }
+.btns .btn { flex: 1; }
+.btns .btn.grow { flex: 1.4; }
+.reject { display: grid; gap: 12px; }
+.area { height: auto; min-height: 112px; padding: 12px 14px; resize: vertical; font: inherit; line-height: 1.5; width: 100%; }
+.under { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-top: 6px; }
+.err { display: inline-flex; gap: 6px; align-items: flex-start; }
+.err:empty { display: none; }
+.count { margin-left: auto; white-space: nowrap; }
+
+/* Phone */
+.m-head { display: flex; align-items: center; min-height: 56px; margin-bottom: 8px; }
+.m-head h1 { font-size: var(--t-24); letter-spacing: -.025em; }
+.m-body { display: grid; gap: 12px; }
+.m-body .scan { height: 250px; }
+.m-body .scan img { height: 100%; object-fit: cover; object-position: 50% 0; }
+
+.scan-dialog { border: 0; border-radius: var(--r-lg); padding: 16px; width: 100%; max-width: min(760px, calc(100vw - 24px)); box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); }
+.scan-dialog::backdrop { background: rgb(20 19 17 / .55); }
+.sd-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.sd-head h2 { font-size: var(--t-18); }
+.scan-dialog img { width: 100%; height: auto; display: block; border-radius: 8px; }

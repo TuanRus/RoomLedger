@@ -1,0 +1,83 @@
+@let room = store.activeRoom();
+@let slot = store.activeSlot();
+@let job = store.activeJob();
+@let next = store.nextRoomCode();
+@if (room && slot && job) {
+  @let kind = slot.kind;
+  @let unit = kindUnit[kind];
+  @let unreadable = job.phase === 'unreadable';
+  @if (layout() === 'phone') {
+    <div class="appbar">
+      <button type="button" class="iconbtn" aria-label="Quay lại danh sách phòng" (click)="store.close()"><app-icon name="i-back" /></button>
+      <h1 id="cap-title" class="cap-focus" tabindex="-1">{{ room.roomCode }} · {{ kindLabel[kind] }}</h1>
+    </div>
+  }
+  <div class="body">
+    <div class="photo" [class.short]="unreadable">
+      <!-- Plain img: the photo can be a blob: URL, which NgOptimizedImage rejects. -->
+      <img [src]="job.photoUrl" [alt]="unreadable ? 'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + ' bị mờ hoặc lóa, không đọc được số' : 'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + ', AI đọc ' + job.aiValue + ' ' + unit">
+      <span class="tag">{{ unreadable ? 'Ảnh vừa chụp' : 'Bạn chụp · ' + shortStamp(job.capturedAt) }}</span>
+    </div>
+
+    @if (unreadable && !manual()) {
+      <div>
+        <span class="chip err"><app-icon name="i-blur" />AI không đọc được số</span>
+        <h2>Chụp lại khi còn đứng ở đồng hồ</h2>
+      </div>
+      <ul class="tips">
+        <li><app-icon name="i-blur" /><span><b>Ảnh bị mờ.</b> Giữ máy yên, chạm vào màn hình để lấy nét vào dãy số.</span></li>
+        <li><app-icon name="i-sun" /><span><b>Bị lóa hoặc quá tối.</b> Đèn chiếu thẳng vào mặt số thì tắt flash, nghiêng máy; hành lang tối thì bật flash.</span></li>
+        <li><app-icon name="i-meter" /><span><b>Đúng {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }}?</b> Số {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }} {{ room.roomCode }} là {{ slot.meterNo }}.</span></li>
+      </ul>
+      <div class="acts col">
+        <button type="button" class="btn lg block" (click)="store.discard()"><app-icon name="i-camera" />{{ layout() === 'phone' ? 'Chụp lại' : 'Tải ảnh khác' }}</button>
+        <button type="button" class="btn ghost block" (click)="startManual()">Tự nhập số từ đồng hồ</button>
+      </div>
+    } @else {
+      <div class="field">
+        <div class="row between">
+          <label [for]="'cap-v-' + room.roomId">{{ unreadable ? 'Số trên đồng hồ (tự nhập)' : 'AI đọc được' }}</label>
+          @if (!unreadable && job.confidence != null) {
+            @if (job.confidence >= 0.9) {
+              <span class="chip info"><app-icon name="i-ai" />Khá chắc chắn · {{ confidence(job.confidence) }}</span>
+            } @else {
+              <span class="chip warn"><app-icon name="i-alert" />Chưa chắc · {{ confidence(job.confidence) }}</span>
+            }
+          }
+        </div>
+        @if (editing() || unreadable) {
+          <div class="input lcd-input">
+            <input [id]="'cap-v-' + room.roomId" class="val" inputmode="numeric" autocomplete="off" [value]="value() ?? ''" (input)="onInput($event)" [attr.aria-describedby]="'cap-h-' + room.roomId" [attr.aria-invalid]="tooLow()">
+            <span class="unit">{{ unit }}</span>
+          </div>
+        } @else {
+          <button type="button" [id]="'cap-v-' + room.roomId" class="read-input" [attr.aria-describedby]="'cap-h-' + room.roomId" (click)="startEdit()">
+            <app-meter-digits [kind]="kind" [value]="value() ?? 0" size="lg" /><span class="unit">{{ unit }}</span><app-icon name="i-edit" />
+            <span class="vh">Sửa</span>
+          </button>
+        }
+        @if (tooLow()) {
+          <span class="err" [id]="'cap-h-' + room.roomId"><app-icon name="i-alert" />Nhỏ hơn kỳ trước ({{ slot.previousValue | num }} {{ unit }}). Kiểm tra lại số trên đồng hồ.</span>
+        } @else {
+          <span class="help" [id]="'cap-h-' + room.roomId">{{ unreadable ? 'Nhìn mặt đồng hồ ' + slot.meterNo + ' và nhập đủ dãy số.' : 'Số trên ảnh khác? Chạm vào ô để sửa.' }}</span>
+        }
+      </div>
+
+      <div class="sheet">
+        <dl class="kv">
+          <dt>Kỳ trước ({{ prevPeriod }})</dt><dd>{{ slot.previousValue | num }} {{ unit }}</dd>
+          <dt>Tiêu thụ kỳ này</dt><dd><b>{{ cost() ? (cost()!.usage | num) + ' ' + unit : '—' }}</b></dd>
+          <dt>Thành tiền</dt><dd class="money">{{ cost() ? (cost()!.amount | vnd) : '—' }}</dd>
+        </dl>
+      </div>
+
+      <div class="acts">
+        <button type="button" class="btn sec lg" (click)="store.discard()">Chụp lại</button>
+        <button type="button" class="btn lg grow" [disabled]="value() == null || tooLow()" (click)="approve()">
+          {{ unreadable ? 'Lưu' : 'Duyệt' }} · {{ next ? 'sang ' + next : 'xong lượt' }}
+        </button>
+      </div>
+      <p class="small muted note">Người thuê chỉ thấy số này cùng ảnh gốc sau khi bạn duyệt.</p>
+    }
+  </div>
+}

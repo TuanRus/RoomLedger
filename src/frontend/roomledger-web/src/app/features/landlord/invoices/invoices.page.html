@@ -1,0 +1,212 @@
+@let counts = store.counts();
+@let drafts = store.drafts().length;
+@let missing = store.roomsWithoutInvoice;
+
+<ng-template #status let-inv>
+  @if (overdue(inv); as days) {
+    <span class="chip err"><app-icon name="i-flag" />Quá hạn {{ days }} ngày</span>
+  } @else {
+    <app-status-chip [invoice]="inv.status" />
+  }
+</ng-template>
+
+<ng-template #headerAction>
+  @if (drafts > 0) {
+    <button type="button" class="btn" (click)="openSend()"><app-icon name="i-mail" />Gửi {{ drafts }} hóa đơn nháp</button>
+  } @else if (unpaidThisPeriod().length > 0) {
+    <button type="button" class="btn sec" (click)="remindAll()"><app-icon name="i-bell" />Nhắc {{ unpaidThisPeriod().length }} phòng chưa thanh toán</button>
+  }
+</ng-template>
+
+<ng-template #banner>
+  @if (drafts > 0) {
+    <div class="banner info">
+      <app-icon name="i-info" />
+      <span><b>Kỳ {{ store.period | period }}: {{ counts.all }} hóa đơn, đã gửi {{ counts.sent }}, còn {{ drafts }} nháp.</b> Người thuê chưa thấy hóa đơn nháp. {{ missing.length }} phòng chưa có hóa đơn vì chỉ số chưa được duyệt ({{ missing.join(', ') }}).</span>
+      @if (filter() !== 'draft') {
+        <button type="button" class="btn sm sec" (click)="filter.set('draft')">Xem {{ drafts }} nháp</button>
+      }
+    </div>
+  } @else {
+    <div class="banner ok">
+      <app-icon name="i-check-c" />
+      <span><b>Đã gửi cả {{ counts.all }} hóa đơn kỳ {{ store.period | period }}.</b>
+        @if (store.lastBatch(); as b) { {{ b.count }} hóa đơn gửi lúc {{ b.at | stamp }}; người thuê đã nhận email. }
+        {{ missing.length }} phòng còn chờ chỉ số ({{ missing.join(', ') }}).</span>
+    </div>
+  }
+</ng-template>
+
+<ng-template #pills>
+  <div class="pills" role="group" aria-label="Lọc hóa đơn theo trạng thái">
+    @for (f of filters; track f.id) {
+      <button type="button" class="pill" [class.on]="filter() === f.id" [attr.aria-pressed]="filter() === f.id" (click)="filter.set(f.id)">{{ f.label }} <b>{{ count(f.id) }}</b></button>
+    }
+  </div>
+</ng-template>
+
+<ng-template #detail let-inv>
+  <div class="row between">
+    <h2>{{ inv.roomCode }} · kỳ {{ inv.period | period }}</h2>
+    <ng-container [ngTemplateOutlet]="status" [ngTemplateOutletContext]="{ $implicit: inv }" />
+  </div>
+  <p class="small muted meta">
+    {{ inv.tenantName }} · @if (inv.sentAt) { gửi {{ inv.sentAt | day }} } @else { chưa gửi } · hạn {{ inv.dueDate | day }}
+  </p>
+  <app-receipt [invoice]="inv" (photo)="openPhoto(inv, $event)" />
+  @if (inv.correction; as c) {
+    <p class="small muted note"><app-icon name="i-edit" size="sm" />{{ kindName(c.kind) }} đã sửa {{ c.from | num }} → {{ c.to | num }} {{ unit(c.kind) }} sau khiếu nại ngày {{ c.at | day }}; hóa đơn đã tính lại.</p>
+  }
+  @switch (inv.status) {
+    @case ('DRAFT') {
+      <div class="acts-col">
+        <button type="button" class="btn block" (click)="sendOne(inv)"><app-icon name="i-mail" />Gửi hóa đơn này</button>
+      </div>
+      <p class="small muted note">Người thuê chưa thấy hóa đơn nháp. Sau khi gửi, sửa hóa đơn cần ghi lý do.</p>
+    }
+    @case ('DISPUTED') {
+      <div class="banner info"><app-icon name="i-talk" /><span><b>{{ inv.tenantName }} đang khiếu nại hóa đơn này.</b> Trả lời khiếu nại trước khi đánh dấu đã thanh toán.</span></div>
+      <div class="acts-col">
+        <a class="btn block" routerLink="/landlord/disputes" [queryParams]="{ invoice: inv.invoiceId }"><app-icon name="i-talk" />Xem khiếu nại</a>
+      </div>
+    }
+    @case ('PAID') {
+      <div class="banner ok"><app-icon name="i-cash" /><span><b>Đã nhận {{ inv.total | vnd }}</b> · đánh dấu lúc {{ inv.paidAt | stamp }}. Người thuê đã thấy trạng thái này.</span></div>
+      <div class="acts-col">
+        <button type="button" class="btn ghost block" (click)="unmarkPaid(inv)"><app-icon name="i-refresh" />Bỏ đánh dấu đã thanh toán</button>
+      </div>
+      <p class="small muted note">Đánh dấu nhầm? Bỏ đánh dấu, hóa đơn trở về “Chưa thanh toán” và người thuê được báo.</p>
+    }
+    @default {
+      <div class="acts-col">
+        <button type="button" class="btn block" (click)="markPaid(inv)"><app-icon name="i-cash" />Đánh dấu đã thanh toán</button>
+        <button type="button" class="btn sec block" (click)="remind(inv)"><app-icon name="i-bell" />Nhắc người thuê</button>
+      </div>
+      <p class="small muted note">
+        Chỉ đánh dấu khi bạn đã nhận tiền. Người thuê thấy trạng thái ngay.
+        @if (inv.remindedAt) { Đã nhắc lúc {{ inv.remindedAt | stamp }}. }
+      </p>
+    }
+  }
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top">
+    <div><h1>Hóa đơn</h1><p class="sub">Kỳ {{ store.period | period }} · hạn thanh toán {{ store.dueDate | day }}</p></div>
+    <div class="acts">
+      <span class="select" aria-label="Kỳ đang xem"><app-icon name="i-cal" />Kỳ {{ store.period | period }}</span>
+      <ng-container [ngTemplateOutlet]="headerAction" />
+    </div>
+  </div>
+  <ng-container [ngTemplateOutlet]="banner" />
+  <div class="split inv-split">
+    <div>
+      <ng-container [ngTemplateOutlet]="pills" />
+      <div class="tablewrap">
+        <table class="table">
+          <caption class="sr">Hóa đơn kỳ {{ store.period | period }}</caption>
+          <thead><tr><th scope="col">Phòng</th><th scope="col">Người thuê</th><th scope="col" class="num">Điện</th><th scope="col" class="num">Nước</th><th scope="col" class="num">Tổng</th><th scope="col">Trạng thái</th></tr></thead>
+          <tbody>
+            @for (inv of visible(); track inv.invoiceId) {
+              <tr [class.sel]="selectedId() === inv.invoiceId" (click)="selectedId.set(inv.invoiceId)">
+                <td>
+                  <button type="button" class="room" [attr.aria-current]="selectedId() === inv.invoiceId" (click)="selectedId.set(inv.invoiceId)">
+                    <b>{{ inv.roomCode }}</b>@if (inv.period !== store.period) { <span class="muted small"> kỳ {{ +inv.period.slice(5) }}</span> }
+                  </button>
+                </td>
+                <td>{{ inv.tenantName }}</td>
+                <td class="num">{{ inv.electricity.amount | vnd }}</td>
+                <td class="num">{{ inv.water.amount | vnd }}</td>
+                <td class="num"><b>{{ inv.total | vnd }}</b></td>
+                <td><ng-container [ngTemplateOutlet]="status" [ngTemplateOutletContext]="{ $implicit: inv }" /></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="muted empty">Không có hóa đơn nào ở trạng thái này.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <aside class="panel side-panel" aria-live="polite" aria-label="Hóa đơn đang chọn">
+      @if (selected(); as inv) {
+        <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: inv }" />
+      } @else {
+        <p class="muted">Chọn một hóa đơn để xem chi tiết.</p>
+      }
+    </aside>
+  </div>
+} @else {
+  @if (selected(); as inv) {
+    <div class="m-head">
+      <button type="button" class="iconbtn" aria-label="Quay lại danh sách hóa đơn" (click)="selectedId.set(null)"><app-icon name="i-back" /></button>
+    </div>
+    <section class="m-detail" [attr.aria-label]="'Hóa đơn ' + inv.roomCode">
+      <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: inv }" />
+    </section>
+  } @else {
+    <div class="m-head"><h1>Hóa đơn</h1><span class="muted small">Kỳ {{ store.period | period }} · hạn {{ store.dueDate | day }}</span></div>
+    <ng-container [ngTemplateOutlet]="banner" />
+    <div class="m-action"><ng-container [ngTemplateOutlet]="headerAction" /></div>
+    <div class="m-pills"><ng-container [ngTemplateOutlet]="pills" /></div>
+    @for (g of groups(); track g.id) {
+      <h2 class="m-group">{{ g.label }} <span class="muted">· {{ g.items.length }}</span></h2>
+      <ul class="list m-list">
+        @for (inv of g.items; track inv.invoiceId) {
+          <li>
+            <button type="button" class="m-open" (click)="selectedId.set(inv.invoiceId)">
+              <span class="m-text"><b>{{ inv.roomCode }}@if (inv.period !== store.period) { <span class="muted small"> · kỳ {{ +inv.period.slice(5) }}</span> }</b><span class="small muted">{{ inv.tenantName }}</span></span>
+              <span class="m-val"><b>{{ inv.total | vnd }}</b><ng-container [ngTemplateOutlet]="status" [ngTemplateOutletContext]="{ $implicit: inv }" /></span>
+              <app-icon name="i-chev" />
+            </button>
+          </li>
+        }
+      </ul>
+    } @empty {
+      <p class="muted empty">Không có hóa đơn nào ở trạng thái này.</p>
+    }
+  }
+}
+
+<dialog #sendDialog class="rl-dlg" aria-labelledby="send-t">
+  <h2 id="send-t">Gửi {{ drafts }} hóa đơn kỳ {{ store.period | period }}?</h2>
+  <dl class="kv">
+    <dt>Số hóa đơn</dt><dd>{{ drafts }} phòng</dd>
+    <dt>Tổng tiền</dt><dd><b>{{ store.draftTotal() | vnd }}</b></dd>
+    <dt>Hạn thanh toán</dt><dd>{{ store.dueDate | day }}</dd>
+    <dt>Thông tin chuyển khoản</dt><dd>Có, kèm mã QR</dd>
+  </dl>
+  <ul class="rules">
+    <li><app-icon name="i-mail" />Mỗi người thuê nhận email và thấy hóa đơn trong ứng dụng, kèm ảnh đồng hồ của từng chỉ số.</li>
+    <li><app-icon name="i-edit" />Sau khi gửi, sửa hóa đơn cần ghi lý do và người thuê được báo.</li>
+    <li><app-icon name="i-clock" />{{ missing.length }} phòng chưa có chỉ số đã duyệt không nhận hóa đơn lần này.</li>
+  </ul>
+  <div class="dlg-acts">
+    <button type="button" class="btn ghost" (click)="reviewDrafts()">Xem lại từng hóa đơn</button>
+    <button type="button" class="btn" (click)="sendAll()"><app-icon name="i-mail" />Gửi {{ drafts }} hóa đơn</button>
+  </div>
+</dialog>
+
+<dialog #photoDialog class="rl-dlg" (close)="photo.set(null)" aria-labelledby="photo-t">
+  @if (photo(); as p) {
+    @let line = p.kind === 'ELECTRICITY' ? p.inv.electricity : p.inv.water;
+    <div class="row between">
+      <h2 id="photo-t">{{ p.kind === 'ELECTRICITY' ? 'Công tơ điện' : 'Đồng hồ nước' }} · {{ p.inv.roomCode }}</h2>
+      <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
+    </div>
+    @if (line.photoUrl) {
+      <img class="dlg-img" [ngSrc]="line.photoUrl" width="640" height="480" [alt]="'Ảnh gốc ' + p.inv.roomCode + ', chỉ số ' + line.current + ' ' + unit(p.kind)">
+    } @else {
+      <p class="muted">Dữ liệu mẫu không có ảnh cho phòng này.</p>
+    }
+    <p class="small muted">Bạn chụp và duyệt. Chỉ số: {{ line.previous | num }} → {{ line.current | num }} {{ unit(p.kind) }}.</p>
+  }
+</dialog>
+
+@if (toast(); as t) {
+  <div class="rl-toast" role="status">
+    <app-icon name="i-check-c" /><span>{{ t.text }}</span>
+    @if (t.undoId) {
+      <button type="button" class="btn sm ghost inv-ghost" (click)="undo()">Hoàn tác · {{ t.seconds }} giây</button>
+    }
+  </div>
+}

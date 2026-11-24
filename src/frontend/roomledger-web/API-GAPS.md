@@ -31,6 +31,47 @@ Sample data: `src/app/core/data/sample-ledger.ts`. View types: `src/app/core/dat
 - **Payment details** of the landlord: bank name, account number, account holder, transfer note, and a QR image URL.
   - On a computer the tenant sees the QR code; on a phone only a "Sao chép số tài khoản" button (decided 2026-11-24, see PRODUCT.md).
 
+### Landlord invoices (LL-05, LL-05b/c/d)
+
+- Tenant name, due date, last reminder time, and a correction record (what changed, from/to, when) on invoices.
+- Endpoints for reminders, for un-marking a paid invoice, and a period summary (counts, draft total, rooms without an invoice).
+
+### Disputes (LL-08, TN-11, TN-20 / TD-04)
+
+- No `GET /disputes` list (landlord or tenant); disputes only come nested in the invoice detail.
+- `DisputeResponse` needs room code, tenant name, period, meter kind, previous / AI / approved / tenant-proposed / corrected values, photo URL and times, rate, and the invoice total before and after a correction.
+- `CreateDisputeRequest` needs the value the tenant proposes and must allow a dispute about the whole invoice (`readingId` is required today).
+
+### Landlord meter capture (LM-04 … LM-10)
+
+- Round totals and position ("26/32", "Phòng 27/32"), tenant name, meter serial number, and the previous value when the current reading is null.
+- Approving right after the AI read (e.g. `PATCH /meter-readings/{id}` with `{ value, confirm: true }`), a polling rule for the AI result, and reason codes for unreadable photos (blur, glare).
+- `CreateMeterReadingRequest` has no `captureSource`; uploads must be retryable for the offline queue.
+
+### Landlord overview, rooms, end of tenancy (LL-02, LL-03, LL-10)
+
+- No dashboard response; today it means combining readings, rooms, invoices (overdue days), tenancies and disputes.
+- `RoomResponse` lacks floor, deposit, tenancy start, latest approved readings, contract and current-period reading status, and the pending invite (email, start, expiry). `CreateInviteRequest` has no start date.
+- No endpoint to end a tenancy or move rooms: final reading for a date, a final invoice with landlord-entered rent, carried-over balance, the new room's opening readings.
+
+### Landlord settings and contracts (LL-06, LL-07)
+
+- Property settings: reading days, due day, reading reminder, and the period a price change applies from.
+- Bank transfer settings: bank, account number, holder, transfer-note template, QR image (fields and upload endpoint).
+- Contract versions: uploaded / rejected dates, change note, an endpoint to send a draft to the tenant, and a version type for re-uploading a corrected initial contract. `TenancyFileResponse` has no page count or thumbnail.
+
+### Tenant home, meters, contract, account (TD-01, TD-03, TN-02 … TN-12)
+
+- A tenant endpoint for a room's reading history; `MeterReadingResponse` lacks capturedAt, digitCropUrl, rate, usage and amount.
+- The API must hide `value` and `photoUrl` from the tenant until the reading is `CONFIRMED`.
+- `TenantHomeResponse` lacks landlord name and email, latest readings, contract confirmation state and date, move data and opening readings; `MeResponse` has no room.
+- No notification preference endpoint; the contract scan URL expires after 5 minutes and has no page count.
+
+### Sign-in, forgot password, invite, landing
+
+- Screens are UI only: Cognito sign-in, forgot/confirm password and invite accept are TODOs for the auth work (Kiru). The temporary sign-in stub sends emails containing "lan"/"chunha" to the landlord app, others to the tenant app.
+- `InvitePreviewResponse` lacks landlord name and email, start date and sent time. No landlord sign-up contract.
+
 ## Not covered by the frontend
 
 The contract still contains move-in/move-out inspections, findings and settlement endpoints. These are

@@ -16,6 +16,7 @@ type CopyTarget = 'account' | 'note';
  * TD-02 (computer) and TN-09 (phone): one invoice and how to pay it.
  * Payment is outside the app. On a computer the tenant scans the landlord's QR code with a banking app;
  * on a phone there is no QR code (they cannot scan their own screen), only a button that copies the account number.
+ * TN-22: once the landlord marks the invoice paid, the payment panel gives way to a "Đã thanh toán" confirmation.
  */
 @Component({
   selector: 'app-tenant-invoice-page',
@@ -34,6 +35,11 @@ export class TenantInvoicePage {
   protected readonly invoice = computed(() => this.store.detail(this.invoiceId()));
   protected readonly history = this.store.history;
   protected readonly payment = this.store.payment;
+  protected readonly isPaid = computed(() => this.invoice()?.status === 'PAID');
+  /** TN-22: what comes after a paid invoice (the next invoice, or when the meters are read). */
+  protected readonly next = computed(() => this.store.nextAfter(this.invoiceId()));
+  /** "Báo tôi" on the next-period hint; sample only, the email preference is not in the API yet. */
+  protected readonly notify = signal(false);
 
   /** "2026-12-10" -> "10/12/2026". */
   protected readonly dueDate = computed(() => this.invoice()?.dueDate.split('-').reverse().join('/') ?? '');

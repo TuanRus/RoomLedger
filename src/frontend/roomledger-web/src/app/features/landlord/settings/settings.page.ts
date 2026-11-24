@@ -1,0 +1,188 @@
+import { NgOptimizedImage } from '@angular/common';
+import { Component, DestroyRef, ElementRef, computed, inject, signal } from '@angular/core';
+import { FieldTree, FormField, form, schema, submit, validate } from '@angular/forms/signals';
+
+import { Viewport } from '../../../core/layout/viewport';
+import { PeriodPipe, VndPipe } from '../../../shared/pipes/format.pipes';
+import { Icon } from '../../../shared/ui/icon';
+import {
+  READING_WINDOW_DAYS,
+  SettingsForm,
+  accountNumberError,
+  dueDayError,
+  formatMoney,
+  fromForm,
+  moneyError,
+  parseMoney,
+  roomNumber,
+  sameForm,
+  toForm,
+  transferNoteError,
+  transferNoteExample,
+} from './settings.model';
+import { BANKS, SettingsStore } from './settings.store';
+
+const QR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const QR_MAX_BYTES = 5 * 1024 * 1024;
+
+const err = (message: string | null) => (message ? { kind: 'invalid', message } : undefined);
+
+const settingsSchema = schema<SettingsForm>((p) => {
+  validate(p.electricityRate, ({ value }) => err(moneyError(value(), 'Giá điện', 500, 20_000)));
+  validate(p.waterRate, ({ value }) => err(moneyError(value(), 'Giá nước', 1_000, 200_000)));
+  validate(p.dueDay, ({ value, valueOf }) => err(dueDayError(Number(valueOf(p.readingStartDay)), Number(value()))));
+  validate(p.bankName, ({ value, valueOf }) => err(valueOf(p.bankEnabled) && !value() ? 'Chọn ngân hàng.' : null));
+  validate(p.accountNumber, ({ value, valueOf }) => err(valueOf(p.bankEnabled) ? accountNumberError(value()) : null));
+  validate(p.accountHolder, ({ value, valueOf }) => {
+    if (!valueOf(p.bankEnabled)) return undefined;
+    const v = value().trim();
+    return err(v === '' ? 'Nhập tên chủ tài khoản.' : v.length > 50 ? 'Tên tối đa 50 ký tự.' : null);
+  });
+  validate(p.transferNoteTemplate, ({ value, valueOf }) => err(valueOf(p.bankEnabled) ? transferNoteError(value()) : null));
+});
+
+/** Sample edits so the page opens in the LL-06 state (giá điện 3.500 -> 3.800, P.209 2.600.000 chưa lưu). */
+function withSampleEdits(f: SettingsForm): SettingsForm {
+  return {
+    ...f,
+    electricityRate: '3.800',
+    rents: f.rents.map((r) => (r.roomId === 'r-209' ? { ...r, rent: '2.600.000' } : r)),
+  };
+}
+
+/** LL-06: electricity/water prices, billing cycle, per-room rent and optional bank-transfer details. */
+@Component({
+  selector: 'app-settings-page',
+  imports: [NgOptimizedImage, FormField, Icon, PeriodPipe, VndPipe],
+  templateUrl: './settings.page.html',
+  styleUrl: './settings.page.scss',
+})
+export class SettingsPage {
+  protected readonly store = inject(SettingsStore);
+  protected readonly viewport = inject(Viewport);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  protected readonly banks = BANKS;
+  protected readonly readingDays = Array.from({ length: 26 }, (_, i) => i + 1);
+  protected readonly dueDays = Array.from({ length: 28 }, (_, i) => i + 1);
+  protected readonly windowEnd = READING_WINDOW_DAYS - 1;
+
+  protected readonly model = signal<SettingsForm>(withSampleEdits(toForm(this.store.settings())));
+  protected readonly f = form(this.model, settingsSchema);
+
+  private readonly savedForm = computed(() => toForm(this.store.settings()));
+  protected readonly rooms = computed(() => this.store.settings().rents);
+
+  /** QR image: saved URL, or a local preview (blob:) until saved. */
+  protected readonly qrUrl = signal<string | null>(this.store.settings().payment.qrImageUrl);
+  protected readonly qrError = signal<string | null>(null);
+  protected readonly qrIsLocal = computed(() => this.qrUrl()?.startsWith('blob:') ?? false);
+
+  protected readonly status = signal<'idle' | 'saved' | 'invalid'>('idle');
+  protected readonly savedAt = signal('');
+  protected readonly saving = signal(false);
+
+  protected readonly dirty = computed(
+    () => !sameForm(this.model(), this.savedForm()) || this.qrUrl() !== this.store.settings().payment.qrImageUrl,
+  );
+
+  protected readonly changedRooms = computed(() => {
+    const saved = new Map(this.savedForm().rents.map((r) => [r.roomId, parseMoney(r.rent)]));
+    return new Set(this.model().rents.filter((r) => parseMoney(r.rent) !== saved.get(r.roomId)).map((r) => r.roomId));
+  });
+
+  /** "Đổi giá điện từ 3.500 đ lên 3.800 đ/kWh" for each price that changed and is valid. */
+  protected readonly priceChanges = computed(() => {
+    const s = this.store.settings();
+    const m = this.model();
+    const out: string[] = [];
+    const e = parseMoney(m.electricityRate);
+    const w = parseMoney(m.waterRate);
+    if (e != null && e !== s.electricityRate) out.push(`giá điện từ ${formatMoney(s.electricityRate)} đ ${e > s.electricityRate ? 'lên' : 'xuống'} ${formatMoney(e)} đ/kWh`);
+    if (w != null && w !== s.waterRate) out.push(`giá nước từ ${formatMoney(s.waterRate)} đ ${w > s.waterRate ? 'lên' : 'xuống'} ${formatMoney(w)} đ/m³`);
+    return out;
+  });
+
+  protected readonly noteExample = computed(() => transferNoteExample(this.model().transferNoteTemplate, '204', 11));
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.revokeQr());
+  }
+
+  protected errOf<T>(field: FieldTree<T>): string | null {
+    const s = field();
+    return s.touched() && s.invalid() ? (s.errors()[0]?.message ?? 'Giá trị không hợp lệ.') : null;
+  }
+
+  protected rentField(index: number): FieldTree<string> {
+    return this.f.rents[index].rent;
+  }
+
+  protected roomNo(code: string): string {
+    return roomNumber(code);
+  }
+
+  protected onQrFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    if (!QR_TYPES.includes(file.type)) {
+      this.qrError.set('Chọn ảnh PNG, JPG hoặc WEBP.');
+      return;
+    }
+    if (file.size > QR_MAX_BYTES) {
+      this.qrError.set('Ảnh QR tối đa 5 MB.');
+      return;
+    }
+    this.qrError.set(null);
+    this.revokeQr();
+    this.qrUrl.set(URL.createObjectURL(file));
+    this.status.set('idle');
+  }
+
+  protected removeQr(): void {
+    this.revokeQr();
+    this.qrUrl.set(null);
+    this.qrError.set(null);
+  }
+
+  protected async save(): Promise<void> {
+    if (this.saving()) return;
+    this.saving.set(true);
+    const ok = await submit(this.f, async () => {
+      this.store.save(fromForm(this.model(), this.store.settings(), this.qrUrl()));
+      return undefined;
+    });
+    this.saving.set(false);
+    if (ok) {
+      this.model.set(toForm(this.store.settings()));
+      this.f().reset();
+      this.savedAt.set(nowHm());
+      this.status.set('saved');
+    } else {
+      this.status.set('invalid');
+      queueMicrotask(() => this.host.nativeElement.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+    }
+  }
+
+  protected cancel(): void {
+    this.revokeQr();
+    this.model.set(toForm(this.store.settings()));
+    this.qrUrl.set(this.store.settings().payment.qrImageUrl);
+    this.qrError.set(null);
+    this.f().reset();
+    this.status.set('idle');
+  }
+
+  private revokeQr(): void {
+    const url = this.qrUrl();
+    // A saved local preview stays in use by the store until the API stores the file.
+    if (url?.startsWith('blob:') && url !== this.store.settings().payment.qrImageUrl) URL.revokeObjectURL(url);
+  }
+}
+
+function nowHm(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}

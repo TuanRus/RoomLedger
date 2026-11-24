@@ -1,0 +1,72 @@
+@let room = store.activeRoom();
+@let slot = store.activeSlot();
+@let job = store.activeJob();
+@let next = store.nextRoomCode();
+@if (room && slot) {
+  @let kind = slot.kind;
+  <div class="appbar">
+    <button type="button" class="iconbtn" aria-label="Đóng, về danh sách phòng" (click)="store.close()"><app-icon name="i-x" /></button>
+    <h1 id="cap-title" class="cap-focus" tabindex="-1">{{ room.roomCode }} · {{ job ? kindLabel[kind] : 'chụp đồng hồ' }}</h1>
+    <span class="iconbtn" aria-hidden="true"></span>
+  </div>
+
+  <div class="pad">
+    <div class="seg" role="group" aria-label="Loại đồng hồ">
+      <button type="button" [class.on]="kind === 'ELECTRICITY'" [attr.aria-pressed]="kind === 'ELECTRICITY'" (click)="setKind('ELECTRICITY')"><app-icon name="i-bolt" />Điện</button>
+      <button type="button" [class.on]="kind === 'WATER'" [attr.aria-pressed]="kind === 'WATER'" (click)="setKind('WATER')"><app-icon name="i-drop" />Nước</button>
+    </div>
+  </div>
+
+  <div class="vf">
+    @if (!job) {
+      <div class="guide" aria-hidden="true"><app-icon name="i-meter" /></div>
+      <div class="hint"><app-icon name="i-info" /><span>Bấm nút chụp để mở camera. Đặt cả dãy số của {{ kindMeter[kind] }} {{ slot.meterNo }} vào khung, giữ máy yên, tránh lóa.</span></div>
+    } @else {
+      <!-- Plain img: the photo can be a blob: URL, which NgOptimizedImage rejects. -->
+      <img [src]="job.photoUrl" [class.dim]="job.phase === 'uploading'" [alt]="'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + (job.phase === 'reading' ? ' đang được AI đọc' : ' vừa chụp')">
+      @if (job.phase === 'reading') { <div class="scanbox" aria-hidden="true"></div> }
+      <div class="state" role="status" aria-live="polite">
+        @if (job.phase === 'uploading') {
+          @if (job.held) {
+            <div class="t"><app-icon name="i-wifi-off" />Chờ mạng · đã tải {{ pct() }}%</div>
+          } @else {
+            <div class="t"><app-icon name="i-upload" />Đang tải ảnh lên · {{ pct() }}%</div>
+          }
+          <div class="bar" role="progressbar" [attr.aria-valuenow]="pct()" aria-valuemin="0" aria-valuemax="100" aria-label="Tiến độ tải ảnh"><i [style.width.%]="job.progress"></i></div>
+          <span class="sub">{{ mb(uploaded()) }} / {{ mb(job.sizeBytes) }} MB · ảnh gốc, không nén</span>
+        } @else {
+          <span class="ok-l small"><app-icon name="i-check" size="sm" />Đã tải lên {{ mb(job.sizeBytes) }} MB</span>
+          <div class="t"><span class="spin" aria-hidden="true"></span>AI đang đọc số…</div>
+          <div class="skel-row" aria-hidden="true"><span class="drum lg skel"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i></span><span class="sub">{{ kindUnit[kind] }}</span></div>
+          <span class="sub">Thường mất 2–5 giây.</span>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="roomstrip"><span><b>Phòng {{ position() }}/{{ store.total() }}</b> · {{ room.tenantName }}</span><div class="bar" aria-hidden="true"><i [style.width.%]="percent()"></i></div></div>
+
+  @if (!job) {
+    <div class="shutter-row">
+      <label class="round" title="Chọn ảnh có sẵn">
+        <input type="file" accept="image/*" class="vh" aria-label="Chọn ảnh có sẵn" (change)="onPick($event)">
+        <app-icon name="i-image" />
+      </label>
+      <label class="shutter">
+        <input type="file" accept="image/*" capture="environment" class="vh" [attr.aria-label]="'Chụp ' + kindMeter[kind] + ' ' + room.roomCode" (change)="onPick($event)">
+        <i></i>
+      </label>
+      <button type="button" class="round" [attr.aria-label]="next ? 'Bỏ qua, sang ' + next : 'Bỏ qua, về danh sách'" (click)="store.goNext()"><app-icon name="i-chev" /></button>
+    </div>
+    <p class="foot"><button type="button" class="link" (click)="store.captureSample()"><app-icon name="i-image" size="sm" />Dùng ảnh mẫu (không cần camera)</button></p>
+  } @else if (job.phase === 'uploading') {
+    <div class="acts">
+      <button type="button" class="btn lg ghosty" (click)="store.discard()">Hủy tải</button>
+      <button type="button" class="btn lg inv grow" (click)="store.goNext()">{{ next ? 'Chụp phòng kế' : 'Về danh sách' }}</button>
+    </div>
+    <p class="foot">Ảnh vẫn tải tiếp khi bạn chụp phòng khác.</p>
+  } @else {
+    <div class="acts"><button type="button" class="btn lg inv grow" (click)="store.goNext()">{{ next ? 'Chụp phòng kế, duyệt sau' : 'Về danh sách, duyệt sau' }}</button></div>
+    <p class="foot">Số AI đọc sẽ chờ ở tab Duyệt.</p>
+  }
+}

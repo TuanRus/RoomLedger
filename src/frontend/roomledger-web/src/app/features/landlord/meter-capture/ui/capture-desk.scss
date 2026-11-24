@@ -1,0 +1,25 @@
+:host { display: flex; flex-direction: column; gap: 14px; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.head h2 { font-size: 22px; letter-spacing: -.02em; outline: none; }
+.iconbtn { cursor: pointer; margin: -8px -8px 0 0; }
+.seg button { flex: 1; height: 44px; border: 0; border-radius: 10px; background: none; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 8px; font: 500 var(--t-16) var(--sans); color: var(--ink-2); }
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+.drop { border: 1.5px dashed var(--line-strong); border-radius: var(--r-lg); padding: 24px 20px; display: grid; justify-items: center; gap: 12px;
+  text-align: center; font-size: 15px; line-height: 1.5; color: var(--ink-2); }
+.drop .ic { width: 52px; height: 52px; border-radius: 14px; background: var(--soft); display: grid; place-items: center; color: var(--ink-2); }
+.drop label:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.photo { height: 220px; }
+.state { display: grid; gap: 10px; }
+.state .t { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
+.state .bar i { transition: width .1s linear; }
+.ok-l { color: var(--ok); display: inline-flex; align-items: center; gap: 6px; }
+.skel-row { display: flex; align-items: center; gap: 10px; }
+.drum.skel { gap: 4px; }
+.drum.skel i { background: var(--soft); color: transparent; border: 1px solid var(--line-strong); }
+.spin.dark { width: 20px; height: 20px; border: 2.5px solid var(--soft-2); border-top-color: var(--ink); flex: none; }
+@media (prefers-reduced-motion: no-preference) { .spin { animation: sp .9s linear infinite; } }
+@keyframes sp { to { transform: rotate(1turn); } }
+.acts { display: flex; gap: 8px; }
+.acts .btn:last-child { flex: 1; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

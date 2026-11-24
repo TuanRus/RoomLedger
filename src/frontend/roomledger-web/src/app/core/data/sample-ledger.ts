@@ -88,12 +88,53 @@ export const TENANT_INVOICE: InvoiceDetail = {
   dueDate: '2026-12-10',
 };
 
-export const TENANT_INVOICE_HISTORY: InvoiceSummary[] = [
-  { invoiceId: 'inv-204-2026-11', period: '2026-11', status: 'SENT', total: 3_245_000, paidAt: null },
-  { invoiceId: 'inv-204-2026-10', period: '2026-10', status: 'PAID', total: 3_168_000, paidAt: '2026-11-08T19:20:00+07:00' },
-  { invoiceId: 'inv-204-2026-09', period: '2026-09', status: 'PAID', total: 3_201_000, paidAt: '2026-10-09T20:05:00+07:00' },
-  { invoiceId: 'inv-204-2026-08', period: '2026-08', status: 'PAID', total: 3_122_000, paidAt: '2026-09-07T18:40:00+07:00' },
+/** A paid P.204 invoice from earlier periods; every amount is rent + usage × rate. */
+function paidInvoice(period: string, elec: [number, number], water: [number, number], sentAt: string, paidAt: string, dueDate: string): InvoiceDetail {
+  const line = (kind: MeterKind, [previous, current]: [number, number], rate: number) => ({
+    readingId: `r-204-${kind}-${period}`,
+    previous,
+    current,
+    usage: current - previous,
+    rate,
+    amount: (current - previous) * rate,
+    photoUrl: `sample/${kind === 'ELECTRICITY' ? 'elec' : 'water'}-204.jpg`,
+  });
+  const electricity = line('ELECTRICITY', elec, 3_500);
+  const waterLine = line('WATER', water, 18_000);
+  return {
+    invoiceId: `inv-204-${period}`,
+    roomCode: 'P.204',
+    propertyName: 'Nhà trọ Cô Lan',
+    period,
+    status: 'PAID',
+    roomRent: 2_500_000,
+    electricity,
+    water: waterLine,
+    serviceFee: 0,
+    total: 2_500_000 + electricity.amount + waterLine.amount,
+    sentAt,
+    paidAt,
+    dueDate,
+  };
+}
+
+/**
+ * Paid history. Usage follows the landlord's review history for P.204 (điện 162/171/168 kWh, nước 6/6/5 m³),
+ * so totals differ from the early mockup figures (3.122.000 / 3.201.000 / 3.168.000 đ), which did not add up.
+ */
+export const TENANT_PAID_INVOICES: InvoiceDetail[] = [
+  paidInvoice('2026-10', [934, 1102], [56, 61], '2026-11-02T16:04:00+07:00', '2026-11-08T19:20:00+07:00', '2026-11-10'),
+  paidInvoice('2026-09', [763, 934], [50, 56], '2026-10-02T16:10:00+07:00', '2026-10-09T20:05:00+07:00', '2026-10-10'),
+  paidInvoice('2026-08', [601, 763], [44, 50], '2026-09-02T16:02:00+07:00', '2026-09-07T18:40:00+07:00', '2026-09-10'),
 ];
+
+/** Every invoice of the signed-in tenant (P.204), newest first. */
+export const TENANT_INVOICES: InvoiceDetail[] = [TENANT_INVOICE, ...TENANT_PAID_INVOICES];
+
+export const TENANT_INVOICE_HISTORY: InvoiceSummary[] = TENANT_INVOICES.map(({ invoiceId, period, status, total, paidAt }) => ({ invoiceId, period, status, total, paidAt }));
+
+/** The next period nobody has recorded yet, and when the landlord goes round to read the meters. */
+export const TENANT_NEXT_CAPTURE = { period: '2026-12', window: '01–03/01/2027' } as const;
 
 export const LANDLORD_PAYMENT_INFO: PaymentInfo = {
   bankName: 'Ngân hàng mẫu',

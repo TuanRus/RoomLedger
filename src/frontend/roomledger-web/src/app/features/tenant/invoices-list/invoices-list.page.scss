@@ -1,0 +1,25 @@
+:host { display: block; }
+
+.m-head { display: flex; align-items: center; min-height: 56px; }
+.m-head h1 { font-size: var(--t-24); letter-spacing: -.025em; }
+
+.pills { margin-bottom: 14px; flex-wrap: wrap; }
+.pill { cursor: pointer; min-height: 44px; }
+.pill.on b { color: inherit; }
+
+.table tbody tr { position: relative; }
+.table tbody tr:hover td { background: var(--soft); }
+.table td { height: 60px; }
+.table td:last-child { color: var(--ink-3); width: 40px; }
+.rowlink { color: inherit; text-decoration: none; }
+.rowlink b { font-weight: 500; font-size: var(--t-16); }
+/* The whole row is clickable; the link is the accessible target. */
+.rowlink::after { content: ""; position: absolute; inset: 0; }
+.empty-row { text-align: center; padding: 24px; }
+
+.inv-list { list-style: none; margin: 0; padding: 0; }
+.inv-list li + li { border-top: 1px solid var(--line); }
+a.list-item { color: inherit; text-decoration: none; }
+.grow { flex: 1; display: grid; gap: 2px; }
+.grow b, .end b { font-weight: 500; }
+.end { display: grid; justify-items: end; gap: 4px; text-align: right; }

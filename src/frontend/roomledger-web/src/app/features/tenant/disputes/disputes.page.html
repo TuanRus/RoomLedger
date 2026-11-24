@@ -1,0 +1,83 @@
+@let sel = selected();
+
+<ng-template #sentBanner>
+  @if (justSent()) {
+    <div class="banner ok sent" role="status"><app-icon name="i-check-c" /><span><b>Đã gửi khiếu nại.</b> Chủ nhà xem lại và trả lời một lần; bạn nhận email khi có kết quả.</span></div>
+  }
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top">
+    <div><h1>Khiếu nại</h1><p class="sub">{{ summary() || 'Chưa có khiếu nại' }}</p></div>
+    <div class="acts"><a class="btn sec" routerLink="/tenant/disputes/new"><app-icon name="i-plus" />Gửi khiếu nại</a></div>
+  </div>
+  <ng-container [ngTemplateOutlet]="sentBanner" />
+  @if (disputes().length) {
+    <div class="disp">
+      <nav aria-label="Danh sách khiếu nại">
+        <ul class="list items">
+          @for (d of disputes(); track d.disputeId) {
+            <li>
+              <a class="list-item" [class.on]="d === sel" [routerLink]="[]" [queryParams]="{ id: d.disputeId }" [attr.aria-current]="d === sel ? 'true' : null">
+                <div class="grow"><b>{{ subjectLabel(d.subject) }} · kỳ {{ d.period | period }}</b><p class="small muted">{{ dateRange(d) }}</p></div>
+                <app-dispute-chip [dispute]="d" />
+              </a>
+            </li>
+          }
+        </ul>
+      </nav>
+      @if (sel) {
+        <section class="panel" aria-label="Chi tiết khiếu nại"><app-dispute-detail [dispute]="sel" (photo)="openPhoto($event)" /></section>
+      }
+    </div>
+  } @else {
+    <ng-container [ngTemplateOutlet]="empty" />
+  }
+} @else {
+  @if (sel) {
+    <div class="m-head">
+      <a class="iconbtn" routerLink="/tenant/disputes" aria-label="Về danh sách khiếu nại"><app-icon name="i-back" /></a>
+      <h1>Khiếu nại · {{ subjectLabel(sel.subject).toLowerCase() }} kỳ {{ sel.period | period }}</h1>
+    </div>
+    <ng-container [ngTemplateOutlet]="sentBanner" />
+    <app-dispute-detail [dispute]="sel" [compact]="true" (photo)="openPhoto($event)" />
+  } @else {
+    <div class="m-head"><h1>Khiếu nại</h1></div>
+    @if (disputes().length) {
+      <p class="small muted m-sum">{{ summary() }}</p>
+      <ul class="list items">
+        @for (d of disputes(); track d.disputeId) {
+          <li>
+            <a class="list-item" [routerLink]="[]" [queryParams]="{ id: d.disputeId }">
+              <div class="grow"><b>{{ subjectLabel(d.subject) }} · kỳ {{ d.period | period }}</b><p class="small muted">{{ dateRange(d) }}</p><app-dispute-chip [dispute]="d" /></div>
+              <app-icon name="i-chev" />
+            </a>
+          </li>
+        }
+      </ul>
+      <a class="btn sec block m-new" routerLink="/tenant/disputes/new"><app-icon name="i-plus" />Gửi khiếu nại</a>
+    } @else {
+      <ng-container [ngTemplateOutlet]="empty" />
+    }
+  }
+}
+
+<ng-template #empty>
+  <div class="empty-m">
+    <span class="ic"><app-icon name="i-talk" /></span>
+    <b>Chưa có khiếu nại</b>
+    <p class="small muted">Nếu một con số trên hóa đơn không khớp với đồng hồ trong phòng, bạn gửi khiếu nại từ hóa đơn. Chủ nhà xem lại ảnh gốc và trả lời.</p>
+    <a class="btn sec" routerLink="/tenant/invoices">Xem hóa đơn</a>
+  </div>
+</ng-template>
+
+<dialog #photoDialog class="photo-dialog" (close)="photoOf.set(null)" aria-labelledby="dp-title">
+  @if (photoOf(); as p) {
+    <div class="pd-head">
+      <h2 id="dp-title">{{ p.subject === 'WATER' ? 'Đồng hồ nước' : 'Công tơ điện' }} · kỳ {{ p.period | period }}</h2>
+      <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
+    </div>
+    <img [ngSrc]="p.photoUrl!" width="640" height="480" [alt]="'Ảnh gốc ' + (p.subject === 'WATER' ? 'đồng hồ nước' : 'công tơ điện') + ', chủ nhà ghi ' + p.recordedValue + ' ' + photoUnit()">
+    <p class="small muted">Ảnh chủ nhà chụp, lưu nguyên bản. Chủ nhà ghi {{ p.recordedValue | num }} {{ photoUnit() }}@if (p.proposedValue != null) {, bạn thấy {{ p.proposedValue | num }} {{ photoUnit() }}}.</p>
+  }
+</dialog>

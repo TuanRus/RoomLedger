@@ -16,3 +16,8 @@ body {
 }
 .rl-toast svg.i { color: #9fd3b4; }
 @media (max-width: 767px) { .rl-toast { bottom: 172px; } }
+
+/* PRODUCT.md: touch targets on a phone are at least 44px, including small buttons and filter pills. */
+@media (max-width: 767px) {
+  .pill, .btn.sm { min-height: 44px; }
+}

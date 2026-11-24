@@ -1,0 +1,25 @@
+:host { display: block; }
+
+.form { display: grid; gap: 18px; }
+h1 { font-size: 36px; letter-spacing: -.03em; line-height: 1.15; }
+.lead { margin-top: 8px; }
+.input:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgb(27 26 24 / .12); }
+.input.is-error { border-color: var(--err); box-shadow: 0 0 0 3px rgb(158 47 27 / .12); }
+
+.pw { position: relative; }
+.pw .input { padding-right: 76px; }
+.eye { position: absolute; right: 0; top: 0; height: 44px; min-width: 64px; padding: 0 12px; border: 0; background: none;
+  font: 500 var(--t-14) var(--sans); color: var(--ink-2); cursor: pointer; border-radius: 0 var(--r-md) var(--r-md) 0; }
+.eye:hover { color: var(--ink); background: var(--soft); }
+.under { align-items: flex-start; gap: 12px; }
+.forgot { min-height: 44px; display: inline-flex; align-items: center; margin-top: -10px; white-space: nowrap; }
+
+.art { width: min(420px, 100%); display: grid; gap: 16px; }
+.shot { padding: 12px; border-radius: 24px; }
+.shot .photo { height: 300px; }
+.val { margin-top: 10px; display: flex; align-items: baseline; gap: 8px; }
+
+@media (max-width: 767px) {
+  h1 { font-size: 28px; }
+  .form { gap: 16px; }
+}

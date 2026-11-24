@@ -1,0 +1,264 @@
+@if (draft(); as d) {
+  @let inv = invoice()!;
+  @let t = target();
+
+  <ng-template #step1>
+    <section class="card step" id="step-1" aria-labelledby="h-step-1">
+      <div class="row between"><h2 id="h-step-1">1 · Hình thức</h2>
+        @if (done()[1]) { <span class="chip ok"><app-icon name="i-check" />Đã chọn</span> }
+      </div>
+      <div class="kinds" role="radiogroup" aria-labelledby="h-step-1">
+        <label class="radio-card" [class.on]="d.kind === 'LEAVE'">
+          <input type="radio" name="end-kind" class="sr" [checked]="d.kind === 'LEAVE'" (change)="setKind('LEAVE')">
+          <span class="radio" aria-hidden="true"></span>
+          <span><b>Người thuê rời đi</b><span class="small muted desc">Kết thúc hợp đồng ngày {{ day(d.endDate) }}, phòng thành trống.</span></span>
+        </label>
+        <label class="radio-card" [class.on]="d.kind === 'MOVE'">
+          <input type="radio" name="end-kind" class="sr" [checked]="d.kind === 'MOVE'" (change)="setKind('MOVE')">
+          <span class="radio" aria-hidden="true"></span>
+          <span><b>Chuyển sang phòng khác</b>
+            <span class="small muted desc">@if (t) { {{ t.code }} · từ {{ day(d.endDate) }} · } tạo hợp đồng mới để người thuê xác nhận.</span>
+          </span>
+        </label>
+      </div>
+      @if (d.kind === 'MOVE') {
+        <div class="field target">
+          <label for="move-to">Phòng chuyển đến</label>
+          @if (store.targets().length) {
+            <select id="move-to" class="input" (change)="onTarget($event)">
+              @for (o of store.targets(); track o.roomId) {
+                <option [value]="o.roomId" [selected]="o.roomId === d.targetRoomId">{{ o.code }} · {{ o.monthlyRent | vnd }} / tháng</option>
+              }
+            </select>
+            <span class="help">Ngày chuyển {{ day(d.endDate) }}. Hợp đồng mới bắt đầu với chỉ số đầu của phòng mới ngày đó.</span>
+          } @else {
+            <span class="err"><app-icon name="i-alert" size="sm" />Không còn phòng trống để chuyển đến.</span>
+          }
+        </div>
+      }
+    </section>
+  </ng-template>
+
+  <ng-template #readingActions let-r>
+    @if (r.state === 'missing') {
+      <div class="r-acts">
+        <a class="btn sec" routerLink="/landlord/meter-capture"><app-icon name="i-camera" />Chụp {{ kindLabel(r.kind).toLowerCase() }} trên điện thoại</a>
+        <label class="btn ghost upload">
+          <app-icon name="i-upload" />Tải ảnh lên từ máy
+          <input type="file" accept="image/*" class="sr" (change)="onPhoto($event, r.kind)">
+        </label>
+        <button type="button" class="btn ghost demo" (click)="recordDemo(r.kind)"><app-icon name="i-check" />Ghi mẫu {{ demoValue(r) | num }} {{ unit(r.kind) }} (dữ liệu mẫu)</button>
+      </div>
+    } @else if (r.state === 'pending') {
+      <div class="r-acts">
+        <button type="button" class="btn" (click)="approve(r.kind)"><app-icon name="i-check" />Duyệt {{ kindLabel(r.kind).toLowerCase() }} {{ r.value | num }} {{ unit(r.kind) }}</button>
+      </div>
+    }
+  </ng-template>
+
+  <ng-template #chipFor let-r>
+    @switch (r.state) {
+      @case ('approved') { <span class="chip ok"><app-icon name="i-check" />Đã duyệt {{ day(r.approvedOn).slice(0, 5) }}</span> }
+      @case ('pending') { <span class="chip warn"><app-icon name="i-clock" />Chờ duyệt</span> }
+      @default { <span class="chip neu"><app-icon name="i-camera" />Chưa ghi</span> }
+    }
+  </ng-template>
+
+  <ng-template #photo let-r>
+    @if (r.photoUrl) {
+      <img class="thumb" [ngSrc]="r.photoUrl" width="56" height="42" [alt]="'Đồng hồ ' + kindLabel(r.kind).toLowerCase() + ' ' + d.roomCode + ', ảnh chỉ số cuối'">
+    } @else {
+      <span class="thumb none" aria-hidden="true"><app-icon [name]="r.state === 'missing' ? 'i-camera' : 'i-image'" /></span>
+    }
+  </ng-template>
+
+  <ng-template #step2>
+    <section class="card step" id="step-2" aria-labelledby="h-step-2">
+      <div class="row between wrap"><h2 id="h-step-2">2 · Chỉ số cuối {{ d.roomCode }} ngày {{ day(d.endDate) }}</h2>
+        @if (done()[2]) { <span class="chip ok"><app-icon name="i-check" />Đủ chỉ số</span> }
+        @else if (d.water.state === 'missing' && d.electricity.state !== 'missing') { <span class="chip warn"><app-icon name="i-clock" />Còn thiếu nước</span> }
+        @else if (d.electricity.state === 'missing' && d.water.state !== 'missing') { <span class="chip warn"><app-icon name="i-clock" />Còn thiếu điện</span> }
+        @else { <span class="chip warn"><app-icon name="i-clock" />Chưa đủ</span> }
+      </div>
+      @if (!viewport.isPhone()) {
+        <div class="tablewrap">
+          <table class="table">
+            <caption class="sr">Chỉ số cuối {{ d.roomCode }}</caption>
+            <thead><tr><th scope="col">Loại</th><th scope="col">Ảnh</th><th scope="col" class="num">Kỳ trước</th><th scope="col" class="num">Chỉ số cuối</th><th scope="col" class="num">Tiêu thụ</th><th scope="col">Trạng thái</th></tr></thead>
+            <tbody>
+              @for (r of readings(); track r.kind) {
+                <tr>
+                  <td><b>{{ kindLabel(r.kind) }}</b></td>
+                  <td><ng-container [ngTemplateOutlet]="photo" [ngTemplateOutletContext]="{ $implicit: r }" /></td>
+                  <td class="num">{{ r.previous | num }}</td>
+                  <td class="num">@if (r.value != null) { <app-meter-digits [kind]="r.kind" [value]="r.value" size="sm" /> } @else { <span class="muted">—</span> }</td>
+                  <td class="num">@if (r.value != null) { {{ r.value - r.previous | num }} {{ unit(r.kind) }} } @else { <span class="muted">—</span> }</td>
+                  <td><ng-container [ngTemplateOutlet]="chipFor" [ngTemplateOutletContext]="{ $implicit: r }" /></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @for (r of readings(); track r.kind) {
+          @if (r.state !== 'approved') {
+            <div class="r-block"><span class="small muted">{{ kindLabel(r.kind) }}:</span><ng-container [ngTemplateOutlet]="readingActions" [ngTemplateOutletContext]="{ $implicit: r }" /></div>
+          }
+        }
+      } @else {
+        <ul class="m-readings">
+          @for (r of readings(); track r.kind) {
+            <li>
+              <div class="row">
+                <ng-container [ngTemplateOutlet]="photo" [ngTemplateOutletContext]="{ $implicit: r }" />
+                <span class="m-text"><b>{{ kindLabel(r.kind) }}</b>
+                  <span class="small muted">Từ {{ r.previous | num }}@if (r.value != null) { → {{ r.value | num }} · {{ r.value - r.previous | num }} {{ unit(r.kind) }} }</span>
+                </span>
+                <span class="m-chip"><ng-container [ngTemplateOutlet]="chipFor" [ngTemplateOutletContext]="{ $implicit: r }" /></span>
+              </div>
+              <ng-container [ngTemplateOutlet]="readingActions" [ngTemplateOutletContext]="{ $implicit: r }" />
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </ng-template>
+
+  <ng-template #step3>
+    <section class="card step" id="step-3" aria-labelledby="h-step-3">
+      <div class="row between wrap"><h2 id="h-step-3">3 · Hóa đơn cuối {{ d.roomCode }} ({{ finalPeriod() }})</h2>
+        @if (inv.total != null) { <span class="chip ok"><app-icon name="i-check" />Sẵn sàng</span> }
+        @else if (!done()[2]) { <span class="chip neu"><app-icon name="i-clock" />Chờ đủ chỉ số</span> }
+        @else { <span class="chip warn"><app-icon name="i-edit" />Chưa nhập tiền phòng</span> }
+      </div>
+      <div class="field rent">
+        <label for="fin-r">Tiền phòng tháng cuối (chủ nhà nhập)</label>
+        <div class="input rent-input">
+          <input id="fin-r" inputmode="numeric" autocomplete="off" [value]="inv.rent != null ? (inv.rent | num) : ''" (input)="onRent($event)" aria-describedby="fin-r-help">
+          <span class="unit">đ</span>
+        </div>
+        <span class="help" id="fin-r-help">Không tự chia theo ngày. Nhập số hai bên đã thỏa thuận. Tiền phòng đủ tháng: {{ d.monthlyRent | vnd }}.</span>
+      </div>
+      <table class="lines">
+        <caption class="sr">Các dòng hóa đơn cuối</caption>
+        <tbody>
+          <tr><td>Tiền phòng tháng cuối<small>chủ nhà nhập</small></td><td>@if (inv.rent != null) { {{ inv.rent | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+          <tr><td>Điện<small>@if (inv.electricity; as e) { {{ e.usage | num }} kWh × {{ e.rate | vnd }} } @else { chờ chỉ số cuối }</small></td><td>@if (inv.electricity; as e) { {{ e.amount | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+          <tr><td>Nước<small>@if (inv.water; as w) { {{ w.usage | num }} m³ × {{ w.rate | vnd }} } @else { chờ chỉ số cuối }</small></td><td>@if (inv.water; as w) { {{ w.amount | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+          <tr><td>Hóa đơn cũ chưa thanh toán<small>@if (inv.unpaidPrevious) { cộng vào hóa đơn cuối } @else { Không có }</small></td><td>{{ inv.unpaidPrevious | vnd }}</td></tr>
+          <tr class="total"><td>Tổng</td><td>@if (inv.total != null) { {{ inv.total | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </ng-template>
+
+  <ng-template #step4>
+    <section class="step-4" id="step-4" aria-label="4 · Xác nhận">
+      @if (blockers().length) {
+        <div class="banner warn" id="why-blocked">
+          <app-icon name="i-info" />
+          <span><b>Chưa thể kết thúc thuê:</b> {{ blockers().join(', ') }}. Sau khi đủ, hóa đơn cuối được tạo để gửi người thuê, {{ d.roomCode }} thành phòng trống@if (d.kind === 'MOVE' && t) {, và hợp đồng {{ t.code }} bắt đầu với chỉ số đầu ngày {{ day(d.endDate).slice(0, 5) }} (điện {{ t.startElectricity | num }} kWh, nước {{ t.startWater | num }} m³)}.</span>
+        </div>
+      } @else {
+        <div class="banner info" id="why-blocked">
+          <app-icon name="i-info" />
+          <span><b>Sẵn sàng.</b> Hóa đơn cuối {{ inv.total | vnd }} được tạo để gửi người thuê, {{ d.roomCode }} thành phòng trống@if (d.kind === 'MOVE' && t) {, và hợp đồng {{ t.code }} bắt đầu với chỉ số đầu ngày {{ day(d.endDate).slice(0, 5) }} (điện {{ t.startElectricity | num }} kWh, nước {{ t.startWater | num }} m³)}.</span>
+        </div>
+      }
+      <div class="final-acts">
+        <a class="btn sec" routerLink="/landlord/rooms">Quay lại</a>
+        <button type="button" class="btn" [disabled]="blockers().length > 0" aria-describedby="why-blocked" (click)="finish()">{{ confirmLabel() }}</button>
+      </div>
+    </section>
+  </ng-template>
+
+  @if (d.finishedAt) {
+    <div class="card finished">
+      <div class="done-hero">
+        <span class="ic"><app-icon name="i-check" /></span>
+        <h2>Đã kết thúc thuê {{ d.roomCode }}</h2>
+        <p class="muted">{{ d.tenantName }} · {{ day(d.endDate) }}</p>
+      </div>
+      <ul class="rules">
+        <li class="ok"><app-icon name="i-check" />Hóa đơn cuối {{ inv.total | vnd }} đã tạo, chờ gửi người thuê.</li>
+        <li class="ok"><app-icon name="i-check" />{{ d.roomCode }} thành phòng trống.</li>
+        @if (d.kind === 'MOVE' && t) {
+          <li class="ok"><app-icon name="i-check" />Hợp đồng {{ t.code }} bắt đầu {{ day(d.endDate) }} (điện {{ t.startElectricity | num }} kWh, nước {{ t.startWater | num }} m³), chờ {{ d.tenantName }} xác nhận.</li>
+        }
+      </ul>
+      <div class="final-acts">
+        <a class="btn sec" routerLink="/landlord/invoices">Xem hóa đơn</a>
+        <a class="btn" routerLink="/landlord/rooms">Về danh sách phòng</a>
+      </div>
+    </div>
+  } @else if (!viewport.isPhone()) {
+    <nav class="crumb" aria-label="Vị trí">
+      <a routerLink="/landlord/rooms">Phòng</a><app-icon name="i-chev" size="sm" />{{ d.roomCode }}<app-icon name="i-chev" size="sm" /><span aria-current="page">Kết thúc thuê</span>
+    </nav>
+    <div class="top">
+      <div><h1>Kết thúc thuê {{ d.roomCode }}</h1><p class="sub">{{ d.tenantName }} · thuê từ {{ day(d.tenancyStart) }}</p></div>
+      <div class="acts"><button type="button" class="btn sec" (click)="saveDraft()">Lưu nháp</button></div>
+    </div>
+    <div class="wiz">
+      <ol class="wiz-steps" aria-label="Các bước">
+        @for (s of stepIds; track s) {
+          <li [class.done]="done()[s]" [class.cur]="!done()[s] && current() === s" [attr.aria-current]="current() === s ? 'step' : null">
+            <span class="n">@if (done()[s]) { <app-icon name="i-check" size="sm" /><span class="sr">Xong:</span> } @else { {{ s }} }</span>
+            <div>
+              @switch (s) {
+                @case (1) { {{ titles[1] }}<small>@if (d.kind === 'MOVE') { Chuyển sang {{ t?.code ?? '…' }} · {{ day(d.endDate) }} } @else if (d.kind === 'LEAVE') { Rời đi · {{ day(d.endDate) }} } @else { Chưa chọn }</small> }
+                @case (2) { {{ titles[2] }} {{ d.roomCode }}<small>{{ (d.electricity.state === 'approved' ? 1 : 0) + (d.water.state === 'approved' ? 1 : 0) }}/2 đã duyệt</small> }
+                @case (3) { {{ titles[3] }} {{ d.roomCode }}<small>@if (inv.total != null) { {{ inv.total | vnd }} } @else { Tiền phòng tháng cuối }</small> }
+                @case (4) { {{ titles[4] }}<small>{{ d.roomCode }} thành phòng trống</small> }
+              }
+            </div>
+          </li>
+        }
+      </ol>
+      <div class="stack">
+        <ng-container [ngTemplateOutlet]="step1" />
+        <ng-container [ngTemplateOutlet]="step2" />
+        <ng-container [ngTemplateOutlet]="step3" />
+        <ng-container [ngTemplateOutlet]="step4" />
+      </div>
+    </div>
+  } @else {
+    <div class="m-head">
+      <a class="iconbtn" routerLink="/landlord/rooms" aria-label="Quay lại danh sách phòng"><app-icon name="i-back" /></a>
+      <button type="button" class="btn ghost" (click)="saveDraft()">Lưu nháp</button>
+    </div>
+    <h1 class="m-title">Kết thúc thuê {{ d.roomCode }}</h1>
+    <p class="small muted">{{ d.tenantName }} · thuê từ {{ day(d.tenancyStart) }}</p>
+    <div class="m-progress">
+      <span class="small"><b>Bước {{ phoneStep() }}/4</b> · {{ titles[phoneStep()] }}</span>
+      <div class="steps" aria-hidden="true">
+        @for (s of stepIds; track s) { <i [class.on]="s <= phoneStep()"></i> }
+      </div>
+    </div>
+    <div class="stack">
+      @switch (phoneStep()) {
+        @case (1) { <ng-container [ngTemplateOutlet]="step1" /> }
+        @case (2) { <ng-container [ngTemplateOutlet]="step2" /> }
+        @case (3) { <ng-container [ngTemplateOutlet]="step3" /> }
+        @case (4) { <ng-container [ngTemplateOutlet]="step4" /> }
+      }
+    </div>
+    @if (phoneStep() < 4) {
+      <div class="m-nav">
+        @if (phoneStep() > 1) { <button type="button" class="btn sec" (click)="go($any(phoneStep() - 1))">Quay lại</button> }
+        <button type="button" class="btn" (click)="go($any(phoneStep() + 1))">Tiếp tục<app-icon name="i-arrow" /></button>
+      </div>
+    } @else {
+      <div class="m-nav"><button type="button" class="btn ghost" (click)="go(3)">Xem lại bước 3</button></div>
+    }
+  }
+} @else {
+  <div class="card missing">
+    <h1 class="m-title">Không có người thuê để kết thúc</h1>
+    <p class="muted">Phòng này đang trống hoặc không tồn tại.</p>
+    <a class="btn sec" routerLink="/landlord/rooms"><app-icon name="i-back" />Về danh sách phòng</a>
+  </div>
+}
+
+@if (toast(); as text) {
+  <div class="rl-toast" role="status"><app-icon name="i-check-c" /><span>{{ text }}</span></div>
+}

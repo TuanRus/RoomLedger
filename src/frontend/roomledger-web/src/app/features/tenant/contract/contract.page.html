@@ -1,0 +1,89 @@
+@let c = contract();
+@let d = decision();
+
+<ng-template #scan>
+  <button type="button" class="scan" (click)="openScan()" aria-label="Phóng to trang 1 bản scan hợp đồng">
+    <img [ngSrc]="c.scanUrl" width="900" height="1270" [alt]="'Trang 1 bản scan hợp đồng thuê phòng ' + c.roomCode" priority>
+    <span class="tag">Trang 1/{{ c.pages }} · bấm để phóng to</span>
+  </button>
+</ng-template>
+
+<ng-template #terms>
+  <dl class="kv terms">
+    <dt>Tiền phòng</dt><dd class="money">{{ c.monthlyRent | vnd }}</dd>
+    <dt>Tiền cọc</dt><dd class="money">{{ c.deposit | vnd }}</dd>
+    <dt>Thời hạn</dt><dd>{{ c.startDate }} – {{ c.endDate }}</dd>
+    <dt>Điện / nước</dt><dd>{{ c.electricityRate | vnd }} · {{ c.waterRate | vnd }}</dd>
+  </dl>
+</ng-template>
+
+<ng-template #actions>
+  @switch (d.status) {
+    @case ('CONFIRMED') {
+      <div class="banner ok" role="status"><app-icon name="i-check-c" /><span><b>Bạn đã xác nhận hợp đồng ngày {{ d.at }}.</b> Các điều khoản này dùng để tính hóa đơn hằng tháng.</span></div>
+    }
+    @case ('REJECTED') {
+      <div class="banner info" role="status"><app-icon name="i-talk" /><span><b>Đã gửi lý do cho chủ nhà ngày {{ d.at }}.</b> Chủ nhà sửa xong sẽ gửi lại để bạn xác nhận.</span></div>
+      <p class="quote">{{ d.reason }}</p>
+      <button type="button" class="btn ghost" (click)="review()"><app-icon name="i-refresh" />Xem lại và xác nhận</button>
+    }
+    @default {
+      @if (rejecting()) {
+        @let rf = f.reason();
+        <form class="reject" (submit)="sendReject($event)" novalidate>
+          <div class="field">
+            <label for="reject-reason">Chỗ nào chưa đúng?</label>
+            <textarea #reasonBox id="reject-reason" class="input area" rows="4" [formField]="f.reason"
+              placeholder="Ví dụ: tiền cọc trong bản giấy là 2.500.000 đ"
+              [class.is-error]="rf.touched() && rf.invalid()" [attr.aria-invalid]="rf.touched() && rf.invalid()"
+              aria-describedby="reject-count reject-err"></textarea>
+            <div class="under">
+              <span class="err" id="reject-err">
+                @if (rf.touched() && rf.invalid()) { <app-icon name="i-alert" size="sm" />{{ rf.errors()[0].message }} }
+              </span>
+              <span class="help count" id="reject-count">{{ model().reason.trim().length }}/{{ min }} ký tự tối thiểu</span>
+            </div>
+          </div>
+          <div class="btns">
+            <button type="button" class="btn sec" (click)="cancelReject()">Hủy</button>
+            <button type="submit" class="btn">Gửi cho chủ nhà</button>
+          </div>
+        </form>
+      } @else {
+        <p class="small muted">Có chỗ chưa đúng? Bấm “Không đúng” để ghi lý do (ít nhất {{ min }} ký tự) gửi chủ nhà.</p>
+        <div class="btns">
+          <button type="button" class="btn sec" (click)="startReject()">Không đúng</button>
+          <button type="button" class="btn grow" (click)="confirm()"><app-icon name="i-check" />Xác nhận đúng</button>
+        </div>
+      }
+    }
+  }
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top"><div><h1>Hợp đồng {{ c.roomCode }}</h1><p class="sub">{{ c.propertyName }} · {{ c.startDate }} – {{ c.endDate }}</p></div></div>
+  <div class="cols">
+    <ng-container [ngTemplateOutlet]="scan" />
+    <section class="panel side" aria-labelledby="terms-title">
+      <h2 id="terms-title">Điều khoản chủ nhà đã nhập</h2>
+      <p class="small muted">So với bản scan bên trái. Hóa đơn hằng tháng tính theo các số này.</p>
+      <ng-container [ngTemplateOutlet]="terms" />
+      <ng-container [ngTemplateOutlet]="actions" />
+    </section>
+  </div>
+} @else {
+  <div class="m-head"><h1>Hợp đồng {{ c.roomCode }}</h1></div>
+  <div class="m-body">
+    <ng-container [ngTemplateOutlet]="scan" />
+    <div class="sheet"><ng-container [ngTemplateOutlet]="terms" /></div>
+    <ng-container [ngTemplateOutlet]="actions" />
+  </div>
+}
+
+<dialog #scanDialog class="scan-dialog" aria-label="Bản scan hợp đồng">
+  <div class="sd-head">
+    <h2>Hợp đồng {{ c.roomCode }} · trang 1/{{ c.pages }}</h2>
+    <button type="button" class="iconbtn" aria-label="Đóng" (click)="closeScan()"><app-icon name="i-x" /></button>
+  </div>
+  <img [ngSrc]="c.scanUrl" width="900" height="1270" alt="Trang 1 bản scan hợp đồng, phóng to">
+</dialog>

@@ -1,0 +1,142 @@
+@let counts = store.counts();
+
+<ng-template #chip let-d>
+  @if (d.status === 'OPEN') {
+    <span class="chip warn"><app-icon name="i-clock" />Mới</span>
+  } @else {
+    <span class="chip ok"><app-icon name="i-check" />Đã trả lời</span>
+  }
+</ng-template>
+
+<ng-template #list>
+  <ul class="list dp-list" aria-label="Danh sách khiếu nại">
+    @for (d of store.ordered(); track d.disputeId) {
+      <li>
+        <button type="button" class="dp-item" [class.sel]="!viewport.isPhone() && selectedId() === d.disputeId" [attr.aria-current]="selectedId() === d.disputeId" (click)="selectedId.set(d.disputeId)">
+          <span class="dp-text"><b>{{ short(d) }}</b><span class="small muted">{{ d.tenantName }} · {{ d.createdAt | day }}</span></span>
+          <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: d }" />
+        </button>
+      </li>
+    } @empty {
+      <li class="muted dp-empty">Chưa có khiếu nại nào.</li>
+    }
+  </ul>
+</ng-template>
+
+<ng-template #detail let-d>
+  @let r = d.reading;
+  @let inv = invoiceOf();
+  <div class="row between head">
+    <h2>{{ title(d) }}</h2>
+    @if (d.status === 'OPEN') {
+      <span class="chip warn"><app-icon name="i-clock" />Chờ bạn trả lời</span>
+    } @else {
+      <span class="chip ok"><app-icon name="i-check" />Đã trả lời</span>
+    }
+  </div>
+
+  @if (d.status === 'OPEN') {
+    <div class="banner info"><app-icon name="i-talk" /><span><b>{{ d.tenantName }}:</b> “{{ d.reason }}”</span></div>
+  }
+
+  @if (r) {
+    <div class="evidence">
+      <div class="photo"><img [ngSrc]="r.photoUrl" width="400" height="300" [alt]="'Ảnh gốc đồng hồ ' + d.roomCode + ', chỉ số AI đọc ' + r.aiValue + ' ' + unit(d)"><span class="tag">Ảnh gốc · bạn chụp {{ r.capturedAt | day }}</span></div>
+      <dl class="kv">
+        <dt>Kỳ trước</dt><dd>{{ r.previous | num }} {{ unit(d) }}</dd>
+        <dt>AI đọc</dt><dd><app-meter-digits [kind]="r.kind" [value]="r.aiValue" size="sm" /></dd>
+        <dt>Đã duyệt</dt><dd>{{ r.approved | num }} {{ unit(d) }} · {{ r.approvedAt | day }}</dd>
+        <dt>Người thuê báo</dt><dd><app-meter-digits [kind]="r.kind" [value]="r.tenantValue" size="sm" /></dd>
+        <dt>Chênh lệch</dt><dd>{{ r.approved - r.tenantValue | num }} {{ unit(d) }} = {{ (r.approved - r.tenantValue) * r.rate | vnd }}</dd>
+        @if (r.corrected != null) {
+          <dt>Đã sửa thành</dt><dd><b>{{ r.corrected | num }} {{ unit(d) }}</b></dd>
+        }
+      </dl>
+    </div>
+  } @else if (inv) {
+    <dl class="kv inv-kv">
+      <dt>Tiền phòng</dt><dd>{{ inv.roomRent | vnd }}</dd>
+      <dt>Điện · {{ inv.electricity.usage | num }} kWh</dt><dd>{{ inv.electricity.amount | vnd }}</dd>
+      <dt>Nước · {{ inv.water.usage | num }} m³</dt><dd>{{ inv.water.amount | vnd }}</dd>
+      <dt>Tổng</dt><dd><b>{{ inv.total | vnd }}</b></dd>
+    </dl>
+  }
+
+  @if (d.status === 'OPEN') {
+    <div class="choices" [class.one]="!r">
+      @if (r) {
+        <div class="card pick">
+          <b>Sửa chỉ số</b>
+          <div class="field">
+            <label [for]="'dp-v-' + d.disputeId">Chỉ số đúng</label>
+            <div class="input" [class.is-error]="valueError()">
+              <input [id]="'dp-v-' + d.disputeId" class="bare" inputmode="numeric" autocomplete="off" [value]="value() ?? ''" (input)="onValueInput($event)" [attr.aria-invalid]="valueError()" [attr.aria-describedby]="'dp-vh-' + d.disputeId">
+              <span class="unit">{{ unit(d) }}</span>
+            </div>
+            @if (valueError()) {
+              <span class="err" [id]="'dp-vh-' + d.disputeId">Chỉ số không được nhỏ hơn kỳ trước ({{ r.previous | num }} {{ unit(d) }}).</span>
+            } @else {
+              <span class="help" [id]="'dp-vh-' + d.disputeId">
+                @if (recalc(); as t) { Hóa đơn {{ d.roomCode }} được tính lại: {{ t.before | vnd }} → {{ t.after | vnd }} } @else { Hóa đơn được tính lại theo chỉ số mới. }
+              </span>
+            }
+          </div>
+          <button type="button" class="btn block" [disabled]="valueError() || value() === r.approved" (click)="correct(d)">Sửa và tính lại hóa đơn</button>
+        </div>
+      }
+      <div class="card">
+        <b>{{ r ? 'Giữ nguyên ' + r.approved + ' ' + unit(d) : 'Trả lời và giữ nguyên hóa đơn' }}</b>
+        <div class="field">
+          <label [for]="'dp-r-' + d.disputeId">Trả lời người thuê (bắt buộc)</label>
+          <textarea [id]="'dp-r-' + d.disputeId" class="input" [class.is-error]="replyError()" placeholder="Giải thích vì sao giữ nguyên" [value]="reply()" (input)="onReplyInput($event)" [attr.aria-invalid]="replyError()" [attr.aria-describedby]="replyError() ? 'dp-re-' + d.disputeId : null"></textarea>
+          @if (replyError()) {
+            <span class="err" [id]="'dp-re-' + d.disputeId">Nhập câu trả lời để người thuê biết vì sao giữ nguyên.</span>
+          }
+        </div>
+        <button type="button" class="btn sec block" (click)="keep(d)">{{ r ? 'Giữ nguyên và trả lời' : 'Gửi trả lời' }}</button>
+      </div>
+    </div>
+  } @else {
+    <ol class="tl">
+      <li>
+        <span class="dot info"><app-icon name="i-talk" /></span>
+        <div><b>{{ d.tenantName }} gửi khiếu nại</b><time>{{ d.createdAt | stamp }}</time><p class="quote">{{ d.reason }}</p></div>
+      </li>
+      <li>
+        <span class="dot ok"><app-icon name="i-check" /></span>
+        <div>
+          <b>{{ d.resolution === 'CORRECTED' ? 'Bạn đã sửa chỉ số' : 'Bạn giữ nguyên và trả lời' }}</b><time>{{ d.resolvedAt | stamp }}</time>
+          <p class="quote">{{ d.response }}</p>
+        </div>
+      </li>
+    </ol>
+  }
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top"><div><h1>Khiếu nại</h1><p class="sub">{{ counts.open }} mới · {{ counts.resolved }} đã trả lời</p></div></div>
+  <div class="split dp-split">
+    <div><ng-container [ngTemplateOutlet]="list" /></div>
+    <section class="panel" aria-live="polite" aria-label="Chi tiết khiếu nại">
+      @if (selected(); as d) {
+        <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: d }" />
+      } @else {
+        <p class="muted">Chọn một khiếu nại để xem và trả lời.</p>
+      }
+    </section>
+  </div>
+} @else {
+  @if (selected(); as d) {
+    <div class="m-head"><button type="button" class="iconbtn" aria-label="Quay lại danh sách khiếu nại" (click)="selectedId.set(null)"><app-icon name="i-back" /></button></div>
+    <section class="m-detail" [attr.aria-label]="title(d)">
+      <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: d }" />
+    </section>
+  } @else {
+    <div class="m-head"><h1>Khiếu nại</h1><span class="muted small">{{ counts.open }} mới · {{ counts.resolved }} đã trả lời</span></div>
+    <ng-container [ngTemplateOutlet]="list" />
+  }
+}
+
+@if (toast(); as t) {
+  <div class="rl-toast" role="status"><app-icon name="i-check-c" /><span>{{ t }}</span></div>
+}

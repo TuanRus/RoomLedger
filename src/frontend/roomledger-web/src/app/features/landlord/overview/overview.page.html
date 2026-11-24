@@ -1,0 +1,80 @@
+@let o = store.overview();
+@let a = o.attention;
+@let s = o.summary;
+
+<div class="top">
+  <div>
+    <h1>Chào {{ o.landlordName }}</h1>
+    <p class="sub">Kỳ {{ o.period | period }} · ghi chỉ số {{ o.captureWindow }} · hạn thanh toán {{ o.paymentDue }}</p>
+  </div>
+  <div class="acts"><span class="select period"><app-icon name="i-cal" />Kỳ {{ o.period | period }}</span></div>
+</div>
+
+<section class="card progress" aria-labelledby="cap-h">
+  <div class="row between wrap">
+    <b id="cap-h">Ghi chỉ số kỳ {{ o.period | period }}</b>
+    <span class="small muted">{{ o.capture.recorded }}/{{ o.capture.total }} phòng đã ghi · hạn {{ o.capture.deadline }}</span>
+  </div>
+  <div class="bar" role="progressbar" aria-labelledby="cap-h" aria-valuemin="0" [attr.aria-valuemax]="o.capture.total" [attr.aria-valuenow]="o.capture.recorded"
+    [attr.aria-valuetext]="o.capture.recorded + ' trên ' + o.capture.total + ' phòng đã ghi'"><i [style.width.%]="store.capturePercent()"></i></div>
+</section>
+
+<div class="dash-grid">
+  <section class="card" aria-labelledby="att-h">
+    <div class="row between"><h2 id="att-h">Chỉ số cần xử lý</h2><span class="chip warn"><app-icon name="i-clock" />{{ a.total }} chỉ số</span></div>
+    <p class="small muted lead">Điện: {{ a.pending }} chờ duyệt · {{ a.abnormal }} bất thường · {{ a.unreadable }} không đọc được. Nước: đã duyệt đủ {{ a.waterApproved }} phòng.</p>
+    <ul class="mini-list">
+      @for (r of a.rooms; track r.roomCode + r.kind) {
+        <li>
+          <span><b>{{ r.roomCode }}</b> · {{ r.kind }}</span>
+          @if (r.state === 'abnormal') {
+            <span class="chip warn"><app-icon name="i-alert" /><span class="sr">Bất thường </span>{{ formatChange(r.change) }}</span>
+          } @else {
+            <span class="chip err"><app-icon name="i-blur" />Không đọc được</span>
+          }
+        </li>
+      }
+    </ul>
+    <a class="btn block" routerLink="/landlord/meter-readings">Mở màn duyệt chỉ số</a>
+  </section>
+
+  <section class="card" aria-labelledby="unrec-h">
+    <div class="row between"><h2 id="unrec-h">Chưa ghi chỉ số</h2><span class="chip neu"><app-icon name="i-camera" />{{ o.unrecorded.length }} phòng</span></div>
+    <ul class="mini-list">
+      @for (r of o.unrecorded; track r.roomCode) {
+        <li><span><b>{{ r.roomCode }}</b> · {{ r.tenantName }}</span><span class="muted">{{ r.meters }}</span></li>
+      }
+    </ul>
+    <a class="btn sec block" routerLink="/landlord/meter-capture"><app-icon name="i-camera" />Chụp trên điện thoại</a>
+  </section>
+
+  <section class="card" aria-labelledby="due-h">
+    <div class="row between"><h2 id="due-h">Hóa đơn quá hạn</h2><span class="chip err"><app-icon name="i-flag" />{{ o.overdue.length }} hóa đơn</span></div>
+    <p class="money big">{{ store.overdueTotal() | vnd }}</p>
+    <ul class="mini-list">
+      @for (i of o.overdue; track i.roomCode + i.period) {
+        <li><span><b>{{ i.roomCode }}</b> · kỳ {{ i.period | period }}</span><span class="money">{{ i.amount | vnd }} · quá {{ i.daysLate }} ngày</span></li>
+      }
+    </ul>
+    <a class="btn sec block" routerLink="/landlord/invoices">Xem hóa đơn</a>
+  </section>
+</div>
+
+<section class="card summary" aria-label="Tóm tắt">
+  <a class="sum" routerLink="/landlord/rooms">
+    <span class="small muted">Phòng</span><span class="sum-v">{{ s.rooms.total }} phòng</span>
+    <span class="small muted">{{ s.rooms.occupied }} đang thuê · {{ s.rooms.vacant }} trống</span>
+  </a>
+  <a class="sum" routerLink="/landlord/invoices">
+    <span class="small muted">Hóa đơn kỳ {{ s.lastPeriod.period | period }}</span><span class="sum-v">{{ s.lastPeriod.paid }}/{{ s.lastPeriod.total }} đã thu</span>
+    <span class="small muted">còn {{ s.lastPeriod.overdue }} quá hạn</span>
+  </a>
+  <a class="sum" routerLink="/landlord/contracts">
+    <span class="small muted">Hợp đồng</span><span class="sum-v">{{ s.contracts.needAction }} cần xử lý</span>
+    <span class="small muted">{{ s.contracts.note }}</span>
+  </a>
+  <a class="sum" routerLink="/landlord/disputes">
+    <span class="small muted">Khiếu nại</span><span class="sum-v">{{ s.disputes.open }} mới</span>
+    <span class="small muted">{{ s.disputes.note }}</span>
+  </a>
+</section>

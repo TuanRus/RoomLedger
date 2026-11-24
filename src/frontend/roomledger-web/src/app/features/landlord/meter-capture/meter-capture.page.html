@@ -1,0 +1,101 @@
+@let groups = store.groups();
+
+<ng-template #progress>
+  <div class="sheet prog">
+    <div class="row between"><b>{{ store.recordedCount() }}/{{ store.total() }} phòng đã ghi</b><span class="small muted">{{ viewport.isPhone() ? 'Ngày ' + roundDate.slice(0, 5) : 'Lượt chụp ' + roundDate }}</span></div>
+    <div class="bar" role="progressbar" [attr.aria-valuenow]="store.recordedCount()" aria-valuemin="0" [attr.aria-valuemax]="store.total()" aria-label="Số phòng đã ghi"><i [style.width.%]="percent()"></i></div>
+  </div>
+</ng-template>
+
+<ng-template #roomList>
+  <div class="pills" role="group" aria-label="Lọc phòng">
+    @for (p of pills; track p.id) {
+      <button type="button" class="pill" [class.on]="filter() === p.id" [attr.aria-pressed]="filter() === p.id" (click)="filter.set(p.id)">{{ p.label }} <b>{{ groups[p.id].length }}</b></button>
+    }
+  </div>
+  @if (visible().length) {
+    <ul class="list rooms">
+      @for (room of visible(); track room.roomId; let first = $first) {
+        @let g = store.groupOf(room);
+        <li>
+          <button type="button" class="room" [class.first]="first && filter() !== 'done'" [class.on]="isActive(room)" [attr.data-room]="room.roomId"
+                  [attr.aria-current]="isActive(room) ? 'true' : null" (click)="store.open(room.roomId)">
+            <span class="txt"><b>{{ room.roomCode }}</b><span class="small muted">{{ describe(room) }}</span></span>
+            @if (g === 'retake') {
+              <span class="chip err"><app-icon name="i-blur" />Chụp lại</span>
+            } @else if (g === 'done') {
+              <span class="chip ok"><app-icon name="i-check" />Đã ghi</span>
+            } @else if (first) {
+              <span class="go"><app-icon name="i-camera" />{{ viewport.isPhone() ? 'Chụp' : 'Tải ảnh' }}</span>
+            }
+            <app-icon name="i-chev" />
+          </button>
+        </li>
+      }
+    </ul>
+  } @else {
+    <div class="empty-m list">
+      <span class="ic"><app-icon name="i-check" /></span>
+      <b>{{ filter() === 'todo' ? 'Đã ghi đủ ' + store.total() + ' phòng' : 'Không có phòng nào' }}</b>
+      <span class="small muted">{{ filter() === 'todo' ? 'Vào Duyệt chỉ số để kiểm tra số AI đọc trước khi tạo hóa đơn.' : 'Danh sách này đang trống.' }}</span>
+    </div>
+  }
+</ng-template>
+
+<ng-template #demo>
+  <div class="demo">
+    <span class="small muted">Dữ liệu mẫu · tải ảnh và AI đọc số đang giả lập</span>
+    <button type="button" class="btn sm sec" [attr.aria-pressed]="store.simulateOffline()" (click)="store.setSimulateOffline(!store.simulateOffline())">
+      <app-icon [name]="store.simulateOffline() ? 'i-wifi' : 'i-wifi-off'" />{{ store.simulateOffline() ? 'Bật lại mạng' : 'Giả lập mất mạng' }}
+    </button>
+  </div>
+</ng-template>
+
+@if (viewport.isPhone()) {
+  <div class="phone">
+    <div class="ptop">
+      <h1>Ghi chỉ số</h1>
+      <span class="chip neu"><app-icon name="i-cal" />Kỳ {{ period | period }}</span>
+    </div>
+    @if (showQueue()) { <app-offline-queue /> }
+    <ng-container [ngTemplateOutlet]="progress" />
+    <ng-container [ngTemplateOutlet]="roomList" />
+    <ng-container [ngTemplateOutlet]="demo" />
+  </div>
+
+  @if (store.active()) {
+    <div class="overlay" [class.dark]="!showResult()" role="dialog" aria-modal="true" aria-labelledby="cap-title">
+      @if (showResult()) { <app-capture-result layout="phone" /> } @else { <app-capture-camera /> }
+    </div>
+  }
+} @else {
+  <div class="top">
+    <div>
+      <h1>Ghi chỉ số</h1>
+      <p class="sub">Kỳ {{ period | period }} · lượt chụp {{ roundDate }}</p>
+    </div>
+    <div class="acts"><ng-container [ngTemplateOutlet]="demo" /></div>
+  </div>
+  <div class="banner info note"><app-icon name="i-info" /><span>Chụp đồng hồ dùng camera điện thoại: mở trang này trên điện thoại khi đi ghi số. Trên máy tính, chọn một phòng rồi tải ảnh có sẵn lên, ảnh đi qua cùng bước AI đọc số.</span></div>
+  @if (showQueue()) { <app-offline-queue class="queue" /> }
+  <div class="desk-grid">
+    <section class="card" aria-label="Danh sách phòng">
+      <ng-container [ngTemplateOutlet]="progress" />
+      <ng-container [ngTemplateOutlet]="roomList" />
+    </section>
+    <aside class="card panel-side" aria-labelledby="cap-title">
+      @if (store.active()) {
+        <app-capture-desk />
+      } @else {
+        <div class="empty-m">
+          <span class="ic"><app-icon name="i-camera" /></span>
+          <b id="cap-title">Chọn một phòng để ghi chỉ số</b>
+          <span class="small muted">Còn {{ groups.todo.length }} phòng chưa ghi và {{ groups.retake.length }} phòng cần chụp lại.</span>
+          @if (store.nextSlot(); as n) {
+            <button type="button" class="btn" (click)="store.open(n.roomId, n.kind)"><app-icon name="i-upload" />Bắt đầu từ {{ store.nextRoomCode() }}</button>
+          }
+        </div>
+      }
+    </aside>
+  </div>
+}

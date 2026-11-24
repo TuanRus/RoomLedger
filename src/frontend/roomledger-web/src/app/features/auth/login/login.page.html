@@ -1,0 +1,60 @@
+<app-auth-frame>
+  @let em = f.email();
+  @let pw = f.password();
+  <form class="form" novalidate (submit)="submit($event)">
+    <div>
+      <h1>Đăng nhập</h1>
+      <p class="muted lead">Chủ nhà quản lý chỉ số điện nước, hóa đơn và hợp đồng. Người thuê xem hóa đơn và ảnh đồng hồ của phòng mình.</p>
+    </div>
+
+    @if (authError(); as msg) {
+      <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ msg }}</span></div>
+    }
+
+    <div class="field">
+      <label for="login-email">Email</label>
+      <input class="input" id="login-email" type="email" autocomplete="email" inputmode="email" placeholder="ten@vidu.vn"
+        [formField]="f.email" [class.is-error]="em.touched() && em.invalid()"
+        [attr.aria-invalid]="em.touched() && em.invalid()" [attr.aria-describedby]="em.touched() && em.invalid() ? 'login-email-err' : null">
+      @if (em.touched() && em.invalid()) {
+        <span class="err" id="login-email-err"><app-icon name="i-alert" size="sm" />{{ em.errors()[0].message }}</span>
+      }
+    </div>
+
+    <div class="field">
+      <label for="login-pw">Mật khẩu</label>
+      <div class="pw">
+        <input class="input" id="login-pw" [type]="showPassword() ? 'text' : 'password'" autocomplete="current-password"
+          [formField]="f.password" [class.is-error]="pw.touched() && pw.invalid()"
+          [attr.aria-invalid]="pw.touched() && pw.invalid()" [attr.aria-describedby]="pw.touched() && pw.invalid() ? 'login-pw-err' : null">
+        <button type="button" class="eye" (click)="showPassword.set(!showPassword())" [attr.aria-pressed]="showPassword()"
+          [attr.aria-label]="showPassword() ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'">{{ showPassword() ? 'Ẩn' : 'Hiện' }}</button>
+      </div>
+      <div class="row between under">
+        @if (pw.touched() && pw.invalid()) {
+          <span class="err" id="login-pw-err"><app-icon name="i-alert" size="sm" />{{ pw.errors()[0].message }}</span>
+        } @else { <span></span> }
+        <a class="small forgot" routerLink="/forgot-password">Quên mật khẩu?</a>
+      </div>
+    </div>
+
+    <button class="btn lg block" type="submit" [disabled]="busy()">
+      @if (busy()) { <span class="spin" aria-hidden="true"></span>Đang đăng nhập… } @else { Đăng nhập }
+    </button>
+
+    <div class="banner info"><app-icon name="i-info" /><span>Bạn là người thuê lần đầu? Mở link lời mời chủ nhà gửi qua email để tạo mật khẩu.</span></div>
+  </form>
+
+  <p foot class="small muted">Chưa có tài khoản? <a routerLink="/" fragment="dang-ky"><b>Tạo tài khoản chủ nhà</b></a></p>
+
+  <div art class="art">
+    <div class="card shot"><div class="photo"><img ngSrc="sample/elec-201.jpg" width="640" height="480" alt="" priority><span class="tag">Ảnh mẫu</span></div></div>
+    <div class="card row between">
+      <div>
+        <span class="chip info"><app-icon name="i-ai" />AI đọc</span>
+        <div class="val"><app-meter-digits kind="ELECTRICITY" [value]="3120" size="lg" /><span class="muted">kWh</span></div>
+      </div>
+      <span class="chip ok"><app-icon name="i-check" />Đã duyệt</span>
+    </div>
+  </div>
+</app-auth-frame>

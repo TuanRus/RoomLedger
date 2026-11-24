@@ -37,3 +37,13 @@ export class StampPipe implements PipeTransform {
     return m ? `${m[4]}:${m[5]}, ${m[3]}/${m[2]}/${m[1]}` : value;
   }
 }
+
+/** "2026-12-10" or an ISO date-time -> "10/12/2026" ('full', default) or "10/12" ('short'), read from the string so the time zone cannot shift it. */
+@Pipe({ name: 'day' })
+export class DayPipe implements PipeTransform {
+  transform(value: string | null | undefined, format: 'full' | 'short' = 'full'): string {
+    const m = value ? /^(\d{4})-(\d{2})-(\d{2})/.exec(value) : null;
+    if (!m) return '—';
+    return format === 'short' ? `${m[3]}/${m[2]}` : `${m[3]}/${m[2]}/${m[1]}`;
+  }
+}

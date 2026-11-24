@@ -1,0 +1,85 @@
+@let em = f.email();
+<header class="lnav">
+  <nav aria-label="Chính">
+    <a href="#cach-hoat-dong" (click)="scrollTo('cach-hoat-dong', false, $event)">Cách hoạt động</a>
+    <a href="#chu-nha" (click)="scrollTo('chu-nha', false, $event)">Chủ nhà</a>
+    <a href="#nguoi-thue" (click)="scrollTo('nguoi-thue', false, $event)">Người thuê</a>
+  </nav>
+  <a class="brand" routerLink="/"><span class="logo"><app-icon name="i-meter" /></span>RoomLedger</a>
+  <div class="r">
+    <a class="btn ghost" routerLink="/login">Đăng nhập</a>
+    <a class="btn" href="#dang-ky" (click)="scrollTo('dang-ky', true, $event)">Tạo tài khoản</a>
+  </div>
+</header>
+
+<main>
+  <section class="hero" id="dang-ky" aria-labelledby="hero-title">
+    <h1 id="hero-title">Chụp đồng hồ.<span>Hóa đơn tự tính.</span></h1>
+    <p class="lead">Chủ nhà đi một vòng chụp đồng hồ điện nước, AI đọc chỉ số, rồi duyệt cả dãy trọ trong một màn hình. Người thuê mở được ảnh gốc của từng số. Tiền phòng, điện, nước được tính thành hóa đơn và gửi cho từng phòng.</p>
+
+    @if (sentTo(); as to) {
+      <div class="sent" role="status">
+        <span class="ic"><app-icon name="i-mail" /></span>
+        <div>
+          <b>Đã gửi link tạo tài khoản tới {{ to }}</b>
+          <p class="small muted">Mở email trong 24 giờ để đặt mật khẩu. Không thấy? Xem cả hộp thư rác.</p>
+        </div>
+        <button type="button" class="btn ghost sm" (click)="restart()">Dùng email khác</button>
+      </div>
+    } @else {
+      <form class="signup-wrap" novalidate (submit)="signup($event)">
+        <div class="signup" [class.bad]="em.touched() && em.invalid()">
+          <label for="signup-email" class="sr">Email chủ nhà</label>
+          <input id="signup-email" type="email" inputmode="email" autocomplete="email" placeholder="Email của chủ nhà" [formField]="f.email"
+            [attr.aria-invalid]="em.touched() && em.invalid()" [attr.aria-describedby]="em.touched() && em.invalid() ? 'signup-err' : null">
+          <button class="btn" type="submit" [disabled]="busy()">
+            @if (busy()) { <span class="spin" aria-hidden="true"></span>Đang gửi… } @else { Tạo tài khoản chủ nhà }
+          </button>
+        </div>
+        @if (em.touched() && em.invalid()) {
+          <p class="err" id="signup-err"><app-icon name="i-alert" size="sm" />{{ em.errors()[0].message }}</p>
+        }
+      </form>
+    }
+    <p class="invite">Người thuê có lời mời từ chủ nhà? <a routerLink="/invite/mau">Mở lời mời</a></p>
+  </section>
+
+  <app-how-stage id="cach-hoat-dong" />
+
+  <section class="flow" aria-labelledby="flow-title">
+    <div>
+      <h2 id="flow-title">Ít việc tay hơn.<span>Ít câu hỏi “sao tháng này cao vậy”.</span></h2>
+      <p class="lead2">Mỗi con số trên hóa đơn có ảnh đồng hồ đi kèm. Người thuê thấy đúng ảnh và số chủ nhà đã duyệt, và có thể khiếu nại nếu thấy sai.</p>
+    </div>
+    <div class="who-grid">
+      <article class="card" id="chu-nha" aria-labelledby="who-ll">
+        <span class="chip neu"><app-icon name="i-camera" />Chủ nhà · điện thoại và máy tính</span>
+        <h3 id="who-ll">Chụp một vòng, duyệt một lượt</h3>
+        <ul>
+          <li><app-icon name="i-check" size="sm" />Đi một vòng chụp đồng hồ bằng điện thoại, ảnh tự tải lên</li>
+          <li><app-icon name="i-check" size="sm" />Duyệt 30–50 phòng: ảnh cạnh số AI đọc, chỉ số bất thường được đánh dấu sẵn</li>
+          <li><app-icon name="i-check" size="sm" />Tạo hóa đơn cả kỳ, đánh dấu đã thu tiền</li>
+        </ul>
+      </article>
+      <article class="card" id="nguoi-thue" aria-labelledby="who-tn">
+        <span class="chip neu"><app-icon name="i-image" />Người thuê · điện thoại</span>
+        <h3 id="who-tn">Xem, đối chiếu, khiếu nại</h3>
+        <ul>
+          <li><app-icon name="i-check" size="sm" />Mở ảnh gốc của mỗi chỉ số chủ nhà đã duyệt</li>
+          <li><app-icon name="i-check" size="sm" />So số trên ảnh với từng dòng hóa đơn</li>
+          <li><app-icon name="i-check" size="sm" />Xem hợp đồng, gửi khiếu nại nếu thấy sai</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="close" aria-labelledby="close-title">
+    <h2 id="close-title">Thử với một dãy trọ. <span>Bắt đầu từ kỳ này.</span></h2>
+    <a class="btn inv lg" href="#dang-ky" (click)="scrollTo('dang-ky', true, $event)">Tạo tài khoản chủ nhà <app-icon name="i-arrow" /></a>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>RoomLedger</span>
+  <span>Tên, ảnh và số liệu trên trang là mẫu minh họa. <a routerLink="/preview">Xem thử giao diện</a></span>
+</footer>

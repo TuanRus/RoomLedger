@@ -1,0 +1,29 @@
+:host { display: block; }
+
+.form { display: grid; gap: 16px; }
+h1 { font-size: 32px; letter-spacing: -.03em; line-height: 1.2; }
+.lead { margin-top: 8px; }
+.center { text-align: center; }
+.from { padding: 12px 14px; }
+.from .av { width: 40px; height: 40px; }
+.from b { font-weight: 500; }
+.input:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgb(27 26 24 / .12); }
+.input.is-error { border-color: var(--err); box-shadow: 0 0 0 3px rgb(158 47 27 / .12); }
+.input.locked { background: var(--soft); color: #5c5852; padding-right: 44px; }
+
+.pw { position: relative; }
+.pw .input:not(.locked) { padding-right: 76px; }
+.lock-ic { position: absolute; right: 12px; top: 12px; color: var(--ink-3); pointer-events: none; }
+.eye { position: absolute; right: 0; top: 0; height: 44px; min-width: 64px; padding: 0 12px; border: 0; background: none;
+  font: 500 var(--t-14) var(--sans); color: var(--ink-2); cursor: pointer; border-radius: 0 var(--r-md) var(--r-md) 0; }
+.eye:hover { color: var(--ink); background: var(--soft); }
+
+.state-ic { width: 56px; height: 56px; border-radius: 16px; background: var(--soft); display: grid; place-items: center; color: var(--ink-2); }
+.state-ic.warn { background: var(--warn-soft); color: var(--warn); }
+
+.art { width: min(420px, 100%); display: grid; gap: 12px; --notch: var(--soft); }
+.cap { text-align: center; }
+
+@media (max-width: 767px) {
+  h1 { font-size: 26px; }
+}

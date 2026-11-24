@@ -1,0 +1,48 @@
+@if (!viewport.isPhone()) {
+  <div class="top"><div><h1>Hóa đơn</h1><p class="sub">Phòng P.204 · Nhà trọ Cô Lan. Bấm một kỳ để xem chi tiết và ảnh đồng hồ.</p></div></div>
+} @else {
+  <div class="m-head"><h1>Hóa đơn</h1></div>
+}
+
+<div class="pills" role="group" aria-label="Lọc hóa đơn">
+  @for (f of filters(); track f.id) {
+    <button type="button" class="pill" [class.on]="filter() === f.id" [attr.aria-pressed]="filter() === f.id" (click)="filter.set(f.id)">
+      {{ f.label }} @if (f.count) { <b>{{ f.count }}</b> }
+    </button>
+  }
+</div>
+
+@if (!viewport.isPhone()) {
+  <div class="tablewrap">
+    <table class="table">
+      <caption class="sr">Hóa đơn phòng P.204</caption>
+      <thead><tr><th scope="col">Kỳ</th><th scope="col">Hạn / ngày trả</th><th scope="col" class="num">Tổng</th><th scope="col">Trạng thái</th><th scope="col"><span class="sr">Mở</span></th></tr></thead>
+      <tbody>
+        @for (r of rows(); track r.invoiceId) {
+          <tr>
+            <td><a class="rowlink" [routerLink]="['/tenant/invoices', r.invoiceId]"><b>Kỳ {{ r.period | period }}</b></a></td>
+            <td>@if (r.status === 'PAID') { Thanh toán {{ r.paidAt | day: 'full' }} } @else { Hạn {{ r.dueDate | day: 'full' }} }</td>
+            <td class="num money">{{ r.total | vnd }}</td>
+            <td><app-status-chip [invoice]="r.status" /></td>
+            <td class="num"><app-icon name="i-chev" /></td>
+          </tr>
+        } @empty {
+          <tr><td colspan="5" class="muted empty-row">Không có hóa đơn nào ở trạng thái này.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else {
+  <ul class="list inv-list">
+    @for (r of rows(); track r.invoiceId) {
+      <li>
+        <a class="list-item" [routerLink]="['/tenant/invoices', r.invoiceId]">
+          <span class="grow"><b>Kỳ {{ r.period | period }}</b><span class="small muted">@if (r.status === 'PAID') { Thanh toán {{ r.paidAt | day: 'full' }} } @else { Hạn {{ r.dueDate | day: 'full' }} }</span></span>
+          <span class="end"><b class="money">{{ r.total | vnd }}</b><app-status-chip [invoice]="r.status" /></span>
+        </a>
+      </li>
+    } @empty {
+      <li class="list-item muted">Không có hóa đơn nào ở trạng thái này.</li>
+    }
+  </ul>
+}

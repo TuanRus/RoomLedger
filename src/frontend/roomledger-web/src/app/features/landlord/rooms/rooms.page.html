@@ -1,0 +1,169 @@
+@let counts = store.counts();
+
+<ng-template #search>
+  <label class="input search">
+    <app-icon name="i-search" />
+    <span class="sr">Tìm phòng, người thuê</span>
+    <input type="search" placeholder="Tìm phòng, người thuê" autocomplete="off" [value]="query()" (input)="onQuery($event)">
+  </label>
+</ng-template>
+
+<ng-template #filterPills>
+  <div class="pills" role="group" aria-label="Lọc phòng">
+    @for (f of filters; track f.id) {
+      <button type="button" class="pill" [class.on]="filter() === f.id" [attr.aria-pressed]="filter() === f.id" (click)="filter.set(f.id)">
+        {{ f.label }} <b>{{ counts[f.id] }}</b>
+      </button>
+    }
+  </div>
+</ng-template>
+
+<ng-template #chip let-spec>
+  <span class="chip {{ spec[0] }}"><app-icon [name]="spec[1]" />{{ spec[2] }}</span>
+</ng-template>
+
+<ng-template #detail let-room>
+  <div class="row between">
+    <h2>{{ room.code }} · Tầng {{ room.floor }}</h2>
+    <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: roomState(room) }" />
+  </div>
+  <dl class="kv facts">
+    @if (isOccupied(room)) {
+      <dt>Người thuê</dt><dd>{{ room.tenantName }}</dd>
+      <dt>Thuê từ</dt><dd>{{ day(room.tenancyStart) }}</dd>
+    }
+    <dt>Tiền phòng</dt><dd class="money">{{ room.monthlyRent | vnd }} / tháng</dd>
+    <dt>Tiền cọc</dt><dd class="money">{{ room.deposit | vnd }}</dd>
+    <dt>Chỉ số điện hiện tại</dt><dd>{{ room.electricity.value | num }} kWh · {{ day(room.electricity.date) }}</dd>
+    <dt>Chỉ số nước hiện tại</dt><dd>{{ room.water.value | num }} m³ · {{ day(room.water.date) }}</dd>
+    <dt>Hợp đồng</dt><dd>@if (room.contract === 'DRAFT') { Bản scan 2 trang · nháp } @else { {{ contractLabel(room.contract) }} }</dd>
+  </dl>
+  <hr class="sep">
+
+  @if (sent(); as s) {
+    @if (s.roomId === room.roomId) {
+      <div class="banner ok" role="status">
+        <app-icon name="i-check-c" />
+        <span><b>Đã gửi lời mời tới {{ s.invite.email }}.</b> Link có hạn {{ inviteHours }} giờ, đến {{ s.invite.expiresAt | stamp }}. Ngày bắt đầu thuê {{ day(s.invite.startDate) }}.</span>
+      </div>
+      <p class="small muted note">Người thuê xem bản scan hợp đồng và xác nhận trước kỳ thu đầu tiên.</p>
+    }
+  }
+
+  @if (room.displayStatus === 'VACANT') {
+    <h3 class="sec-title">Mời người thuê</h3>
+    <form class="invite" novalidate (submit)="sendInvite($event, room)">
+      @let em = inviteForm.email();
+      @let showEmailErr = em.touched() && em.invalid();
+      <div class="field">
+        <label for="inv-em">Email người thuê</label>
+        <input class="input" [class.is-error]="showEmailErr" id="inv-em" type="email" autocomplete="off" placeholder="ten@vidu.vn"
+          [formField]="inviteForm.email" [attr.aria-invalid]="showEmailErr" aria-describedby="inv-em-help">
+        @if (showEmailErr) {
+          <span class="err" id="inv-em-help"><app-icon name="i-alert" size="sm" />{{ em.errors()[0]?.message }}</span>
+        } @else {
+          <span class="help" id="inv-em-help">Người thuê nhận link qua email, hạn {{ inviteHours }} giờ.</span>
+        }
+      </div>
+      <div class="field">
+        <label for="inv-d">Ngày bắt đầu thuê</label>
+        <input class="input" id="inv-d" type="date" [formField]="inviteForm.startDate">
+      </div>
+      <button type="submit" class="btn block"><app-icon name="i-mail" />Gửi lời mời</button>
+      <p class="small muted">Người thuê xem bản scan hợp đồng và xác nhận trước kỳ thu đầu tiên.</p>
+    </form>
+  } @else if (room.displayStatus === 'AWAITING_CONFIRM') {
+    @if (sent()?.roomId !== room.roomId && room.invite; as inv) {
+      <div class="banner info">
+        <app-icon name="i-mail" />
+        <span>Đã gửi lời mời tới <b>{{ inv.email }}</b>. Link hết hạn lúc {{ inv.expiresAt | stamp }}.</span>
+      </div>
+    }
+  } @else {
+    <h3 class="sec-title">Kỳ {{ store.period | period }}</h3>
+    <p class="small muted reading-line">Chỉ số:
+      @if (room.reading) { <app-status-chip [review]="room.reading" /> } @else { — }
+    </p>
+    <a class="btn sec block" [routerLink]="['/landlord/rooms', room.roomId, 'end-tenancy']"><app-icon name="i-door" />Kết thúc thuê hoặc chuyển phòng</a>
+    <p class="small muted note">Ghi chỉ số cuối, lập hóa đơn cuối, rồi phòng thành trống.</p>
+  }
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top">
+    <div><h1>Phòng</h1><p class="sub">{{ counts.all }} phòng · {{ counts.occupied }} đang thuê · {{ counts.vacant }} trống</p></div>
+    <div class="acts"><ng-container [ngTemplateOutlet]="search" /></div>
+  </div>
+  <div class="split rooms">
+    <div>
+      <ng-container [ngTemplateOutlet]="filterPills" />
+      <div class="tablewrap">
+        <table class="table">
+          <caption class="sr">Danh sách phòng</caption>
+          <thead><tr><th scope="col">Phòng</th><th scope="col">Người thuê</th><th scope="col" class="num">Tiền phòng</th><th scope="col">Hợp đồng</th><th scope="col">Kỳ {{ store.period | period }}</th><th scope="col"><span class="sr">Thao tác</span></th></tr></thead>
+          <tbody>
+            @for (room of visibleRooms(); track room.roomId) {
+              <tr [class.sel]="selectedId() === room.roomId" (click)="select(room.roomId)">
+                <td><button type="button" class="room" [attr.aria-pressed]="selectedId() === room.roomId" (click)="$event.stopPropagation(); select(room.roomId)"><b>{{ room.code }}</b></button></td>
+                <td>
+                  @if (room.displayStatus === 'AWAITING_CONFIRM') { {{ room.tenantName ?? room.invite?.email }} <span class="muted small">(chờ nhận lời mời)</span> }
+                  @else if (room.tenantName) { {{ room.tenantName }} }
+                  @else { <span class="muted">Trống</span> }
+                </td>
+                <td class="num money">{{ room.monthlyRent | vnd }}</td>
+                <td>
+                  @if (room.contract === 'NONE') { <span class="muted">—</span> }
+                  @else { <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: contract[room.contract] }" /> }
+                </td>
+                <td>@if (room.reading) { <app-status-chip [review]="room.reading" /> } @else { <span class="muted">—</span> }</td>
+                <td class="act">
+                  @if (isOccupied(room)) {
+                    <a class="iconbtn" [routerLink]="['/landlord/rooms', room.roomId, 'end-tenancy']" [attr.aria-label]="'Kết thúc thuê ' + room.code" title="Kết thúc thuê hoặc chuyển phòng" (click)="$event.stopPropagation()"><app-icon name="i-door" /></a>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="muted empty-row">Không có phòng nào khớp.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <aside class="panel detail" aria-live="polite">
+      @if (selected(); as room) {
+        <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: room }" />
+      } @else {
+        <p class="muted">Chọn một phòng để xem chi tiết.</p>
+      }
+    </aside>
+  </div>
+} @else {
+  @if (selected(); as room) {
+    <div class="m-head">
+      <button type="button" class="iconbtn" aria-label="Quay lại danh sách phòng" (click)="select(null)"><app-icon name="i-back" /></button>
+    </div>
+    <section class="m-detail" [attr.aria-label]="'Chi tiết ' + room.code">
+      <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: room }" />
+    </section>
+  } @else {
+    <div class="m-head"><h1>Phòng</h1><span class="muted small">{{ counts.occupied }} đang thuê · {{ counts.vacant }} trống</span></div>
+    <ng-container [ngTemplateOutlet]="search" />
+    <div class="m-pills"><ng-container [ngTemplateOutlet]="filterPills" /></div>
+    <ul class="list m-list">
+      @for (room of visibleRooms(); track room.roomId) {
+        <li>
+          <button type="button" class="m-open" (click)="select(room.roomId)">
+            <span class="m-text"><b>{{ room.code }}</b><span class="small muted">{{ room.tenantName ?? room.invite?.email ?? 'Trống' }} · {{ room.monthlyRent | vnd }}</span></span>
+            <span class="m-val">
+              @if (isOccupied(room) && room.reading) { <app-status-chip [review]="room.reading" /> }
+              @else { <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: roomState(room) }" /> }
+            </span>
+            <app-icon name="i-chev" />
+          </button>
+        </li>
+      } @empty {
+        <li class="m-empty muted">Không có phòng nào khớp.</li>
+      }
+    </ul>
+  }
+}

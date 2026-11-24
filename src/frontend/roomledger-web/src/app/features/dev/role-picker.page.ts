@@ -16,8 +16,8 @@ import { Icon } from '../../shared/ui/icon';
       <h1>Xem giao diện với vai trò</h1>
       <p class="muted">Bản xây dựng tạm, dữ liệu mẫu. Đăng nhập thật sẽ thay màn này.</p>
       <div class="choices">
-        <a class="card" routerLink="/landlord/meter-readings"><app-icon name="i-grid" /><b>Chủ nhà</b><span class="small muted">Duyệt chỉ số kỳ 11/2026</span></a>
-        <a class="card" routerLink="/tenant/invoices/inv-204-2026-11"><app-icon name="i-user" /><b>Người thuê</b><span class="small muted">Hóa đơn P.204 kỳ 11/2026</span></a>
+        <a class="card" routerLink="/landlord/overview"><app-icon name="i-grid" /><b>Chủ nhà</b><span class="small muted">Nhà trọ Cô Lan · kỳ 11/2026</span></a>
+        <a class="card" routerLink="/tenant/home"><app-icon name="i-user" /><b>Người thuê</b><span class="small muted">Trần Minh Anh · P.204</span></a>
       </div>
     </main>
   `,
