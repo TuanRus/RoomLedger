@@ -2,7 +2,7 @@
 
 <ng-template #chip let-d>
   @if (d.status === 'OPEN') {
-    <span class="chip warn"><app-icon name="i-clock" />Mới</span>
+    <span class="chip warn"><app-icon name="i-clock" />Chờ trả lời</span>
   } @else {
     <span class="chip ok"><app-icon name="i-check" />Đã trả lời</span>
   }
@@ -29,7 +29,7 @@
   <div class="row between head">
     <h2>{{ title(d) }}</h2>
     @if (d.status === 'OPEN') {
-      <span class="chip warn"><app-icon name="i-clock" />Chờ bạn trả lời</span>
+      <span class="chip warn"><app-icon name="i-clock" />Chờ trả lời</span>
     } @else {
       <span class="chip ok"><app-icon name="i-check" />Đã trả lời</span>
     }
@@ -114,7 +114,7 @@
 </ng-template>
 
 @if (!viewport.isPhone()) {
-  <div class="top"><div><h1>Khiếu nại</h1><p class="sub">{{ counts.open }} mới · {{ counts.resolved }} đã trả lời</p></div></div>
+  <div class="top"><div><h1>Khiếu nại</h1><p class="sub">{{ counts.open }} chờ trả lời · {{ counts.resolved }} đã trả lời</p></div></div>
   <div class="split dp-split">
     <div><ng-container [ngTemplateOutlet]="list" /></div>
     <section class="panel" aria-label="Chi tiết khiếu nại">
@@ -132,11 +132,16 @@
       <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: d }" />
     </section>
   } @else {
-    <div class="m-head"><h1>Khiếu nại</h1><span class="muted small">{{ counts.open }} mới · {{ counts.resolved }} đã trả lời</span></div>
+    <div class="m-head"><h1>Khiếu nại</h1><span class="muted small">{{ counts.open }} chờ trả lời · {{ counts.resolved }} đã trả lời</span></div>
     <ng-container [ngTemplateOutlet]="list" />
   }
 }
 
 @if (toast(); as t) {
-  <div class="rl-toast" role="status"><app-icon name="i-check-c" /><span>{{ t }}</span></div>
+  <div class="rl-toast" role="status">
+    <app-icon name="i-check-c" /><span>{{ t.text }} Người thuê được báo khi hết giờ hoàn tác<span aria-hidden="true"> ({{ t.seconds }} giây)</span>.</span>
+    <span class="acts">
+      <button type="button" class="btn sm ghost inv-ghost" aria-label="Hoàn tác" (click)="undo()">Hoàn tác</button>
+    </span>
+  </div>
 }

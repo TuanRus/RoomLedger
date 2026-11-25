@@ -3,7 +3,8 @@ import { Component, DestroyRef, computed, inject, linkedSignal, signal } from '@
 import { FieldTree, FormField, form, schema, submit, validate } from '@angular/forms/signals';
 
 import { Viewport } from '../../../core/layout/viewport';
-import { VndPipe } from '../../../shared/pipes/format.pipes';
+import { DayPipe, VndPipe } from '../../../shared/pipes/format.pipes';
+import { DateField } from '../../../shared/ui/date-field';
 import { Icon } from '../../../shared/ui/icon';
 import { formatMoney, moneyError, parseMoney } from '../settings/settings.model';
 import {
@@ -70,7 +71,7 @@ function fromTermsForm(f: TermsForm): ContractTerms {
 /** LL-07: contracts per room, scanned pages, terms the landlord typed from the scan, versions and tenant answers. */
 @Component({
   selector: 'app-contracts-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, FormField, Icon, VndPipe],
+  imports: [NgOptimizedImage, NgTemplateOutlet, FormField, Icon, VndPipe, DayPipe, DateField],
   templateUrl: './contracts.page.html',
   styleUrl: './contracts.page.scss',
 })

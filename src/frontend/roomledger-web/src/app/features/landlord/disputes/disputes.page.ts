@@ -11,6 +11,9 @@ import { LandlordInvoicesStore } from '../invoices/data/invoices.store';
 import { LandlordDispute } from './data/disputes.sample';
 import { LandlordDisputesStore } from './data/disputes.store';
 
+/** Seconds the landlord has to undo a resolution before the tenant is notified. */
+const UNDO_SECONDS = 10;
+
 /**
  * LL-08 (computer) and its phone layout (list, then detail): answer a tenant's dispute.
  * Either correct the reading (the invoice is recalculated) or keep it with a required reply.
@@ -61,8 +64,9 @@ export class LandlordDisputesPage {
     return d && v != null && !this.valueError() ? this.store.recalc(d, v) : null;
   });
 
-  protected readonly toast = signal<string | null>(null);
-  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Result of the last resolution, with an undo countdown before the tenant is told. */
+  protected readonly toast = signal<{ text: string; seconds: number } | null>(null);
+  private toastTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.clearToast());
@@ -96,7 +100,7 @@ export class LandlordDisputesPage {
   protected correct(d: LandlordDispute): void {
     const v = this.value();
     if (v == null || this.valueError()) return;
-    if (this.store.correct(d.disputeId, v) === 'ok') this.showToast(`Đã sửa chỉ số ${d.roomCode} và tính lại hóa đơn. Người thuê được báo.`);
+    if (this.store.correct(d.disputeId, v) === 'ok') this.resolved(`Đã sửa chỉ số ${d.roomCode} và tính lại hóa đơn.`);
   }
 
   protected keep(d: LandlordDispute): void {
@@ -105,17 +109,36 @@ export class LandlordDisputesPage {
       this.replyError.set(true);
       return;
     }
-    if (result === 'ok') this.showToast(`Đã trả lời ${d.tenantName} (${d.roomCode}).`);
+    if (result === 'ok') this.resolved(`Đã trả lời ${d.tenantName} (${d.roomCode}).`);
   }
 
-  private showToast(text: string): void {
+  /** Puts the dispute and its invoice back while the toast is showing; the tenant has not been told yet. */
+  protected undo(): void {
+    const id = this.store.undoResolve();
+    if (id) this.selectedId.set(id);
+    this.closeToast();
+  }
+
+  protected closeToast(): void {
     this.clearToast();
-    this.toast.set(text);
-    this.toastTimer = setTimeout(() => this.toast.set(null), 6000);
+    this.toast.set(null);
+  }
+
+  /** Shows the undo toast and moves on to the next dispute still waiting, if any. */
+  private resolved(text: string): void {
+    this.clearToast();
+    this.toast.set({ text, seconds: UNDO_SECONDS });
+    this.toastTimer = setInterval(() => {
+      const t = this.toast();
+      if (!t || t.seconds <= 1) this.closeToast();
+      else this.toast.set({ ...t, seconds: t.seconds - 1 });
+    }, 1000);
+    const next = this.store.ordered().find((x) => x.status === 'OPEN');
+    if (next) this.selectedId.set(next.disputeId);
   }
 
   private clearToast(): void {
-    if (this.toastTimer) clearTimeout(this.toastTimer);
+    if (this.toastTimer) clearInterval(this.toastTimer);
     this.toastTimer = null;
   }
 }
