@@ -1,8 +1,13 @@
 @if (invoice(); as inv) {
   @let p = payment();
 
+  <ng-template #copyFail>
+    @if (copyFailed()) {
+      <p class="banner warn copy-fail" role="alert"><app-icon name="i-alert" /><span>Không sao chép được trên trình duyệt này. Giữ ngón tay lên số để chọn rồi sao chép.</span></p>
+    }
+  </ng-template>
   <ng-template #copyLabel let-target>
-    @if (copied() === target) { <app-icon name="i-check" size="sm" />Đã sao chép } @else { Sao chép }
+    @if (copied() === target) { <app-icon name="i-check" size="sm" />Đã sao chép } @else { <app-icon name="i-copy" size="sm" />Sao chép }
   </ng-template>
 
   <ng-template #paidHero>
@@ -68,8 +73,9 @@
             <div class="stack"><dt>Số tài khoản</dt><dd><b>{{ p.accountNumber }}</b><button type="button" class="btn sec sm" (click)="copy('account')" aria-label="Sao chép số tài khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'account' }" /></button></dd></div>
             <div><dt>Chủ tài khoản</dt><dd>{{ p.accountHolder }}</dd></div>
             <div class="stack"><dt>Nội dung</dt><dd><b>{{ p.transferNote }}</b><button type="button" class="btn sec sm" (click)="copy('note')" aria-label="Sao chép nội dung chuyển khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'note' }" /></button></dd></div>
-            <div><dt>Số tiền</dt><dd><b>{{ inv.total | vnd }}</b></dd></div>
+            <div><dt>Số tiền</dt><dd><b>{{ inv.total | vnd }}</b><button type="button" class="btn sec sm" (click)="copy('amount')" aria-label="Sao chép số tiền"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'amount' }" /></button></dd></div>
           </dl>
+          <ng-container [ngTemplateOutlet]="copyFail" />
           <p class="small muted">Chủ nhà đánh dấu “Đã thanh toán” khi nhận được tiền. Bạn sẽ thấy trạng thái ở đây.</p>
         </aside>
       }
@@ -91,12 +97,14 @@
           <div><dt>Ngân hàng</dt><dd>{{ p.bankName }}</dd></div>
           <div><dt>Số tài khoản</dt><dd><b>{{ p.accountNumber }}</b></dd></div>
           <div><dt>Chủ tài khoản</dt><dd>{{ p.accountHolder }}</dd></div>
-          <div><dt>Nội dung</dt><dd><b>{{ p.transferNote }}</b></dd></div>
+          <div><dt>Nội dung</dt><dd><b>{{ p.transferNote }}</b><button type="button" class="btn sec sm" (click)="copy('note')" aria-label="Sao chép nội dung chuyển khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'note' }" /></button></dd></div>
+          <div><dt>Số tiền</dt><dd><b>{{ inv.total | vnd }}</b><button type="button" class="btn sec sm" (click)="copy('amount')" aria-label="Sao chép số tiền"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'amount' }" /></button></dd></div>
         </dl>
         <button type="button" class="btn lg block" (click)="copy('account')">
-          @if (copied() === 'account') { <app-icon name="i-check" />Đã sao chép số tài khoản } @else { <app-icon name="i-doc" />Sao chép số tài khoản }
+          @if (copied() === 'account') { <app-icon name="i-check" />Đã sao chép số tài khoản } @else { <app-icon name="i-copy" />Sao chép số tài khoản }
         </button>
-        <p class="small muted">Dán vào ứng dụng ngân hàng và ghi nội dung {{ p.transferNote }}.</p>
+        <ng-container [ngTemplateOutlet]="copyFail" />
+        <p class="small muted">Dán từng mục vào ứng dụng ngân hàng. Ghi đúng nội dung {{ p.transferNote }} để chủ nhà nhận ra khoản tiền của bạn.</p>
       </section>
     }
     <a class="btn sec block dispute" routerLink="/tenant/disputes/new" [queryParams]="{ invoice: inv.invoiceId }"><app-icon name="i-talk" />Khiếu nại hóa đơn này</a>

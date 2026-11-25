@@ -18,6 +18,20 @@
   </div>
 </ng-template>
 
+<ng-template #howItWorks>
+  <details class="rl-why">
+    <summary><app-icon name="i-info" size="sm" />Cách RoomLedger kiểm tra chỉ số</summary>
+    <ul>
+      <li><b>Bình thường</b>: tiêu thụ lệch không quá ±10% so với trung bình 3 kỳ gần nhất. Được chọn sẵn để bạn duyệt cùng lúc.</li>
+      <li><b>Lệch 10–50%</b>: vẫn chờ duyệt nhưng không chọn sẵn. Mở từng phòng để xem ảnh.</li>
+      <li><b>Bất thường</b>: lệch hơn 50%. Chỉ duyệt được sau khi bạn đánh dấu đã đối chiếu với ảnh.</li>
+      <li><b>Thấp hơn kỳ trước</b>: không duyệt được. Thường là AI đọc nhầm một chữ số, hoặc cần chụp lại.</li>
+      <li><b>Độ chắc chắn của AI</b>: AI tin số mình đọc đến mức nào. Số càng thấp càng nên nhìn kỹ ảnh.</li>
+      <li><b>Ảnh gốc</b>: lưu nguyên bản, không ai sửa được sau khi tải lên, kể cả bạn. Người thuê xem đúng ảnh này trong hóa đơn.</li>
+    </ul>
+  </details>
+</ng-template>
+
 <ng-template #detail let-row>
   @let r = row.reading;
   <div class="row between">
@@ -136,6 +150,7 @@
         </table>
       </div>
       <p class="small muted rl-keys">Phím tắt: <kbd>J</kbd> <kbd>K</kbd> phòng sau, phòng trước · <kbd>A</kbd> duyệt · <kbd>R</kbd> cần chụp lại · <kbd>Enter</kbd> trong ô số để duyệt</p>
+      <ng-container [ngTemplateOutlet]="howItWorks" />
     </div>
     <aside class="panel detail" aria-label="Phòng đang chọn">
       @if (selected(); as row) {
@@ -183,6 +198,7 @@
         <li class="mrow muted">{{ emptyText() }}</li>
       }
     </ul>
+    <ng-container [ngTemplateOutlet]="howItWorks" />
     @if (checked().size > 0) {
       <div class="m-sticky" role="region" aria-label="Duyệt hàng loạt">
         <span>Đã chọn <b>{{ checked().size }}</b> chỉ số bình thường</span>

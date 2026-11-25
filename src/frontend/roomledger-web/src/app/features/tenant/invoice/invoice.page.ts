@@ -11,7 +11,7 @@ import { MeterPhoto } from '../../../shared/ui/meter-photo';
 import { Receipt } from '../../../shared/ui/receipt';
 import { StatusChip } from '../../../shared/ui/status-chip';
 
-type CopyTarget = 'account' | 'note';
+type CopyTarget = 'account' | 'note' | 'amount';
 
 /**
  * TD-02 (computer) and TN-09 (phone): one invoice and how to pay it.
@@ -46,6 +46,8 @@ export class TenantInvoicePage {
   protected readonly dueDate = computed(() => this.invoice()?.dueDate.split('-').reverse().join('/') ?? '');
 
   protected readonly copied = signal<CopyTarget | null>(null);
+  /** Set when the browser refuses the clipboard, so the tenant knows to select the text by hand. */
+  protected readonly copyFailed = signal(false);
   protected readonly photoKind = signal<MeterKind | null>(null);
   private readonly photoDialog = viewChild<ElementRef<HTMLDialogElement>>('photoDialog');
 
@@ -58,13 +60,16 @@ export class TenantInvoicePage {
 
   protected async copy(target: CopyTarget): Promise<void> {
     const p = this.payment();
-    const text = target === 'account' ? p.accountNumber.replace(/\s/g, '') : p.transferNote;
+    const text =
+      target === 'account' ? p.accountNumber.replace(/\s/g, '') : target === 'note' ? p.transferNote : String(this.invoice()?.total ?? '');
     try {
       await this.window?.navigator.clipboard.writeText(text);
+      this.copyFailed.set(false);
       this.copied.set(target);
       this.window?.setTimeout(() => this.copied.set(null), 2500);
     } catch {
       this.copied.set(null);
+      this.copyFailed.set(true);
     }
   }
 

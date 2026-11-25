@@ -22,7 +22,7 @@
   @if (drafts > 0) {
     <div class="banner info">
       <app-icon name="i-info" />
-      <span><b>Kỳ {{ store.period | period }}: {{ counts.all }} hóa đơn, đã gửi {{ counts.sent }}, còn {{ drafts }} nháp.</b> Người thuê chưa thấy hóa đơn nháp. {{ missing.length }} phòng chưa có hóa đơn vì chỉ số chưa được duyệt ({{ missing.join(', ') }}).</span>
+      <span><b>Kỳ {{ store.period | period }}: {{ counts.all }} hóa đơn, đã gửi {{ counts.sent }}, còn {{ drafts }} nháp.</b> Người thuê chưa thấy hóa đơn nháp. Hóa đơn chỉ được tạo từ chỉ số bạn đã duyệt, nên {{ missing.length }} phòng chưa có ({{ missing.join(', ') }}): <a routerLink="/landlord/meter-readings">duyệt nốt chỉ số</a> để có hóa đơn.</span>
       @if (filter() !== 'draft') {
         <button type="button" class="btn sm sec" (click)="filter.set('draft')">Xem {{ drafts }} nháp</button>
       }
@@ -32,7 +32,7 @@
       <app-icon name="i-check-c" />
       <span><b>Đã gửi cả {{ counts.all }} hóa đơn kỳ {{ store.period | period }}.</b>
         @if (store.lastBatch(); as b) { {{ b.count }} hóa đơn gửi lúc {{ b.at | stamp }}; người thuê đã nhận email. }
-        {{ missing.length }} phòng còn chờ chỉ số ({{ missing.join(', ') }}).</span>
+        {{ missing.length }} phòng còn chờ chỉ số ({{ missing.join(', ') }}): <a routerLink="/landlord/meter-readings">duyệt nốt chỉ số</a>.</span>
     </div>
   }
 </ng-template>
@@ -177,10 +177,11 @@
   <ul class="rules">
     <li><app-icon name="i-mail" />Mỗi người thuê nhận email và thấy hóa đơn trong ứng dụng, kèm ảnh đồng hồ của từng chỉ số.</li>
     <li><app-icon name="i-edit" />Sau khi gửi, sửa hóa đơn cần ghi lý do và người thuê được báo.</li>
-    <li><app-icon name="i-clock" />{{ missing.length }} phòng chưa có chỉ số đã duyệt không nhận hóa đơn lần này.</li>
+    <li><app-icon name="i-clock" />{{ missing.length }} phòng chưa có chỉ số đã duyệt ({{ missing.join(', ') }}) không nhận hóa đơn lần này; gửi riêng sau khi duyệt.</li>
   </ul>
   <div class="dlg-acts">
-    <button type="button" class="btn ghost" (click)="reviewDrafts()">Xem lại từng hóa đơn</button>
+    <button type="button" class="btn ghost" (click)="closeSend()">Hủy</button>
+    <button type="button" class="btn sec" (click)="reviewDrafts()">Xem lại từng hóa đơn</button>
     <button type="button" class="btn" (click)="sendAll()"><app-icon name="i-mail" />Gửi {{ drafts }} hóa đơn</button>
   </div>
 </dialog>

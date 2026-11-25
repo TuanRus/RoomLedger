@@ -51,3 +51,6 @@ a.next:hover { background: var(--soft); }
 .next .btn.sm { height: 44px; white-space: nowrap; }
 .m-next { margin-top: 16px; }
 .done-hero { margin-bottom: 12px; }
+
+/* Clipboard refused: shown inside the payment box, under the copy buttons. */
+.copy-fail { margin: 12px 0 0; }

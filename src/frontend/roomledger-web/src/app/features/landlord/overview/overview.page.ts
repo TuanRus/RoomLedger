@@ -103,7 +103,10 @@ export class LandlordOverviewPage {
         id: 'send',
         icon: 'i-bill',
         title: 'Gửi hóa đơn',
-        detail: `${drafts} hóa đơn nháp, người thuê chưa thấy`,
+        // Drafts exist only for approved readings; say so while review is still open, so sending early is a choice.
+        detail: toReview
+          ? `${drafts} hóa đơn nháp từ chỉ số đã duyệt · ${toReview} chỉ số còn chờ duyệt có hóa đơn sau`
+          : `${drafts} hóa đơn nháp, người thuê chưa thấy`,
         money: this.invoices.draftTotal(),
         link: '/landlord/invoices',
         tone: 'neu',

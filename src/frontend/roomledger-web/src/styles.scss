@@ -38,3 +38,10 @@ body {
 .rl-keys { margin: 12px 0 0; }
 kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 6px;
   background: var(--surface); font: 600 13px/18px var(--sans); color: var(--ink); text-align: center; }
+
+/* "How it works" disclosure next to a work list: closed by default, one line per rule. */
+.rl-why { margin-top: 12px; font-size: var(--t-14); color: var(--ink-2); }
+.rl-why summary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; color: var(--ink); font-weight: 500; }
+.rl-why summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.rl-why ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch; }
+.rl-why b { color: var(--ink); font-weight: 600; }
