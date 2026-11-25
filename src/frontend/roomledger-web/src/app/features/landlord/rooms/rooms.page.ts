@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 
 import { Viewport } from '../../../core/layout/viewport';
 import { DayPipe, NumPipe, PeriodPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
+import { DateField } from '../../../shared/ui/date-field';
 import { Icon } from '../../../shared/ui/icon';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { ContractState, PendingInvite, RoomFilter, RoomRow } from './data/rooms.models';
@@ -38,7 +39,7 @@ function day(iso: string | null): string {
 /** LL-03 (computer) and its phone layout: rooms, tenants, contract and reading state, invite a tenant to an empty room. */
 @Component({
   selector: 'app-rooms-page',
-  imports: [NgTemplateOutlet, RouterLink, FormField, Icon, StatusChip, NumPipe, PeriodPipe, StampPipe, VndPipe, DayPipe],
+  imports: [NgTemplateOutlet, RouterLink, FormField, Icon, StatusChip, NumPipe, PeriodPipe, StampPipe, VndPipe, DayPipe, DateField],
   templateUrl: './rooms.page.html',
   styleUrl: './rooms.page.scss',
 })

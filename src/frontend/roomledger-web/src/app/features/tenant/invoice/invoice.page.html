@@ -45,7 +45,7 @@
             <li [class.on]="h.invoiceId === inv.invoiceId">
               <a [routerLink]="['..', h.invoiceId]" [attr.aria-current]="h.invoiceId === inv.invoiceId ? 'page' : null">
                 <span><b>Kỳ {{ h.period | period }}</b>{{ h.total | vnd }}</span>
-                <app-status-chip [invoice]="h.status" [text]="h.status === 'PAID' ? 'Đã trả' : 'Chưa trả'" />
+                <app-status-chip [invoice]="h.status" />
               </a>
             </li>
           }
@@ -95,16 +95,14 @@
         <h2 id="m-pay-title">Chuyển khoản</h2>
         <dl class="bank">
           <div><dt>Ngân hàng</dt><dd>{{ p.bankName }}</dd></div>
-          <div><dt>Số tài khoản</dt><dd><b>{{ p.accountNumber }}</b></dd></div>
+          <div class="stack"><dt>Số tài khoản</dt><dd><b>{{ p.accountNumber }}</b><button type="button" class="btn sec sm" (click)="copy('account')" aria-label="Sao chép số tài khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'account' }" /></button></dd></div>
           <div><dt>Chủ tài khoản</dt><dd>{{ p.accountHolder }}</dd></div>
           <div><dt>Nội dung</dt><dd><b>{{ p.transferNote }}</b><button type="button" class="btn sec sm" (click)="copy('note')" aria-label="Sao chép nội dung chuyển khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'note' }" /></button></dd></div>
           <div><dt>Số tiền</dt><dd><b>{{ inv.total | vnd }}</b><button type="button" class="btn sec sm" (click)="copy('amount')" aria-label="Sao chép số tiền"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'amount' }" /></button></dd></div>
         </dl>
-        <button type="button" class="btn lg block" (click)="copy('account')">
-          @if (copied() === 'account') { <app-icon name="i-check" />Đã sao chép số tài khoản } @else { <app-icon name="i-copy" />Sao chép số tài khoản }
-        </button>
         <ng-container [ngTemplateOutlet]="copyFail" />
         <p class="small muted">Dán từng mục vào ứng dụng ngân hàng. Ghi đúng nội dung {{ p.transferNote }} để chủ nhà nhận ra khoản tiền của bạn.</p>
+        <p class="small muted">Chủ nhà đánh dấu “Đã thanh toán” khi nhận được tiền. Bạn sẽ thấy trạng thái ở đây.</p>
       </section>
     }
     <a class="btn sec block dispute" routerLink="/tenant/disputes/new" [queryParams]="{ invoice: inv.invoiceId }"><app-icon name="i-talk" />Khiếu nại hóa đơn này</a>

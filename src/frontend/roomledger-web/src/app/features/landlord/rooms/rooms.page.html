@@ -67,7 +67,7 @@
       </div>
       <div class="field">
         <label for="inv-d">Ngày bắt đầu thuê</label>
-        <input class="input" id="inv-d" type="date" [formField]="inviteForm.startDate" aria-describedby="inv-d-h">
+        <app-date-field inputId="inv-d" [formField]="inviteForm.startDate" describedBy="inv-d-h" />
         @if (inviteForm.startDate().value()) { <span class="help" id="inv-d-h">{{ inviteForm.startDate().value() | day: 'long' }}</span> }
       </div>
       <button type="submit" class="btn block"><app-icon name="i-mail" />Gửi lời mời</button>
