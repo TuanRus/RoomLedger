@@ -1,0 +1,224 @@
+@let counts = store.counts();
+@let kind = store.kind();
+
+<ng-template #kindSwitch>
+  <div class="seg" role="group" aria-label="Loại đồng hồ">
+    <button type="button" [class.on]="kind === 'ELECTRICITY'" [attr.aria-pressed]="kind === 'ELECTRICITY'" (click)="setKind('ELECTRICITY')"><app-icon name="i-bolt" />Điện</button>
+    <button type="button" [class.on]="kind === 'WATER'" [attr.aria-pressed]="kind === 'WATER'" (click)="setKind('WATER')"><app-icon name="i-drop" />Nước</button>
+  </div>
+</ng-template>
+
+<ng-template #filterPills>
+  <div class="pills" role="group" aria-label="Lọc theo trạng thái">
+    @for (f of filters; track f.id) {
+      <button type="button" class="pill" [class.on]="filter() === f.id" [attr.aria-pressed]="filter() === f.id" (click)="filter.set(f.id)">
+        {{ f.label }} <b>{{ f.id === 'all' ? store.rows().length : counts[f.id] }}</b>
+      </button>
+    }
+  </div>
+</ng-template>
+
+<ng-template #howItWorks>
+  <details class="rl-why">
+    <summary><app-icon name="i-info" size="sm" />Cách RoomLedger kiểm tra chỉ số</summary>
+    <ul>
+      <li><b>Bình thường</b>: tiêu thụ lệch không quá ±10% so với trung bình 3 kỳ gần nhất. Được chọn sẵn để bạn duyệt cùng lúc.</li>
+      <li><b>Lệch 10–50%</b>: vẫn chờ duyệt nhưng không chọn sẵn. Mở từng phòng để xem ảnh.</li>
+      <li><b>Bất thường</b>: lệch hơn 50%. Chỉ duyệt được sau khi bạn đánh dấu đã đối chiếu với ảnh.</li>
+      <li><b>Thấp hơn kỳ trước</b>: không duyệt được. Thường là AI đọc nhầm một chữ số, hoặc cần chụp lại.</li>
+      <li><b>Độ chắc chắn của AI</b>: AI tin số mình đọc đến mức nào. Số càng thấp càng nên nhìn kỹ ảnh.</li>
+      <li><b>Ảnh gốc</b>: lưu nguyên bản, không ai sửa được sau khi tải lên, kể cả bạn. Người thuê xem đúng ảnh này trong hóa đơn.</li>
+    </ul>
+  </details>
+</ng-template>
+
+<ng-template #detail let-row>
+  @let r = row.reading;
+  <div class="row between">
+    <h2>{{ row.roomCode }} · {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }}</h2>
+    <app-status-chip [review]="stateOf(row)" />
+  </div>
+  <p class="small muted sub">{{ row.tenantName }}@if (row.capturedAt) { · bạn chụp {{ row.capturedAt | stamp }} }</p>
+  @if (r) {
+    <app-zoom-photo class="photo-z" [src]="r.photoUrl" [alt]="'Ảnh gốc đồng hồ ' + row.roomCode + (r.aiValue != null ? ', hiển thị ' + r.aiValue : ', ảnh mờ')"
+      tag="Ảnh gốc · bạn chụp" [shortcut]="viewport.isPhone() ? null : 'Z'" />
+    @let unreadable = stateOf(row) === 'unreadable';
+    @let c = check();
+    @if (stateOf(row) === 'approved') {
+      <div class="approved-val"><app-meter-digits [kind]="kind" [value]="r.value!" size="lg" /><span class="muted">{{ unit() }}</span></div>
+    } @else if (unreadable && !manualEntry()) {
+      <!-- No number to show: a 00000 placeholder would read as a real zero reading. -->
+      <p class="unread-note"><app-icon name="i-blur" size="sm" />AI không đọc được số trên ảnh này. Chụp lại, hoặc tự nhập nếu bạn đọc được số bằng mắt.</p>
+    } @else {
+      <div class="field">
+        <label [for]="'v-' + row.roomId">Chỉ số {{ r.aiValue != null ? 'AI đọc' : 'đúng (tự nhập)' }}</label>
+        <div class="input lcd-input" [class.is-error]="c?.problem === 'below-previous'">
+          <input [id]="'v-' + row.roomId" class="value-input" inputmode="numeric" autocomplete="off" [value]="editValue() ?? ''" (input)="onValueInput($event)"
+            [attr.aria-describedby]="'h-' + row.roomId + ' u-' + row.roomId" [attr.aria-invalid]="c?.problem === 'below-previous'">
+          <span class="unit">{{ unit() }}</span>
+          <app-icon name="i-edit" />
+        </div>
+        <span class="help" [id]="'h-' + row.roomId">
+          @if (r.aiConfidence != null) { AI khá chắc chắn ({{ confidence(r.aiConfidence) }}). Sửa nếu khác với ảnh. } @else { AI không đọc được số. Nhìn ảnh và nhập số trên đồng hồ. }
+        </span>
+        <span class="usage-line" [id]="'u-' + row.roomId" aria-live="polite">
+          @if (c?.problem === 'below-previous') {
+            <span class="err"><app-icon name="i-alert" size="sm" />Thấp hơn kỳ trước ({{ r.previousValue | num }}). Kiểm tra lại số trên ảnh.</span>
+          } @else if (c?.usage != null) {
+            Tiêu thụ <b>{{ c!.usage | num }} {{ unit() }}</b> · <span [class.delta-up]="c!.problem === 'abnormal'">{{ formatDelta(c!.delta) }}</span> so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }})
+          }
+        </span>
+      </div>
+    }
+    <div class="hist-wrap">
+      <span class="small muted">Tiêu thụ 4 kỳ gần nhất ({{ unit() }})</span>
+      <div class="hist">
+        @for (h of row.history; track h.period; let last = $last) {
+          <div [class.now]="last && (stateOf(row) === 'abnormal' || !!c?.problem)">T{{ +h.period.slice(5) }}<b>{{ last ? ((stateOf(row) === 'approved' ? usageOf(row) : c?.usage) | num) : (h.usage | num) }}</b></div>
+        }
+      </div>
+    </div>
+    @if (stateOf(row) === 'abnormal') {
+      <div class="banner warn"><app-icon name="i-alert" /><span>Tăng {{ percent(row) }} so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }}). Kiểm tra số trên ảnh trước khi duyệt.</span></div>
+    }
+    @if (stateOf(row) !== 'approved') {
+      @if (c?.problem === 'abnormal') {
+        <label class="rl-confirm"><input type="checkbox" [checked]="confirmed()" (change)="confirmed.set(!confirmed())">Tôi đã đối chiếu số {{ editValue() | num }} với ảnh</label>
+      }
+      <div class="actions">
+        @if (unreadable && !manualEntry()) {
+          <a class="btn block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }" aria-keyshortcuts="R"><app-icon name="i-camera" />Cần chụp lại</a>
+          <button type="button" class="btn ghost block" (click)="manualEntry.set(true)"><app-icon name="i-edit" />Tự nhập số theo ảnh</button>
+        } @else {
+          <button type="button" class="btn block" [disabled]="!canApprove()" aria-keyshortcuts="A" (click)="approveSelected()">
+            <app-icon name="i-check" />{{ c?.problem === 'abnormal' ? 'Duyệt dù bất thường' : 'Duyệt' }} {{ editValue() | num }} {{ unit() }}
+          </button>
+          <a class="btn sec block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }" aria-keyshortcuts="R"><app-icon name="i-camera" />Cần chụp lại</a>
+        }
+      </div>
+    }
+  } @else {
+    <div class="empty-state">
+      <app-icon name="i-camera" />
+      <p>Chưa có ảnh kỳ {{ store.period | period }}. Chụp đồng hồ trên điện thoại khi đi ghi chỉ số.</p>
+    </div>
+  }
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top">
+    <div><h1>Duyệt chỉ số</h1><p class="sub">Kỳ {{ store.period | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }} phòng · <b class="ink">{{ attention() }} chỉ số {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }} cần xử lý</b> · {{ counts.unrecorded }} chưa ghi</p></div>
+    <div class="acts"><ng-container [ngTemplateOutlet]="kindSwitch" /></div>
+  </div>
+  <div class="split review">
+    <div>
+      <ng-container [ngTemplateOutlet]="filterPills" />
+      @if (checked().size > 0) {
+        <div class="bulk" role="region" aria-label="Duyệt hàng loạt">
+          <span>Đã chọn <b>{{ checked().size }}</b> chỉ số chờ duyệt trong khoảng ±10% so với 3 kỳ. Bất thường và không đọc được thì xem từng phòng.</span>
+          <button type="button" class="btn ghost sm" (click)="clearChecked()">Bỏ chọn</button>
+          <button type="button" class="btn sm" (click)="approveChecked()"><app-icon name="i-check" size="sm" />Duyệt {{ checked().size }} chỉ số</button>
+        </div>
+      }
+      <div class="tablewrap">
+        <table class="table">
+          <caption class="sr">Chỉ số {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }} kỳ {{ store.period | period }}</caption>
+          <thead><tr><th scope="col"><span class="sr">Chọn</span></th><th scope="col">Phòng</th><th scope="col">Số trên ảnh</th><th scope="col" class="num">Kỳ trước</th><th scope="col" class="num">AI đọc</th><th scope="col" class="num">Tiêu thụ</th><th scope="col" class="num">So với 3 kỳ</th><th scope="col">Trạng thái</th></tr></thead>
+          <tbody>
+            @for (row of visibleRows(); track row.roomId) {
+              @let r = row.reading;
+              <tr [class.sel]="selectedRoomId() === row.roomId" (click)="selectedRoomId.set(row.roomId)">
+                <td>
+                  @if (stateOf(row) === 'pending') {
+                    <input type="checkbox" class="cb" [checked]="checked().has(r!.readingId)" (click)="$event.stopPropagation()" (change)="toggle(r!.readingId)" [attr.aria-label]="'Chọn ' + row.roomCode">
+                  }
+                </td>
+                <td><button type="button" class="room" (click)="selectedRoomId.set(row.roomId)"><b>{{ row.roomCode }}</b><span class="who-s">{{ row.tenantName }}</span></button></td>
+                <td>
+                  @if (row.digitCropUrl) {
+                    <img class="digits" [ngSrc]="row.digitCropUrl" width="88" height="35" [alt]="'Số trên ảnh ' + row.roomCode">
+                  } @else {
+                    <span class="thumb none" aria-hidden="true"><app-icon name="i-camera" /></span>
+                  }
+                </td>
+                <td class="num">{{ r?.previousValue | num }}</td>
+                <td class="num">@if (r?.value != null) { <app-meter-digits [kind]="kind" [value]="r!.value!" size="sm" /> } @else { <span class="muted">—</span> }</td>
+                <td class="num">@if (usageOf(row) != null) { {{ usageOf(row) | num }} {{ unit() }} } @else { <span class="muted">—</span> }</td>
+                <td class="num" [class.delta-up]="stateOf(row) === 'abnormal'">{{ percent(row) }}</td>
+                <td><app-status-chip [review]="stateOf(row)" /></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="8" class="muted empty-row">{{ emptyText() }}</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted rl-keys">Phím tắt: <kbd>J</kbd> <kbd>K</kbd> phòng sau, phòng trước · <kbd>A</kbd> duyệt · <kbd>R</kbd> cần chụp lại · <kbd>Z</kbd> phóng to ảnh · <kbd>Enter</kbd> trong ô số để duyệt</p>
+      <ng-container [ngTemplateOutlet]="howItWorks" />
+    </div>
+    <aside class="panel detail" aria-label="Phòng đang chọn">
+      @if (selected(); as row) {
+        <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: row }" />
+      } @else {
+        <p class="muted">Chọn một phòng để xem ảnh và duyệt.</p>
+      }
+    </aside>
+  </div>
+} @else {
+  @if (selected(); as row) {
+    <div class="m-head">
+      <button type="button" class="iconbtn" aria-label="Quay lại danh sách" (click)="selectedRoomId.set(null)"><app-icon name="i-back" /></button>
+    </div>
+    <section class="m-detail" [attr.aria-label]="'Chi tiết ' + row.roomCode">
+      <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: row }" />
+    </section>
+  } @else {
+    <div class="m-head"><h1>Duyệt chỉ số</h1><span class="muted small">Kỳ {{ store.period | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }}</span></div>
+    <ng-container [ngTemplateOutlet]="kindSwitch" />
+    <div class="m-pills"><ng-container [ngTemplateOutlet]="filterPills" /></div>
+    <ul class="list m-list">
+      @for (row of visibleRows(); track row.roomId) {
+        @let r = row.reading;
+        <li class="mrow" [class.warn]="stateOf(row) === 'abnormal'">
+          @if (stateOf(row) === 'pending') {
+            <label class="cb-hit"><input type="checkbox" class="cb" [checked]="checked().has(r!.readingId)" (change)="toggle(r!.readingId)" [attr.aria-label]="'Chọn ' + row.roomCode"></label>
+          } @else {
+            <span class="cb-gap" aria-hidden="true"></span>
+          }
+          <button type="button" class="m-open" (click)="selectedRoomId.set(row.roomId)">
+            @if (row.digitCropUrl) {
+              <img class="digits" [ngSrc]="row.digitCropUrl" width="84" height="34" [alt]="'Số trên ảnh ' + row.roomCode">
+            } @else {
+              <span class="thumb none" aria-hidden="true"><app-icon name="i-camera" /></span>
+            }
+            <span class="m-text"><b>{{ row.roomCode }}</b><span class="small muted">{{ row.tenantName }}</span></span>
+            <span class="m-val">
+              @if (usageOf(row) != null) { <b>{{ usageOf(row) | num }} {{ unit() }}</b><span class="small" [class.muted]="stateOf(row) !== 'abnormal'">{{ percent(row) }}</span> }
+              <!-- Status in words, not only the row tint: abnormal and unreadable rows always carry their chip. -->
+              @if (usageOf(row) == null || stateOf(row) === 'abnormal') { <app-status-chip [review]="stateOf(row)" /> }
+            </span>
+          </button>
+        </li>
+      } @empty {
+        <li class="mrow muted">{{ emptyText() }}</li>
+      }
+    </ul>
+    <ng-container [ngTemplateOutlet]="howItWorks" />
+    @if (checked().size > 0) {
+      <div class="m-sticky" role="region" aria-label="Duyệt hàng loạt">
+        <span>Đã chọn <b>{{ checked().size }}</b> chỉ số bình thường</span>
+        <button type="button" class="btn sm" (click)="approveChecked()">Duyệt {{ checked().size }}</button>
+      </div>
+    }
+  }
+}
+
+@if (toast(); as t) {
+  <div class="rl-toast" role="status">
+    <app-icon name="i-check-c" /><span>Đã duyệt <b>{{ t.count }} chỉ số</b>. Hóa đơn chưa được tạo.</span>
+    <span class="acts">
+      <button type="button" class="btn sm ghost inv-ghost" aria-label="Hoàn tác" (click)="undo()">Hoàn tác<span aria-hidden="true"> · {{ t.seconds }} giây</span></button>
+      <a class="btn sm ghost inv-ghost" routerLink="/landlord/invoices">Sang hóa đơn</a>
+    </span>
+  </div>
+}

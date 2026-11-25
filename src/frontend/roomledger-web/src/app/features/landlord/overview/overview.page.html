@@ -1,0 +1,40 @@
+@let o = store.overview();
+@let s = o.summary;
+
+<div class="top">
+  <div>
+    <h1>Chào {{ o.landlordName }}</h1>
+    <p class="sub">Kỳ {{ o.period | period }} · ghi chỉ số {{ o.captureWindow }} · hạn thanh toán {{ o.paymentDue }}</p>
+  </div>
+</div>
+
+<section aria-labelledby="q-h">
+  <h2 id="q-h" class="q-h">Việc cần làm <span class="muted">{{ queue().length }}</span></h2>
+  <ol class="queue">
+    @for (q of queue(); track q.id) {
+      <li>
+        <a class="q" [routerLink]="q.link">
+          <span class="q-ic" [class.warn]="q.tone === 'warn'" [class.err]="q.tone === 'err'"><app-icon [name]="q.icon" /></span>
+          <span class="q-txt">
+            <b>{{ q.title }}</b>
+            <span class="q-detail">{{ q.detail }}</span>
+            @if (q.progress != null) {
+              <span class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="q.progress" [attr.aria-label]="'Đã ghi ' + q.value + ' phòng'"><i [style.width.%]="q.progress"></i></span>
+            }
+          </span>
+          <span class="q-val" [class.err]="q.tone === 'err'">
+            @if (q.money != null) { {{ q.money | vnd }} } @else { {{ q.value }} }
+          </span>
+          <span class="q-go"><app-icon name="i-chev" /></span>
+        </a>
+      </li>
+    } @empty {
+      <li class="q-done">Không còn việc nào cho kỳ {{ o.period | period }}.</li>
+    }
+  </ol>
+</section>
+
+<p class="later">
+  Kỳ {{ s.lastPeriod.period | period }}: <a routerLink="/landlord/invoices">đã thu {{ s.lastPeriod.paid }}/{{ s.lastPeriod.total }} hóa đơn</a>
+  · <a routerLink="/landlord/rooms">{{ s.rooms.occupied }}/{{ s.rooms.total }} phòng đang thuê, {{ s.rooms.vacant }} trống</a>
+</p>

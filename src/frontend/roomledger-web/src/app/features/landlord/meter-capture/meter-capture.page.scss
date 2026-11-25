@@ -1,0 +1,40 @@
+:host { display: block; }
+
+.phone { display: flex; flex-direction: column; gap: 12px; }
+.ptop { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; }
+.ptop h1 { font-size: var(--t-18); font-weight: 600; }
+
+.prog { display: grid; gap: 8px; }
+.prog:not(.sheet) { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.prog .row > * { white-space: nowrap; }
+.pills { margin: 12px 0; }
+.pill { cursor: pointer; min-height: 44px; }
+.pill.on b { color: inherit; }
+
+ul.rooms { list-style: none; margin: 0; padding: 0; }
+/* Inside the desk card the list is ruled rows, not a second bordered box. */
+.card ul.rooms { border: 0; border-radius: 0; margin: 0 calc(var(--s5) * -1) calc(var(--s5) * -1); }
+.rooms li { border-bottom: 1px solid var(--line); }
+.rooms li:last-child { border-bottom: 0; }
+.room { all: unset; box-sizing: border-box; width: 100%; min-height: 64px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+  cursor: pointer; color: var(--ink-3); }
+.room:hover { background: var(--soft); }
+.room:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.room.first, .room.on { background: var(--soft); }
+.room.on { background: var(--soft-2); color: var(--ink-2); }
+.txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.txt b { font-weight: 500; color: var(--ink); }
+.go { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 10px; background: var(--ink); color: #fff;
+  font: 500 var(--t-14) var(--sans); white-space: nowrap; }
+
+.demo { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.phone .demo { margin-top: 8px; }
+
+.overlay { position: fixed; inset: 0; z-index: 30; overflow-y: auto; background: var(--bg); overscroll-behavior: contain; }
+.overlay.dark { background: #121110; }
+
+.note { margin-bottom: 16px; }
+.queue { margin-bottom: 16px; max-width: 640px; }
+.desk-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); gap: var(--s6); align-items: start; }
+.panel-side { position: sticky; top: 24px; }
+@media (max-width: 1100px) { .desk-grid { grid-template-columns: minmax(0, 1fr) 340px; } }

@@ -1,0 +1,219 @@
+@let s = data();
+@let m = mode();
+@let inv = current();
+
+<!-- Contract + disputes links (TD-01 / TN-02). -->
+<ng-template #links>
+  <ul class="list links">
+    <li>
+      <a class="list-item" routerLink="/tenant/contract">
+        <app-icon name="i-doc" />
+        <span class="grow">Hợp đồng {{ s.roomCode }}
+          <span class="small muted">
+            @switch (contract().status) {
+              @case ('CONFIRMED') { Đã xác nhận · 01/03/2026 – 28/02/2027 }
+              @case ('REJECTED') { Đã gửi lý do, chờ chủ nhà sửa }
+              @default { Chờ bạn xác nhận · 01/03/2026 – 28/02/2027 }
+            }
+          </span>
+        </span>
+        <app-icon name="i-chev" />
+      </a>
+    </li>
+    <li>
+      <a class="list-item" routerLink="/tenant/disputes">
+        <app-icon name="i-talk" />
+        <span class="grow">Khiếu nại<span class="small muted">Không có khiếu nại đang mở</span></span>
+        <app-icon name="i-chev" />
+      </a>
+    </li>
+  </ul>
+</ng-template>
+
+<!-- Readings of the current period: numbers and photos only after approval. -->
+<ng-template #readingsCard>
+  <div class="row between">
+    <h2 class="h">Chỉ số kỳ {{ readingsPeriod() | period }}</h2>
+    @if (readingsApproved()) {
+      <app-status-chip review="approved" [text]="'Đã duyệt ' + (approvedOn() | day: 'short')" />
+    } @else {
+      <span class="chip info"><app-icon name="i-clock" />Đang duyệt</span>
+    }
+  </div>
+  <ul class="readings">
+    @for (r of readings(); track r.readingId) {
+      <li>
+        @if (r.status === 'CONFIRMED') {
+          <a class="reading" routerLink="/tenant/meters" [queryParams]="{ kind: r.kind, reading: r.readingId }">
+            <img [ngSrc]="r.photoUrl!" width="96" height="72" [alt]="'Ảnh ' + (r.kind === 'ELECTRICITY' ? 'công tơ điện' : 'đồng hồ nước') + ' ' + s.roomCode + ', ' + r.value + ' ' + unit[r.kind]">
+            <span class="grow"><b>{{ kindName[r.kind] }}</b><span class="small muted">Chụp {{ r.capturedAt | day: 'short' }} · dùng {{ r.usage | num }} {{ unit[r.kind] }}</span></span>
+            <span class="v"><app-meter-digits [kind]="r.kind" [value]="r.value!" size="sm" /><span class="small muted">{{ unit[r.kind] }}</span></span>
+          </a>
+        } @else {
+          <div class="reading">
+            <span class="dot" aria-hidden="true"><app-icon [name]="r.kind === 'ELECTRICITY' ? 'i-bolt' : 'i-drop'" /></span>
+            <span class="grow"><b>{{ kindName[r.kind] }}</b><span class="small muted">Đã chụp {{ r.capturedAt | day: 'short' }} · chờ duyệt</span></span>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+  <p class="small muted">
+    @if (readingsApproved()) { Bấm vào một chỉ số để xem ảnh gốc. Thấy sai thì gửi khiếu nại từ trang ảnh. }
+    @else { Số và ảnh hiện ở đây khi chủ nhà duyệt xong. }
+  </p>
+</ng-template>
+
+<ng-template #previousList>
+  <h2 class="h prev-h">Hóa đơn trước</h2>
+  <ul class="mini">
+    @for (h of previous(); track h.invoiceId) {
+      <li><a [routerLink]="['/tenant/invoices', h.invoiceId]"><span>Kỳ {{ h.period | period }} · @if (h.paidAt) { trả {{ h.paidAt | day: 'short' }} } @else { chưa trả }</span><b>{{ h.total | vnd }}</b></a></li>
+    }
+  </ul>
+</ng-template>
+
+<!-- Phone / pending: invoice summary card. -->
+<ng-template #invoiceCard>
+  @if (inv) {
+    <div class="sheet inv-card">
+      <div class="row between"><span class="small muted">Hóa đơn kỳ {{ inv.period | period }}</span><app-status-chip [invoice]="inv.status" /></div>
+      <p class="amount">{{ inv.total | vnd }}</p>
+      @if (inv.status === 'PAID') {
+        <p class="small muted">Thanh toán {{ inv.paidAt | day: 'full' }}@if (m === 'pending') { · hóa đơn kỳ {{ readingsPeriod() | period }} có sau khi chủ nhà duyệt chỉ số }</p>
+        <a class="btn sec block" [routerLink]="['/tenant/invoices', inv.invoiceId]">Xem hóa đơn</a>
+      } @else {
+        <p class="small muted">Hạn {{ inv.dueDate | day: 'full' }}</p>
+        <a class="btn block" [routerLink]="['/tenant/invoices', inv.invoiceId]">Xem và chuyển khoản</a>
+      }
+    </div>
+  }
+</ng-template>
+
+<ng-template #finals let-list>
+  <ul class="readings">
+    @for (r of list; track r.kind) {
+      <li>
+        <div class="reading">
+          @if (r.photoUrl && r.value != null) {
+            <img [ngSrc]="r.photoUrl" width="96" height="72" [alt]="'Ảnh ' + (r.kind === 'ELECTRICITY' ? 'công tơ điện' : 'đồng hồ nước') + ', chỉ số ' + r.value + ' ' + unitOf(r.kind)">
+            <span class="grow"><b>{{ nameOf(r.kind) }} · {{ r.value | num }} {{ unitOf(r.kind) }}</b><span class="small muted">{{ r.note }}</span></span>
+          } @else {
+            <span class="dot" aria-hidden="true"><app-icon [name]="r.kind === 'ELECTRICITY' ? 'i-bolt' : 'i-drop'" /></span>
+            <span class="grow"><b>{{ nameOf(r.kind) }}</b><span class="small muted">{{ r.note }}</span></span>
+          }
+        </div>
+      </li>
+    }
+  </ul>
+</ng-template>
+
+@switch (m) {
+  @case ('unassigned') {
+    <!-- TN-17 -->
+    <div class="unassigned">
+      <div class="empty-m">
+        <span class="ic"><app-icon name="i-door" /></span>
+        <h1>Bạn chưa được gán phòng</h1>
+        <p class="muted">Tài khoản <b class="ink">{{ s.email }}</b> chưa gắn với phòng nào. Nhờ chủ nhà gửi lời mời tới email này, rồi mở link trong email.</p>
+      </div>
+      <div class="banner info"><app-icon name="i-info" /><span>Lời mời có hạn 72 giờ. Nếu đã hết hạn, nhờ chủ nhà gửi lại.</span></div>
+      <p class="small muted center" role="status">
+        @if (checking()) { Đang kiểm tra… } @else if (checked()) { Vẫn chưa có phòng nào gắn với tài khoản này. }
+      </p>
+      <div class="stack">
+        <button type="button" class="btn lg block" [disabled]="checking()" (click)="recheck()"><app-icon name="i-refresh" />Kiểm tra lại</button>
+        <a class="btn ghost block" routerLink="/"><app-icon name="i-logout" />Đăng xuất</a>
+      </div>
+    </div>
+  }
+
+  @case ('new') {
+    <!-- TN-16 -->
+    @let o = s.opening!;
+    <div class="head">
+      <h1>Chào {{ s.firstName }}</h1>
+      @if (!viewport.isPhone()) { <p class="sub">Phòng {{ s.roomCode }} · vào ở {{ o.date }}</p> }
+    </div>
+    <div class="grid">
+      <section class="sheet card-g" aria-labelledby="open-h">
+        <div class="row between"><h2 class="h" id="open-h">Chỉ số đầu {{ s.roomCode }}</h2><app-status-chip review="approved" text="Đã ghi" /></div>
+        <p class="small muted">Điện {{ o.finals[0].value | num }} kWh · nước {{ o.finals[1].value | num }} m³ · chủ nhà chụp {{ o.date }}, ngày bạn vào ở. Đây là mốc tính hóa đơn đầu tiên.</p>
+        <button type="button" class="see" [attr.aria-expanded]="showOpeningPhotos()" aria-controls="open-photos" (click)="showOpeningPhotos.set(!showOpeningPhotos())">
+          <app-icon name="i-image" />{{ showOpeningPhotos() ? 'Ẩn ảnh đồng hồ' : 'Xem 2 ảnh đồng hồ' }}
+        </button>
+        <div id="open-photos">
+          @if (showOpeningPhotos()) {
+            <ng-container [ngTemplateOutlet]="finals" [ngTemplateOutletContext]="{ $implicit: o.finals }" />
+          }
+        </div>
+      </section>
+      <section class="sheet empty-m">
+        <span class="ic"><app-icon name="i-bill" /></span>
+        <h2 class="h">Chưa có hóa đơn nào</h2>
+        <p class="small muted">Hóa đơn đầu tiên đến sau khi chủ nhà ghi chỉ số kỳ {{ next.period | period }} ({{ next.window }}) và duyệt.</p>
+        <button type="button" class="btn sec" [attr.aria-pressed]="notifyInvoice()" (click)="notifyInvoice.set(!notifyInvoice())">
+          @if (notifyInvoice()) { <app-icon name="i-check" />Sẽ báo qua email } @else { <app-icon name="i-bell" />Báo tôi khi có hóa đơn }
+        </button>
+      </section>
+    </div>
+  }
+
+  @case ('moving') {
+    <!-- TN-15 -->
+    @let mv = s.move!;
+    <div class="head">
+      <h1>Chào {{ s.firstName }}</h1>
+      @if (!viewport.isPhone()) { <p class="sub">Phòng {{ mv.from }} → {{ mv.to }} · {{ mv.date }}</p> }
+    </div>
+    <div class="banner info move"><app-icon name="i-door" /><span><b>Bạn chuyển từ {{ mv.from }} sang {{ mv.to }} ngày {{ mv.date }}.</b> Chủ nhà ghi chỉ số cuối của {{ mv.from }} vào ngày này rồi lập hóa đơn cuối.</span></div>
+    <div class="grid">
+      <section class="sheet card-g" aria-labelledby="final-h">
+        <div class="row between"><h2 class="h" id="final-h">Chỉ số cuối {{ mv.from }}</h2><span class="chip neu"><app-icon name="i-cal" />Ngày {{ mv.dayMonth }}</span></div>
+        <ng-container [ngTemplateOutlet]="finals" [ngTemplateOutletContext]="{ $implicit: mv.finals }" />
+      </section>
+      <div class="col">
+        <section class="sheet" aria-labelledby="after-h">
+          <h2 class="h" id="after-h">Sau khi chuyển</h2>
+          <ul class="rules after">
+            <li><app-icon name="i-bill" size="sm" />Hóa đơn cuối {{ mv.from }} (01–{{ mv.dayMonth }}) gửi cho bạn sau khi chủ nhà duyệt chỉ số.</li>
+            <li><app-icon name="i-doc" size="sm" />Hợp đồng {{ mv.to }} gửi để bạn xác nhận. Chỉ số đầu {{ mv.to }} lấy theo ngày {{ mv.dayMonth }}.</li>
+          </ul>
+        </section>
+        <ng-container [ngTemplateOutlet]="links" />
+      </div>
+    </div>
+  }
+
+  @default {
+    <!-- approved (TD-01 / TN-02 after approval) and pending (TN-02) -->
+    <div class="head">
+      <h1>Chào {{ s.firstName }}</h1>
+      @if (!viewport.isPhone()) { <p class="sub">Phòng {{ s.roomCode }} · kỳ {{ readingsPeriod() | period }}</p> }
+    </div>
+    @if (!viewport.isPhone()) {
+      <div class="home">
+        <div class="col">
+          @if (inv && inv.status !== 'PAID') {
+            <div class="inv-head"><h2>Hóa đơn kỳ {{ inv.period | period }}</h2><a class="btn" [routerLink]="['/tenant/invoices', inv.invoiceId]">Xem và chuyển khoản</a></div>
+            <app-receipt [invoice]="inv" (photo)="openPhoto($event)" />
+          } @else {
+            <ng-container [ngTemplateOutlet]="invoiceCard" />
+          }
+          <ng-container [ngTemplateOutlet]="links" />
+        </div>
+        <aside class="panel" aria-label="Chỉ số và hóa đơn trước">
+          <ng-container [ngTemplateOutlet]="readingsCard" />
+          <a class="btn sec block" routerLink="/tenant/meters">Xem lịch sử chỉ số</a>
+          <ng-container [ngTemplateOutlet]="previousList" />
+        </aside>
+      </div>
+    } @else {
+      <div class="m-stack">
+        <section class="sheet card-g"><ng-container [ngTemplateOutlet]="readingsCard" /></section>
+        <ng-container [ngTemplateOutlet]="invoiceCard" />
+        <ng-container [ngTemplateOutlet]="links" />
+      </div>
+    }
+  }
+}

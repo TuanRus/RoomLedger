@@ -1,0 +1,204 @@
+@let s = store.settings();
+@let m = model();
+@let changes = priceChanges();
+@let changed = changedRooms();
+
+<form novalidate (submit)="$event.preventDefault(); save()">
+  <div class="top">
+    <div>
+      <h1>Đơn giá và kỳ thu</h1>
+      <p class="sub">Áp dụng cho hóa đơn từ kỳ {{ store.nextPeriod | period }}. Hóa đơn đã tạo không đổi.</p>
+    </div>
+    <div class="acts">
+      <button type="button" class="btn sec" [disabled]="!dirty()" (click)="cancel()">Hủy</button>
+      <button type="submit" class="btn" [disabled]="saving()">
+        @if (!dirty() && status() === 'saved') { <app-icon name="i-check" />Đã lưu } @else { Lưu thay đổi }
+      </button>
+    </div>
+  </div>
+
+  <div aria-live="polite">
+    @if (status() === 'saved' && !dirty()) {
+      <div class="banner ok msg"><app-icon name="i-check-c" /><span>Đã lưu lúc {{ savedAt() }}. Giá mới áp dụng từ kỳ {{ store.nextPeriod | period }}.</span></div>
+    } @else if (status() === 'invalid' && f().invalid()) {
+      <div class="banner warn msg"><app-icon name="i-alert" /><span>Chưa lưu được. Sửa các ô báo đỏ rồi bấm Lưu thay đổi.</span></div>
+    }
+  </div>
+
+  <div class="layout">
+    <div class="col">
+      <section class="card stack" aria-labelledby="h-rates">
+        <h2 id="h-rates">Điện và nước</h2>
+        <div class="field">
+          <label for="p-e">Giá điện</label>
+          @let eErr = errOf(f.electricityRate);
+          <div class="input" [class.is-error]="eErr">
+            <input id="p-e" inputmode="numeric" autocomplete="off" [formField]="f.electricityRate" [attr.aria-invalid]="!!eErr" aria-describedby="p-e-h">
+            <span class="unit">đ / kWh</span>
+          </div>
+          @if (eErr) { <span class="err" id="p-e-h"><app-icon name="i-alert" />{{ eErr }}</span> }
+          @else { <span class="help" id="p-e-h">Hiện tại {{ s.electricityRate | vnd }}/kWh</span> }
+        </div>
+        <div class="field">
+          <label for="p-w">Giá nước</label>
+          @let wErr = errOf(f.waterRate);
+          <div class="input" [class.is-error]="wErr">
+            <input id="p-w" inputmode="numeric" autocomplete="off" [formField]="f.waterRate" [attr.aria-invalid]="!!wErr" aria-describedby="p-w-h">
+            <span class="unit">đ / m³</span>
+          </div>
+          @if (wErr) { <span class="err" id="p-w-h"><app-icon name="i-alert" />{{ wErr }}</span> }
+          @else { <span class="help" id="p-w-h">Hiện tại {{ s.waterRate | vnd }}/m³</span> }
+        </div>
+      </section>
+
+      <section class="card stack" aria-labelledby="h-cycle">
+        <h2 id="h-cycle">Kỳ thu</h2>
+        <div class="field">
+          <label for="p-d1">Ngày ghi chỉ số</label>
+          <select id="p-d1" class="input" [formField]="f.readingStartDay">
+            @for (d of readingDays; track d) { <option [value]="'' + d">Ngày {{ d }}–{{ d + windowEnd }} hằng tháng</option> }
+          </select>
+        </div>
+        <div class="field">
+          <label for="p-d2">Hạn thanh toán</label>
+          @let dErr = errOf(f.dueDay);
+          <select id="p-d2" class="input" [class.is-error]="dErr" [formField]="f.dueDay" [attr.aria-invalid]="!!dErr" aria-describedby="p-d2-h">
+            @for (d of dueDays; track d) { <option [value]="'' + d">Ngày {{ d }} hằng tháng</option> }
+          </select>
+          @if (dErr) { <span class="err" id="p-d2-h"><app-icon name="i-alert" />{{ dErr }}</span> }
+        </div>
+        <label class="switch-row">
+          <span><b>Nhắc tôi đi ghi chỉ số</b><span class="small muted block">Gửi email cho bạn sáng ngày {{ m.readingStartDay }}</span></span>
+          <input type="checkbox" role="switch" class="sr" [formField]="f.remindReading">
+          <span class="toggle" [class.on]="m.remindReading" aria-hidden="true"></span>
+        </label>
+      </section>
+
+      @if (changes.length) {
+        <div class="banner info"><app-icon name="i-info" /><span>Đổi {{ changes.join(' và ') }} sẽ áp dụng cho <b>{{ store.occupiedRooms }} phòng</b> từ kỳ {{ store.nextPeriod | period }}. Người thuê được báo trong hóa đơn tiếp theo.</span></div>
+      }
+    </div>
+
+    <div class="card col-wide">
+      <section aria-labelledby="h-rent">
+        <div class="row between">
+          <h2 id="h-rent">Tiền phòng theo phòng</h2>
+          <span class="small muted">{{ rooms().length }} / {{ store.occupiedRooms }} phòng (mẫu)</span>
+        </div>
+        @if (viewport.isPhone()) {
+          <ul class="rent-list">
+            @for (room of rooms(); track room.roomId; let i = $index) {
+              @let rf = rentField(i);
+              @let rErr = errOf(rf);
+              <li>
+                <div class="row between">
+                  <label [for]="'rent-' + room.roomId"><b>{{ room.roomCode }}</b> <span class="muted small">· {{ room.areaM2 }} m²</span></label>
+                  @if (changed.has(room.roomId)) { <span class="chip warn"><app-icon name="i-edit" />Chưa lưu</span> }
+                  @else { <span class="small muted">Từ {{ room.since | period }}</span> }
+                </div>
+                <div class="input" [class.is-error]="rErr">
+                  <input [id]="'rent-' + room.roomId" inputmode="numeric" autocomplete="off" [formField]="rf" [attr.aria-invalid]="!!rErr" [attr.aria-describedby]="rErr ? 'rent-e-' + room.roomId : null">
+                  <span class="unit">đ / tháng</span>
+                </div>
+                @if (rErr) { <span class="err" [id]="'rent-e-' + room.roomId"><app-icon name="i-alert" />{{ rErr }}</span> }
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="tablewrap rent-table">
+            <table class="table">
+              <thead><tr><th scope="col">Phòng</th><th scope="col">Diện tích</th><th scope="col" class="num">Tiền phòng / tháng</th><th scope="col">Áp dụng từ</th></tr></thead>
+              <tbody>
+                @for (room of rooms(); track room.roomId; let i = $index) {
+                  @let rf = rentField(i);
+                  @let rErr = errOf(rf);
+                  <tr>
+                    <th scope="row"><b>{{ room.roomCode }}</b></th>
+                    <td>{{ room.areaM2 }} m²</td>
+                    <td class="num">
+                      <div class="input cell" [class.is-error]="rErr">
+                        <input inputmode="numeric" autocomplete="off" [attr.aria-label]="'Tiền phòng ' + room.roomCode" [formField]="rf" [attr.aria-invalid]="!!rErr" [attr.aria-describedby]="rErr ? 'rent-e-' + room.roomId : null">
+                        <span class="unit">đ</span>
+                      </div>
+                      @if (rErr) { <span class="err cell-err" [id]="'rent-e-' + room.roomId">{{ rErr }}</span> }
+                    </td>
+                    <td>
+                      @if (changed.has(room.roomId)) { <span class="chip warn"><app-icon name="i-edit" />Chưa lưu</span> }
+                      @else { <span class="muted">{{ room.since | period }}</span> }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      <section class="bank" aria-labelledby="h-bank">
+        <label class="switch-row">
+          <span><span class="h2" id="h-bank">Thông tin chuyển khoản</span><span class="small muted block">Không bắt buộc. Hiện trên hóa đơn để người thuê biết cách trả tiền.</span></span>
+          <input type="checkbox" role="switch" class="sr" aria-label="Hiện thông tin chuyển khoản trên hóa đơn" [formField]="f.bankEnabled">
+          <span class="toggle" [class.on]="m.bankEnabled" aria-hidden="true"></span>
+        </label>
+
+        @if (m.bankEnabled) {
+          <div class="bank-grid">
+            <div class="field">
+              <label for="b-n">Ngân hàng</label>
+              @let bnErr = errOf(f.bankName);
+              <select id="b-n" class="input" [formField]="f.bankName" [attr.aria-invalid]="!!bnErr">
+                @for (b of banks; track b) { <option [value]="b">{{ b }}</option> }
+              </select>
+              @if (bnErr) { <span class="err"><app-icon name="i-alert" />{{ bnErr }}</span> }
+            </div>
+            <div class="field">
+              <label for="b-a">Số tài khoản</label>
+              @let baErr = errOf(f.accountNumber);
+              <input id="b-a" class="input" inputmode="numeric" autocomplete="off" [class.is-error]="baErr" [formField]="f.accountNumber" [attr.aria-invalid]="!!baErr" [attr.aria-describedby]="baErr ? 'b-a-e' : null">
+              @if (baErr) { <span class="err" id="b-a-e"><app-icon name="i-alert" />{{ baErr }}</span> }
+            </div>
+            <div class="field">
+              <label for="b-h">Tên chủ tài khoản</label>
+              @let bhErr = errOf(f.accountHolder);
+              <input id="b-h" class="input upper" autocomplete="off" [class.is-error]="bhErr" [formField]="f.accountHolder" [attr.aria-invalid]="!!bhErr" [attr.aria-describedby]="bhErr ? 'b-h-e' : null">
+              @if (bhErr) { <span class="err" id="b-h-e"><app-icon name="i-alert" />{{ bhErr }}</span> }
+            </div>
+            <div class="field">
+              <label for="b-c">Nội dung chuyển khoản</label>
+              @let bcErr = errOf(f.transferNoteTemplate);
+              <input id="b-c" class="input" autocomplete="off" [class.is-error]="bcErr" [formField]="f.transferNoteTemplate" [attr.aria-invalid]="!!bcErr" aria-describedby="b-c-h">
+              @if (bcErr) { <span class="err" id="b-c-h"><app-icon name="i-alert" />{{ bcErr }}</span> }
+              @else { <span class="help" id="b-c-h">Ví dụ: {{ noteExample() }}. Dùng [phòng] và [tháng].</span> }
+            </div>
+
+            <div class="qr">
+              <span class="lbl">Mã QR ngân hàng</span>
+              @if (qrUrl(); as url) {
+                @if (qrIsLocal()) {
+                  <img [src]="url" width="140" height="140" alt="Mã QR chuyển khoản vừa chọn">
+                } @else {
+                  <img [ngSrc]="url" width="140" height="140" alt="Mã QR chuyển khoản mẫu">
+                }
+                <div class="qr-acts">
+                  <label class="btn sec sm file-btn"><app-icon name="i-upload" />Đổi ảnh<input type="file" class="sr" accept="image/png,image/jpeg,image/webp" (change)="onQrFile($event)"></label>
+                  <button type="button" class="btn ghost sm" (click)="removeQr()"><app-icon name="i-x" />Xóa</button>
+                </div>
+              } @else {
+                <label class="qr-empty file-btn"><app-icon name="i-upload" /><span>Tải ảnh QR lên</span><input type="file" class="sr" accept="image/png,image/jpeg,image/webp" (change)="onQrFile($event)"></label>
+              }
+              @if (qrError()) { <span class="err" role="alert"><app-icon name="i-alert" />{{ qrError() }}</span> }
+            </div>
+          </div>
+          <p class="banner info note"><app-icon name="i-info" /><span>Người thuê thấy mã QR khi mở hóa đơn trên máy tính. Trên điện thoại không có QR (không tự quét được màn hình của mình), họ thấy nút <b>Sao chép số tài khoản</b> và nội dung chuyển khoản, ví dụ “{{ noteExample() }}”.</span></p>
+        }
+      </section>
+    </div>
+  </div>
+
+  @if (viewport.isPhone()) {
+    <div class="phone-acts">
+      <button type="submit" class="btn lg block" [disabled]="saving()">Lưu thay đổi</button>
+      <button type="button" class="btn sec lg block" [disabled]="!dirty()" (click)="cancel()">Hủy</button>
+    </div>
+  }
+</form>

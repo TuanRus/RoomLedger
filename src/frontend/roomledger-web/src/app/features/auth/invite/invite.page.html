@@ -1,0 +1,77 @@
+<app-auth-frame>
+  @let s = state();
+  @switch (s.kind) {
+    @case ('valid') {
+      @let inv = s.invite;
+      @let pw = f.password();
+      <form class="form" novalidate (submit)="accept($event)">
+        <div>
+          <h1>{{ inv.landlordShortName }} mời bạn thuê phòng {{ inv.roomCode }}</h1>
+          <p class="muted lead">{{ inv.propertyName }} · từ {{ dmy(inv.startDate) }}. Tạo mật khẩu để xem hợp đồng, chỉ số điện nước và hóa đơn.</p>
+        </div>
+        <div class="sheet row from">
+          <span class="av" aria-hidden="true">LL</span>
+          <div><b>{{ inv.landlordName }} · chủ nhà</b><p class="small muted">Gửi từ {{ inv.landlordEmail }} · {{ dmy(inv.sentAt) }}</p></div>
+        </div>
+
+        <div class="field">
+          <label for="inv-email">Email</label>
+          <div class="pw">
+            <input class="input locked" id="inv-email" type="email" [value]="inv.email" readonly aria-describedby="inv-email-help">
+            <span class="lock-ic"><app-icon name="i-lock" /></span>
+          </div>
+          <span class="help" id="inv-email-help">Email lời mời gửi tới, không đổi được.</span>
+        </div>
+
+        <div class="field">
+          <label for="inv-pw">Tạo mật khẩu</label>
+          <div class="pw">
+            <input class="input" id="inv-pw" [type]="showPassword() ? 'text' : 'password'" autocomplete="new-password"
+              [formField]="f.password" [class.is-error]="pw.touched() && pw.invalid()"
+              [attr.aria-invalid]="pw.touched() && pw.invalid()" aria-describedby="inv-rules">
+            <button type="button" class="eye" (click)="showPassword.set(!showPassword())" [attr.aria-pressed]="showPassword()"
+              [attr.aria-label]="showPassword() ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'">{{ showPassword() ? 'Ẩn' : 'Hiện' }}</button>
+          </div>
+          @if (pw.touched() && pw.invalid()) {
+            <span class="err"><app-icon name="i-alert" size="sm" />{{ pw.errors()[0].message }}</span>
+          }
+        </div>
+        <app-password-rules listId="inv-rules" [value]="model().password" [showErrors]="pw.touched()" />
+
+        <button class="btn lg block" type="submit" [disabled]="busy()">
+          @if (busy()) { <span class="spin" aria-hidden="true"></span>Đang tạo tài khoản… } @else { Nhận lời mời }
+        </button>
+        <div class="banner info"><app-icon name="i-clock" /><span>Lời mời còn hạn đến {{ expiresLabel() }}.</span></div>
+      </form>
+    }
+    @case ('expired') {
+      @let inv = s.invite;
+      <div class="form">
+        <div class="state-ic warn"><app-icon name="i-clock" /></div>
+        <div>
+          <h1>Lời mời đã hết hạn</h1>
+          <p class="muted lead">Lời mời thuê phòng {{ inv.roomCode }} · {{ inv.propertyName }} chỉ có hạn 72 giờ và đã hết hạn lúc {{ expiresLabel() }}.</p>
+        </div>
+        <div class="banner warn"><app-icon name="i-info" /><span>Nhắn {{ inv.landlordName }} ({{ inv.landlordEmail }}) gửi lại lời mời. Link mới sẽ tới {{ inv.emailMasked }}.</span></div>
+        <a class="btn sec lg block" routerLink="/login">Tôi đã có tài khoản · Đăng nhập</a>
+      </div>
+    }
+    @case ('invalid') {
+      <div class="form">
+        <div class="state-ic"><app-icon name="i-alert" /></div>
+        <div>
+          <h1>Không mở được lời mời</h1>
+          <p class="muted lead">Link này không đúng hoặc đã được dùng. Mở lại link trong email mới nhất chủ nhà gửi, hoặc nhờ chủ nhà gửi lại lời mời.</p>
+        </div>
+        <a class="btn sec lg block" routerLink="/login">Tôi đã có tài khoản · Đăng nhập</a>
+      </div>
+    }
+  }
+
+  <p foot class="small muted center">Đã có tài khoản? <a routerLink="/login"><b>Đăng nhập</b></a></p>
+
+  <div art class="art">
+    <p class="small muted cap">Sau khi nhận lời mời, mỗi kỳ bạn nhận hóa đơn kèm ảnh đồng hồ</p>
+    <app-receipt [invoice]="sampleInvoice" />
+  </div>
+</app-auth-frame>

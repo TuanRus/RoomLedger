@@ -1,0 +1,102 @@
+@if (inv(); as i) {
+  @let vf = f.value();
+  @let rf = f.reason();
+  @if (viewport.isPhone()) {
+    <div class="m-head">
+      <a class="iconbtn" [routerLink]="['/tenant/invoices', i.invoiceId]" aria-label="Quay lại hóa đơn"><app-icon name="i-back" /></a>
+      <h1>Khiếu nại</h1>
+    </div>
+  } @else {
+    <div class="top"><div><h1>Gửi khiếu nại</h1><p class="sub">Hóa đơn {{ i.roomCode }} kỳ {{ i.period | period }} · chủ nhà xem lại ảnh gốc và trả lời bạn</p></div></div>
+  }
+
+  <div class="layout">
+    <form class="form" novalidate (submit)="submit($event)">
+      <fieldset class="field">
+        <legend class="lbl">Bạn khiếu nại về</legend>
+        <div class="seg">
+          @for (s of subjects; track s.id) {
+            <label [class.on]="subject() === s.id">
+              <input type="radio" name="dn-subject" [value]="s.id" [checked]="subject() === s.id" (change)="setSubject(s.id)">{{ s.label }}
+            </label>
+          }
+        </div>
+      </fieldset>
+
+      @if (line(); as l) {
+        <div class="sheet meter-row">
+          <button type="button" class="ph" (click)="openPhoto()" [attr.aria-label]="'Xem ảnh gốc ' + meterName().toLowerCase() + ' kỳ ' + (i.period | period)">
+            <img [ngSrc]="l.photoUrl!" width="64" height="48" alt="">
+            <span class="zoom" aria-hidden="true"><app-icon name="i-search" size="sm" /></span>
+          </button>
+          <div class="grow">
+            <b>{{ subject() === 'WATER' ? 'Nước' : 'Điện' }} kỳ {{ i.period | period }}</b>
+            <p class="small muted reads">Chủ nhà ghi <app-meter-digits [kind]="kind()" [value]="l.current" size="sm" /> {{ unit() }} · bấm vào ảnh để xem</p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="dn-value">Chỉ số đúng theo bạn</label>
+          <div class="input with-unit" [class.is-error]="vf.touched() && vf.invalid()">
+            <input id="dn-value" type="text" inputmode="numeric" autocomplete="off" [formField]="f.value" [placeholder]="'Ví dụ: ' + (l.current - 2)"
+              [attr.aria-invalid]="vf.touched() && vf.invalid()" [attr.aria-describedby]="vf.touched() && vf.invalid() ? 'dn-value-err dn-value-help' : 'dn-value-help'">
+            <span class="unit">{{ unit() }}</span>
+          </div>
+          @if (vf.touched() && vf.invalid()) {
+            <span class="err" id="dn-value-err"><app-icon name="i-alert" size="sm" />{{ vf.errors()[0].message }}</span>
+          }
+          <span class="help" id="dn-value-help">Xem đồng hồ trong phòng rồi ghi số bạn thấy. Chủ nhà xem lại ảnh gốc. Kỳ trước: {{ l.previous | num }} {{ unit() }}.</span>
+        </div>
+      } @else {
+        <p class="small muted other">Ví dụ: tiền phòng, phí dịch vụ hoặc hạn thanh toán không đúng với hợp đồng. Ghi rõ bạn thấy gì và số đúng theo bạn.</p>
+      }
+
+      <div class="field">
+        <label for="dn-reason">Lý do</label>
+        <textarea class="input" id="dn-reason" rows="4" [formField]="f.reason" [class.is-error]="rf.touched() && rf.invalid()"
+          [placeholder]="line() ? 'Ví dụ: đồng hồ trong phòng ghi 65, phóng to ảnh thấy số cuối là 5' : 'Ví dụ: hợp đồng ghi hạn thanh toán ngày 15'"
+          [attr.aria-invalid]="rf.touched() && rf.invalid()" [attr.aria-describedby]="rf.touched() && rf.invalid() ? 'dn-reason-err dn-reason-cnt' : 'dn-reason-cnt'"></textarea>
+        <div class="row between under">
+          @if (rf.touched() && rf.invalid()) {
+            <span class="err" id="dn-reason-err"><app-icon name="i-alert" size="sm" />{{ rf.errors()[0].message }}</span>
+          } @else { <span></span> }
+          <span class="cnt" id="dn-reason-cnt">
+            @if (reasonCount() < reasonMin) { {{ reasonCount() }}/{{ reasonMin }} ký tự tối thiểu } @else { {{ reasonCount() }}/{{ reasonMax }} }
+          </span>
+        </div>
+      </div>
+
+      <button class="btn lg block" type="submit" [disabled]="busy()">
+        @if (busy()) { <span class="spin" aria-hidden="true"></span>Đang gửi… } @else { Gửi khiếu nại }
+      </button>
+    </form>
+
+    @if (!viewport.isPhone()) {
+      <aside class="panel how" aria-labelledby="how-title">
+        <h2 id="how-title">Chủ nhà xử lý thế nào</h2>
+        <ol class="tl">
+          <li><span class="dot"><app-icon name="i-image" /></span><div><b>Xem lại ảnh gốc</b><p class="small muted">Ảnh lưu nguyên bản, không ai sửa được sau khi tải lên.</p></div></li>
+          <li><span class="dot ok"><app-icon name="i-bill" /></span><div><b>Sửa số</b><p class="small muted">Hóa đơn được tính lại, bạn thấy số tiền mới.</p></div></li>
+          <li><span class="dot info"><app-icon name="i-talk" /></span><div><b>Hoặc giữ nguyên</b><p class="small muted">Chủ nhà trả lời kèm lý do. Nếu vẫn thấy sai, bạn gửi được khiếu nại mới.</p></div></li>
+        </ol>
+      </aside>
+    }
+  </div>
+
+  @if (line(); as l) {
+    <dialog #photoDialog class="photo-dialog" aria-labelledby="dn-photo-title">
+      <div class="pd-head">
+        <h2 id="dn-photo-title">{{ meterName() }} · kỳ {{ i.period | period }}</h2>
+        <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
+      </div>
+      <img [ngSrc]="l.photoUrl!" width="640" height="480" [alt]="'Ảnh gốc ' + meterName().toLowerCase() + ' ' + i.roomCode + ', chủ nhà ghi ' + l.current + ' ' + unit()">
+      <p class="small muted">Chủ nhà chụp và duyệt. Chỉ số: {{ l.previous | num }} → {{ l.current | num }} {{ unit() }}.</p>
+    </dialog>
+  }
+} @else {
+  <div class="missing">
+    <h1>Không tìm thấy hóa đơn</h1>
+    <p class="muted">Hóa đơn này không tồn tại hoặc không thuộc phòng của bạn, nên chưa gửi khiếu nại được.</p>
+    <a class="btn sec" routerLink="/tenant/invoices">Xem hóa đơn</a>
+  </div>
+}

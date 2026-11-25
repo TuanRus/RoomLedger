@@ -1,0 +1,118 @@
+@let d = dispute();
+@let u = unit();
+@if (!compact()) {
+  <div class="row between head">
+    <h2>{{ title() }} {{ d.period | period }}</h2>
+    <span class="small muted">{{ dateLabel() }}</span>
+  </div>
+} @else {
+  <div class="row between head">
+    <app-dispute-chip [dispute]="d" />
+    <span class="small muted">{{ dateLabel() }}</span>
+  </div>
+}
+
+<ol class="tl" aria-label="Diễn biến khiếu nại">
+  <li>
+    <span class="dot"><app-icon name="i-talk" /></span>
+    <div>
+      <time [attr.datetime]="d.createdAt">{{ shortStamp(d.createdAt) }}</time>
+      <b>Bạn gửi khiếu nại</b>
+      <div class="quote">
+        @if (d.proposedValue != null) {
+          Chỉ số đúng là <b class="em">{{ d.proposedValue | num }} {{ u }}</b>, không phải {{ d.recordedValue | num }}.
+        }
+        {{ d.reason }}
+      </div>
+    </div>
+  </li>
+
+  @switch (view()) {
+    @case ('waiting') {
+      <li>
+        <span class="dot warn"><app-icon name="i-clock" /></span>
+        <div>
+          <b>Chờ chủ nhà trả lời</b>
+          <p class="small muted note">
+            Chủ nhà xem lại {{ d.photoUrl ? 'ảnh gốc' : 'hóa đơn' }} rồi trả lời bạn: sửa số (hóa đơn được tính lại) hoặc giữ nguyên kèm lý do.
+            Bạn nhận email khi có trả lời. Hóa đơn kỳ {{ d.period | period }} tạm ở trạng thái “Đang khiếu nại”.
+          </p>
+          @if (d.photoUrl) {
+            <button type="button" class="ph-btn" (click)="photo.emit(d)">
+              <img [ngSrc]="d.photoUrl" width="64" height="48" alt="">
+              <span>Ảnh đồng hồ chủ nhà chụp<span class="small muted">Chủ nhà ghi {{ d.recordedValue | num }} {{ u }} · bấm để xem</span></span>
+            </button>
+          }
+        </div>
+      </li>
+    }
+    @case ('corrected') {
+      <li>
+        <span class="dot info"><app-icon name="i-user" /></span>
+        <div><time [attr.datetime]="d.resolvedAt">{{ shortStamp(d.resolvedAt!) }}</time><b>Chủ nhà trả lời</b><div class="quote">{{ d.response }}</div></div>
+      </li>
+      <li>
+        <span class="dot ok"><app-icon name="i-bill" /></span>
+        <div>
+          <time [attr.datetime]="d.resolvedAt">{{ shortStamp(d.resolvedAt!) }}</time>
+          <b>Hóa đơn kỳ {{ d.period | period }} được tính lại</b>
+          @if (corrected(); as c) {
+            <p class="small muted calc">
+              {{ d.subject === 'WATER' ? 'Nước' : 'Điện' }}
+              <app-meter-digits [kind]="kindOf()" [value]="d.previousValue!" size="sm" />→<app-meter-digits [kind]="kindOf()" [value]="d.correctedValue!" size="sm" />
+              <span>= {{ c.usage | num }} {{ u }} × {{ d.rate | vnd }} = {{ c.amount | vnd }}</span>
+            </p>
+          }
+        </div>
+      </li>
+    }
+    @case ('kept') {
+      <li>
+        <span class="dot info"><app-icon name="i-user" /></span>
+        <div><time [attr.datetime]="d.resolvedAt">{{ shortStamp(d.resolvedAt!) }}</time><b>Chủ nhà trả lời: giữ nguyên chỉ số</b><div class="quote">{{ d.response }}</div></div>
+      </li>
+      <li>
+        <span class="dot"><app-icon name="i-image" /></span>
+        <div>
+          <b>Chỉ số trên hóa đơn không đổi</b>
+          <p class="small muted calc">
+            <app-meter-digits [kind]="kindOf()" [value]="d.previousValue!" size="sm" />→<app-meter-digits [kind]="kindOf()" [value]="d.recordedValue!" size="sm" />
+            <span>= {{ d.recordedValue! - d.previousValue! | num }} {{ u }}</span>
+          </p>
+          @if (d.photoUrl) {
+            <button type="button" class="ph-btn" (click)="photo.emit(d)">
+              <img [ngSrc]="d.photoUrl" width="64" height="48" alt="">
+              <span>Xem lại ảnh gốc<span class="small muted">So số trên ảnh với đồng hồ trong phòng</span></span>
+            </button>
+          }
+        </div>
+      </li>
+    }
+  }
+</ol>
+
+@switch (view()) {
+  @case ('corrected') {
+    <div class="newinv">
+      <div><p class="small muted">Hóa đơn mới</p><p class="amt">{{ d.totalAfter | vnd }}</p></div>
+      <div class="diff"><p class="small muted"><s>{{ d.totalBefore | vnd }}</s></p><p class="small save">−{{ saving() | vnd }}</p></div>
+      <a class="btn" [routerLink]="['/tenant/invoices', d.invoiceId]">Xem hóa đơn mới</a>
+    </div>
+    <p class="small muted foot">Có vấn đề khác? Gửi khiếu nại mới từ hóa đơn hoặc trang ảnh đồng hồ.</p>
+  }
+  @case ('kept') {
+    <div class="next">
+      <b>Vẫn thấy chưa đúng?</b>
+      <p class="small muted">Đối chiếu đồng hồ trong phòng với ảnh gốc; nếu số vẫn khác, gửi khiếu nại mới kèm số bạn thấy, hoặc nói trực tiếp với chủ nhà.</p>
+      <div class="acts">
+        <a class="btn sec" routerLink="/tenant/disputes/new" [queryParams]="newDisputeParams()"><app-icon name="i-talk" />Gửi khiếu nại mới</a>
+        <a class="btn ghost" [routerLink]="['/tenant/invoices', d.invoiceId]">Xem hóa đơn kỳ {{ d.period | period }}</a>
+      </div>
+    </div>
+  }
+  @case ('waiting') {
+    <div class="acts">
+      <a class="btn sec" [routerLink]="['/tenant/invoices', d.invoiceId]"><app-icon name="i-bill" />Xem hóa đơn kỳ {{ d.period | period }}</a>
+    </div>
+  }
+}

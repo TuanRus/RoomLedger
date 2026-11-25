@@ -1,1 +1,51 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global styles: the RoomLedger design system (tokens + shared component classes). */
+@use 'styles/rl';
+
+html,
+body {
+  min-height: 100%;
+}
+
+/* Desktop and phone breakpoint used across shells and pages: 768px (see core/layout/viewport.ts). */
+
+/* Undo toast shared by bulk actions (approve readings, mark paid). Sits above the phone bottom bar. */
+.rl-toast {
+  position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%); z-index: 20;
+  display: flex; align-items: center; gap: 12px; background: var(--ink); color: #fff; border-radius: 14px;
+  padding: 8px 8px 8px 16px; font-size: 15px; box-shadow: 0 20px 40px -16px rgb(0 0 0 / .45); max-width: calc(100vw - 24px);
+}
+.rl-toast svg.i { color: #9fd3b4; flex: none; }
+.rl-toast .acts { display: flex; gap: 8px; flex: none; }
+.rl-toast a.btn.ghost.inv-ghost { text-decoration: none; }
+/* Phone: full width above the bottom bar (centring with translateX capped it at half the screen); actions on their own row. */
+@media (max-width: 767px) {
+  .rl-toast { left: 12px; right: 12px; bottom: 172px; transform: none; max-width: none; flex-wrap: wrap; padding: 12px 12px 12px 16px; }
+  .rl-toast > span { flex: 1 1 calc(100% - 40px); }
+  .rl-toast .acts { flex: 1 1 100%; justify-content: flex-end; }
+  .rl-toast > .btn { margin-left: auto; }
+}
+
+/* PRODUCT.md: touch targets on a phone are at least 44px, including small buttons and filter pills. */
+@media (max-width: 767px) {
+  .pill, .btn.sm { min-height: 44px; }
+}
+
+/* "I have checked…" acknowledgement before a risky action, e.g. approving an abnormal reading. */
+.rl-confirm { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px; font-size: var(--t-14); font-weight: 500; cursor: pointer; }
+.rl-confirm input { width: 20px; height: 20px; accent-color: var(--ink); flex: none; margin: 0; }
+
+/* Keyboard shortcut hint under work lists (computer only). */
+.rl-keys { margin: 12px 0 0; }
+kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 6px;
+  background: var(--surface); font: 600 13px/18px var(--sans); color: var(--ink); text-align: center; }
+
+/* "How it works" disclosure next to a work list: closed by default, one line per rule. */
+.rl-why { margin-top: 12px; font-size: var(--t-14); color: var(--ink-2); }
+.rl-why summary { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; color: var(--ink); font-weight: 500; }
+.rl-why summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.rl-why ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch; }
+.rl-why b { color: var(--ink); font-weight: 600; }
+
+/* No lone last words in Vietnamese copy: balanced headings, no orphan on the last line of a paragraph. */
+h1, h2, h3 { text-wrap: balance; }
+p, li { text-wrap: pretty; }

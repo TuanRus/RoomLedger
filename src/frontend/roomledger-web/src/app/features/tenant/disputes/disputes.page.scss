@@ -1,0 +1,33 @@
+:host { display: block; }
+
+.sent { margin-bottom: 16px; }
+.disp { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 24px; align-items: start; }
+
+.items { list-style: none; margin: 0; padding: 0; }
+.items li { border-bottom: 1px solid var(--line); }
+.items li:last-child { border-bottom: 0; }
+.items .list-item { border-bottom: 0; text-decoration: none; color: var(--ink); }
+.items .list-item:hover { background: var(--soft); }
+.items .list-item.on { background: var(--soft-2); }
+.grow { flex: 1; min-width: 0; display: grid; gap: 2px; justify-items: start; }
+.grow b { font-weight: 500; }
+.grow app-dispute-chip { margin-top: 6px; }
+.list-item > app-icon { color: var(--ink-3); }
+
+/* Phone (TN-20) */
+.m-head { display: flex; align-items: center; gap: 4px; min-height: 56px; margin: 0 -8px 8px; }
+.m-head h1 { font-size: var(--t-18); font-weight: 600; padding-left: 8px; }
+.m-head a + h1 { padding-left: 0; }
+.m-sum { margin-bottom: 12px; }
+.m-new { margin-top: 16px; }
+
+.photo-dialog { border: 0; border-radius: var(--r-lg); padding: 16px; max-width: min(680px, calc(100vw - 24px)); width: 100%; box-shadow: 0 30px 80px -20px rgb(0 0 0 / .45); }
+.photo-dialog::backdrop { background: rgb(20 19 17 / .55); }
+.pd-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.pd-head h2 { font-size: var(--t-18); }
+.photo-dialog img { width: 100%; height: auto; border-radius: 12px; display: block; }
+.photo-dialog p { margin-top: 10px; }
+
+@media (max-width: 1100px) {
+  .disp { grid-template-columns: 1fr; }
+}

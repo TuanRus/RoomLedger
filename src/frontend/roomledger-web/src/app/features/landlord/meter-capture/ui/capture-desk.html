@@ -1,0 +1,57 @@
+@let room = store.activeRoom();
+@let slot = store.activeSlot();
+@let job = store.activeJob();
+@let next = store.nextRoomCode();
+@if (room && slot) {
+  @let kind = slot.kind;
+  <div class="head">
+    <div>
+      <h2 id="cap-title" class="cap-focus" tabindex="-1">{{ room.roomCode }} · {{ kindLabel[kind] }}</h2>
+      <p class="small muted">{{ room.tenantName }} · số {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }} {{ slot.meterNo }}</p>
+    </div>
+    <button type="button" class="iconbtn" aria-label="Đóng bảng tải ảnh" (click)="store.close()"><app-icon name="i-x" /></button>
+  </div>
+
+  <div class="seg" role="group" aria-label="Loại đồng hồ">
+    <button type="button" [class.on]="kind === 'ELECTRICITY'" [attr.aria-pressed]="kind === 'ELECTRICITY'" (click)="setKind('ELECTRICITY')"><app-icon name="i-bolt" />Điện</button>
+    <button type="button" [class.on]="kind === 'WATER'" [attr.aria-pressed]="kind === 'WATER'" (click)="setKind('WATER')"><app-icon name="i-drop" />Nước</button>
+  </div>
+
+  @if (!job) {
+    <div class="drop">
+      <span class="ic"><app-icon name="i-upload" /></span>
+      <p>Chọn ảnh {{ kindMeter[kind] }} {{ room.roomCode }} đã chụp. Ảnh gửi nguyên bản, không nén, để người thuê xem được rõ số.</p>
+      <label class="btn">
+        <input type="file" accept="image/*" class="vh" (change)="onPick($event)">
+        <app-icon name="i-upload" />Tải ảnh lên từ máy
+      </label>
+      <button type="button" class="btn ghost" (click)="store.captureSample()"><app-icon name="i-image" />Dùng ảnh mẫu</button>
+    </div>
+    <p class="small muted">Chụp trực tiếp cần camera điện thoại: mở trang này trên điện thoại khi đi ghi số.</p>
+  } @else if (job.phase === 'uploading' || job.phase === 'reading') {
+    <div class="photo">
+      <!-- Plain img: the photo can be a blob: URL, which NgOptimizedImage rejects. -->
+      <img [src]="job.photoUrl" [alt]="'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + ' vừa tải lên'">
+    </div>
+    <div class="state" role="status" aria-live="polite">
+      @if (job.phase === 'uploading') {
+        <div class="t">
+          @if (job.held) { <app-icon name="i-wifi-off" />Chờ mạng · đã tải {{ pct() }}% } @else { <app-icon name="i-upload" />Đang tải ảnh lên · {{ pct() }}% }
+        </div>
+        <div class="bar" role="progressbar" [attr.aria-valuenow]="pct()" aria-valuemin="0" aria-valuemax="100" aria-label="Tiến độ tải ảnh"><i [style.width.%]="job.progress"></i></div>
+        <span class="small muted">{{ mb(job.sizeBytes) }} MB · ảnh gốc, không nén</span>
+      } @else {
+        <span class="ok-l small"><app-icon name="i-check" size="sm" />Đã tải lên {{ mb(job.sizeBytes) }} MB</span>
+        <div class="t"><span class="spin dark" aria-hidden="true"></span>AI đang đọc số…</div>
+        <div class="skel-row" aria-hidden="true"><span class="drum lg skel"><i>0</i><i>0</i><i>0</i><i>0</i><i>0</i></span><span class="small muted">{{ kindUnit[kind] }}</span></div>
+        <span class="small muted">Thường mất 2–5 giây. Số AI đọc sẽ chờ ở trang Duyệt chỉ số nếu bạn chuyển phòng.</span>
+      }
+    </div>
+    <div class="acts">
+      @if (job.phase === 'uploading') { <button type="button" class="btn sec" (click)="store.discard()">Hủy tải</button> }
+      <button type="button" class="btn" (click)="store.goNext()">{{ next ? 'Sang ' + next : 'Xong lượt' }}</button>
+    </div>
+  } @else {
+    <app-capture-result layout="desk" />
+  }
+}

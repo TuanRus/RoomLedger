@@ -1,0 +1,136 @@
+@let kind = current();
+
+<ng-template #kindSwitch>
+  <div class="seg" role="group" aria-label="Loại đồng hồ">
+    <button type="button" [class.on]="kind === 'ELECTRICITY'" [attr.aria-pressed]="kind === 'ELECTRICITY'" (click)="setKind('ELECTRICITY')"><app-icon name="i-bolt" />Điện</button>
+    <button type="button" [class.on]="kind === 'WATER'" [attr.aria-pressed]="kind === 'WATER'" (click)="setKind('WATER')"><app-icon name="i-drop" />Nước</button>
+  </div>
+</ng-template>
+
+<ng-template #statusOf let-r>
+  @if (r.status === 'CONFIRMED') {
+    <app-status-chip review="approved" [text]="'Đã duyệt ' + (r.confirmedAt | day: 'short')" />
+  } @else {
+    <app-status-chip review="pending" text="Chủ nhà đang duyệt" />
+  }
+</ng-template>
+
+<!-- Viewer body shared by the TD-03 side panel and the TN-03 full-screen view. Approved readings only. -->
+<ng-template #viewer let-r>
+  <button type="button" class="viewer" (click)="zoom()" [attr.aria-label]="'Phóng to ảnh gốc ' + kindName().toLowerCase() + ' kỳ ' + (r.period | period)">
+    <img [ngSrc]="r.photoUrl" width="640" height="480" [alt]="'Ảnh gốc ' + (kind === 'ELECTRICITY' ? 'công tơ điện' : 'đồng hồ nước') + ' P.204 kỳ ' + (r.period | period)">
+    <span class="tag">Ảnh gốc · P.204</span>
+    <span class="zoom" aria-hidden="true"><app-icon name="i-search" /></span>
+  </button>
+  <div class="match">
+    @if (r.digitCropUrl) {
+      <img class="digits" [ngSrc]="r.digitCropUrl" width="132" height="50" [alt]="'Dãy số cắt từ ảnh kỳ ' + (r.period | period)">
+    }
+    <div>
+      <span class="small muted">Chỉ số đã ghi</span>
+      <div class="val"><app-meter-digits [kind]="kind" [value]="r.value" /><span class="muted">{{ unit() }}</span></div>
+    </div>
+  </div>
+  <dl class="kv">
+    <dt>Chủ nhà chụp</dt><dd>{{ r.capturedAt | stamp }}</dd>
+    <dt>Kỳ trước</dt><dd>{{ r.previousValue | num }} {{ unit() }}</dd>
+    <dt>Dùng</dt><dd><b>{{ r.usage | num }} {{ unit() }} × {{ r.rate | vnd }} = {{ r.amount | vnd }}</b></dd>
+    <dt>Trạng thái</dt><dd><ng-container [ngTemplateOutlet]="statusOf" [ngTemplateOutletContext]="{ $implicit: r }" /></dd>
+  </dl>
+  <p class="small muted">Ảnh lưu nguyên bản, không ai sửa được sau khi tải lên. So số trên ảnh với đồng hồ trong phòng nếu bạn thấy lạ.</p>
+  <a class="btn sec block" routerLink="/tenant/disputes/new" [queryParams]="{ reading: r.readingId }"><app-icon name="i-talk" />Khiếu nại chỉ số này</a>
+</ng-template>
+
+@if (!viewport.isPhone()) {
+  <div class="top">
+    <div><h1>Chỉ số điện nước</h1><p class="sub">Chủ nhà chụp và ghi chỉ số. Bạn xem được ảnh gốc của từng số.</p></div>
+    <div class="acts"><ng-container [ngTemplateOutlet]="kindSwitch" /></div>
+  </div>
+  <div class="meters">
+    <div class="tablewrap">
+      <table class="table">
+        <caption class="sr">Chỉ số {{ kindName().toLowerCase() }} phòng P.204 theo kỳ</caption>
+        <thead><tr><th scope="col">Kỳ</th><th scope="col">Ảnh</th><th scope="col" class="num">Chỉ số</th><th scope="col" class="num">Dùng</th><th scope="col">Trạng thái</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b class="per">Kỳ {{ next.period | period }}</b></td>
+            <td><span class="thumb none" aria-hidden="true"><app-icon name="i-clock" /></span></td>
+            <td class="num muted">—</td><td class="num muted">—</td>
+            <td><span class="chip neu"><app-icon name="i-cal" />Ghi {{ next.window }}</span></td>
+          </tr>
+          @for (r of rows(); track r.readingId) {
+            @if (r.status === 'CONFIRMED') {
+              <tr class="pick" [class.sel]="r.readingId === selectedId()" (click)="selectedId.set(r.readingId)">
+                <td><button type="button" class="rowbtn" (click)="selectedId.set(r.readingId)" [attr.aria-pressed]="r.readingId === selectedId()"><b class="per">Kỳ {{ r.period | period }}</b></button></td>
+                <td><img class="thumb" [ngSrc]="r.photoUrl!" width="72" height="54" [alt]="'Ảnh ' + kindName().toLowerCase() + ' kỳ ' + (r.period | period)"></td>
+                <td class="num"><app-meter-digits [kind]="kind" [value]="r.value!" size="sm" /></td>
+                <td class="num">{{ r.usage | num }} {{ unit() }}</td>
+                <td><ng-container [ngTemplateOutlet]="statusOf" [ngTemplateOutletContext]="{ $implicit: r }" /></td>
+              </tr>
+            } @else {
+              <tr>
+                <td><b class="per">Kỳ {{ r.period | period }}</b></td>
+                <td><span class="thumb none" aria-hidden="true"><app-icon name="i-clock" /></span></td>
+                <td class="num muted">—</td><td class="num muted">—</td>
+                <td><ng-container [ngTemplateOutlet]="statusOf" [ngTemplateOutletContext]="{ $implicit: r }" /><span class="who-s">Đã chụp {{ r.capturedAt | day: 'short' }}</span></td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+    <aside class="panel side" aria-live="polite">
+      @if (selected(); as r) {
+        <h2>{{ kindName() }} · kỳ {{ r.period | period }}</h2>
+        <ng-container [ngTemplateOutlet]="viewer" [ngTemplateOutletContext]="{ $implicit: r }" />
+      } @else {
+        <p class="muted">Chưa có chỉ số nào được duyệt.</p>
+      }
+    </aside>
+  </div>
+} @else if (viewerOpen() && selected(); as r) {
+  <div class="m-head">
+    <button type="button" class="iconbtn" aria-label="Quay lại danh sách chỉ số" (click)="viewerOpen.set(false)"><app-icon name="i-back" /></button>
+    <h1>{{ kindName() }} · kỳ {{ r.period | period }}</h1>
+  </div>
+  <div class="m-viewer">
+    <ng-container [ngTemplateOutlet]="viewer" [ngTemplateOutletContext]="{ $implicit: r }" />
+  </div>
+} @else {
+  <div class="m-head"><h1 class="big">Chỉ số điện nước</h1></div>
+  <ng-container [ngTemplateOutlet]="kindSwitch" />
+  <ul class="list hlist">
+    <li class="hrow">
+      <span class="ph none" aria-hidden="true"><app-icon name="i-clock" /></span>
+      <span class="grow"><b>Kỳ {{ next.period | period }}</b><span class="small muted">Chủ nhà ghi {{ next.window }}</span></span>
+    </li>
+    @for (r of rows(); track r.readingId) {
+      <li>
+        @if (r.status === 'CONFIRMED') {
+          <button type="button" class="hrow" (click)="open(r.readingId)" [attr.aria-label]="'Kỳ ' + (r.period | period) + ', chỉ số ' + r.value + ' ' + unit() + ', dùng ' + r.usage + ' ' + unit() + '. Xem ảnh gốc'">
+            <span class="ph"><img [ngSrc]="r.photoUrl!" width="64" height="48" alt=""></span>
+            <span class="grow"><b>Kỳ {{ r.period | period }}</b><span class="small muted">Dùng {{ r.usage | num }} {{ unit() }}</span></span>
+            <span class="v"><app-meter-digits [kind]="kind" [value]="r.value!" size="sm" /><ng-container [ngTemplateOutlet]="statusOf" [ngTemplateOutletContext]="{ $implicit: r }" /></span>
+          </button>
+        } @else {
+          <div class="hrow">
+            <span class="ph none" aria-hidden="true"><app-icon name="i-clock" /></span>
+            <span class="grow"><b>Kỳ {{ r.period | period }}</b><span class="small muted">Đã chụp {{ r.capturedAt | day: 'short' }} · chờ duyệt</span></span>
+            <span class="v"><ng-container [ngTemplateOutlet]="statusOf" [ngTemplateOutletContext]="{ $implicit: r }" /></span>
+          </div>
+        }
+      </li>
+    }
+  </ul>
+  <p class="small muted hint">Chạm vào một kỳ để xem ảnh gốc. Chỉ chủ nhà chụp và ghi chỉ số; bạn xem được mọi ảnh và khiếu nại nếu thấy sai.</p>
+}
+
+<dialog #zoomDialog class="zoom-dialog" (close)="zoomed.set(false)" aria-label="Ảnh gốc phóng to">
+  @if (zoomed() && selected(); as r) {
+    <div class="zd-head">
+      <h2>{{ kindName() }} · kỳ {{ r.period | period }}</h2>
+      <button type="button" class="iconbtn" aria-label="Đóng" (click)="closeZoom()"><app-icon name="i-x" /></button>
+    </div>
+    <img [ngSrc]="r.photoUrl!" width="1280" height="960" [alt]="'Ảnh gốc phóng to, chỉ số đã ghi ' + r.value + ' ' + unit()">
+  }
+</dialog>

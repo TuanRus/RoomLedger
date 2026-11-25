@@ -1,0 +1,188 @@
+<ng-template #chip let-spec>
+  <span class="chip {{ spec.tone }}"><app-icon [name]="spec.icon" />{{ spec.label }}</span>
+</ng-template>
+
+<ng-template #list>
+  <ul class="clist" aria-label="Hợp đồng theo phòng">
+    @for (c of store.contracts(); track c.tenancyId) {
+      <li>
+        <button type="button" class="citem" [class.on]="c.tenancyId === selectedId()" [attr.aria-current]="c.tenancyId === selectedId() ? 'true' : null" (click)="select(c)">
+          <span class="ctext"><b>{{ c.roomCode }}</b><span class="small muted">{{ c.tenantName }}</span>
+            <span><ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: contractChip(c) }" /></span></span>
+          @if (viewport.isPhone()) { <app-icon name="i-chev" /> }
+        </button>
+      </li>
+    }
+  </ul>
+</ng-template>
+
+@if (viewport.isPhone() && !selected()) {
+  <div class="top"><div><h1>Hợp đồng</h1><p class="sub">Bản scan và điều khoản của từng phòng.</p></div></div>
+  <ng-container [ngTemplateOutlet]="list" />
+} @else {
+  <div class="layout">
+    @if (!viewport.isPhone()) {
+      <nav class="side" aria-label="Danh sách hợp đồng">
+        <h2 class="small muted side-h">Hợp đồng · {{ store.contracts().length }} phòng</h2>
+        <ng-container [ngTemplateOutlet]="list" />
+      </nav>
+    }
+
+    @if (selected(); as c) {
+      @let v = current();
+      <div class="detail">
+        @if (viewport.isPhone()) {
+          <button type="button" class="btn ghost sm back" (click)="back()"><app-icon name="i-back" />Hợp đồng</button>
+        } @else {
+          <div class="crumb">Hợp đồng <app-icon name="i-chev" size="sm" /> {{ c.roomCode }}</div>
+        }
+        <div class="top">
+          <div>
+            <h1>Hợp đồng {{ c.roomCode }}</h1>
+            <p class="sub">{{ c.tenantName }}@if (v) { · {{ ddmmyyyy(v.terms.startDate) }} – {{ ddmmyyyy(v.terms.endDate) }} }</p>
+          </div>
+          <div class="acts"><ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: contractChip(c) }" /></div>
+        </div>
+
+        <div aria-live="polite">
+          @if (notice()) { <div class="banner ok msg"><app-icon name="i-check-c" /><span>{{ notice() }}</span></div> }
+        </div>
+
+        <div class="split2">
+          <div class="col">
+            <section class="card" aria-labelledby="h-scan">
+              <div class="row between wrap">
+                <h2 id="h-scan">Bản scan · phiên bản {{ v?.number ?? 1 }}@if (draft()) { (nháp) }</h2>
+                @if (v?.files?.length) { <span class="small muted">{{ v!.files.length }} trang · {{ totalSize() }}</span> }
+              </div>
+              @if (v?.files?.length) {
+                <ul class="pages">
+                  @for (f of v!.files; track f.fileId; let i = $index) {
+                    <li>
+                      <a [href]="f.url" target="_blank" rel="noopener" [attr.aria-label]="'Mở trang ' + (i + 1) + ' bản scan hợp đồng ' + c.roomCode + ' trong thẻ mới'">
+                        @if (!isImage(f)) {
+                          <span class="pdf"><app-icon name="i-doc" /><span>{{ f.fileName }}</span><span class="muted">{{ fileSize(f.size) }}</span></span>
+                        } @else if (f.local) {
+                          <img [src]="f.url" width="150" height="212" [alt]="'Trang ' + (i + 1) + ' bản scan hợp đồng thuê phòng'">
+                        } @else {
+                          <img [ngSrc]="f.url" width="150" height="212" [class.bottom]="i % 2 === 1" [alt]="'Trang ' + (i + 1) + ' bản scan hợp đồng thuê phòng'">
+                        }
+                      </a>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="muted empty">Chưa có bản scan.</p>
+              }
+
+              <label class="drop" [class.over]="dragging()" (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)">
+                <app-icon name="i-upload" />
+                <span class="drop-text">
+                  <b>@if (draft()) { Thay bản scan của phiên bản {{ draft()!.number }} } @else { Tải phiên bản {{ (v?.number ?? 0) + 1 }} lên }</b>
+                  <span class="small muted">@if (viewport.isPhone()) { Chụp hoặc chọn file. } @else { Kéo file vào đây hoặc chọn file. } PDF hoặc ảnh JPG, PNG, HEIC, tối đa 20 MB. File gốc được giữ nguyên, không nén.</span>
+                </span>
+                <span class="btn sec sm">Chọn file</span>
+                <input type="file" class="sr" multiple accept="application/pdf,image/jpeg,image/png,image/heic,image/heif" (change)="onPick($event)">
+              </label>
+              @if (uploadErrors().length) {
+                <div class="banner warn upl-err" role="alert"><app-icon name="i-alert" /><span>@for (e of uploadErrors(); track e) { {{ e }}<br> }</span></div>
+              }
+            </section>
+
+            <section class="card" aria-labelledby="h-terms">
+              <h2 id="h-terms">Điều khoản chính (chủ nhà nhập)</h2>
+              @if (draft()) {
+                <p class="small muted">Nhập đúng như trên bản scan. Người thuê so bản scan với các số này trước khi xác nhận.</p>
+                <div class="terms">
+                  <div class="field">
+                    <label for="c-r">Tiền phòng</label>
+                    @let rErr = errOf(tf.monthlyRent);
+                    <div class="input" [class.is-error]="rErr"><input id="c-r" inputmode="numeric" autocomplete="off" [formField]="tf.monthlyRent" [attr.aria-invalid]="!!rErr" aria-describedby="c-r-h"><span class="unit">đ</span></div>
+                    @if (rErr) { <span class="err" id="c-r-h"><app-icon name="i-alert" />{{ rErr }}</span> } @else if (was('monthlyRent')) { <span class="help" id="c-r-h">{{ was('monthlyRent') }}</span> }
+                  </div>
+                  <div class="field">
+                    <label for="c-d">Tiền cọc</label>
+                    @let dErr = errOf(tf.deposit);
+                    <div class="input" [class.is-error]="dErr"><input id="c-d" inputmode="numeric" autocomplete="off" [formField]="tf.deposit" [attr.aria-invalid]="!!dErr" aria-describedby="c-d-h"><span class="unit">đ</span></div>
+                    @if (dErr) { <span class="err" id="c-d-h"><app-icon name="i-alert" />{{ dErr }}</span> } @else if (was('deposit')) { <span class="help" id="c-d-h">Sửa theo phản hồi của người thuê. {{ was('deposit') }}</span> }
+                  </div>
+                  <div class="field">
+                    <label for="c-s">Ngày bắt đầu</label>
+                    @let sErr = errOf(tf.startDate);
+                    <input id="c-s" type="date" class="input" [class.is-error]="sErr" [formField]="tf.startDate" [attr.aria-invalid]="!!sErr" aria-describedby="c-s-h">
+                    @if (sErr) { <span class="err" id="c-s-h"><app-icon name="i-alert" />{{ sErr }}</span> }
+                  </div>
+                  <div class="field">
+                    <label for="c-t">Thời hạn</label>
+                    <select id="c-t" class="input" [formField]="tf.months" aria-describedby="c-t-h">
+                      @for (o of termOptions; track o) { <option [value]="'' + o">{{ o }} tháng</option> }
+                    </select>
+                    <span class="help" id="c-t-h">Đến {{ endDate() }}</span>
+                  </div>
+                  <div class="field">
+                    <label for="c-e">Giá điện</label>
+                    @let eErr = errOf(tf.electricityRate);
+                    <div class="input" [class.is-error]="eErr"><input id="c-e" inputmode="numeric" autocomplete="off" [formField]="tf.electricityRate" [attr.aria-invalid]="!!eErr" aria-describedby="c-e-h"><span class="unit">đ / kWh</span></div>
+                    @if (eErr) { <span class="err" id="c-e-h"><app-icon name="i-alert" />{{ eErr }}</span> } @else if (was('electricityRate')) { <span class="help" id="c-e-h">{{ was('electricityRate') }}</span> }
+                  </div>
+                  <div class="field">
+                    <label for="c-w">Giá nước</label>
+                    @let wErr = errOf(tf.waterRate);
+                    <div class="input" [class.is-error]="wErr"><input id="c-w" inputmode="numeric" autocomplete="off" [formField]="tf.waterRate" [attr.aria-invalid]="!!wErr" aria-describedby="c-w-h"><span class="unit">đ / m³</span></div>
+                    @if (wErr) { <span class="err" id="c-w-h"><app-icon name="i-alert" />{{ wErr }}</span> } @else if (was('waterRate')) { <span class="help" id="c-w-h">{{ was('waterRate') }}</span> }
+                  </div>
+                </div>
+              } @else if (v) {
+                <dl class="kv terms-kv">
+                  <dt>Tiền phòng</dt><dd>{{ v.terms.monthlyRent | vnd }} / tháng</dd>
+                  <dt>Tiền cọc</dt><dd>{{ v.terms.deposit | vnd }}</dd>
+                  <dt>Thời hạn</dt><dd>{{ months(v.terms) }} tháng · {{ ddmmyyyy(v.terms.startDate) }} – {{ ddmmyyyy(v.terms.endDate) }}</dd>
+                  <dt>Giá điện</dt><dd>{{ v.terms.electricityRate | vnd }} / kWh</dd>
+                  <dt>Giá nước</dt><dd>{{ v.terms.waterRate | vnd }} / m³</dd>
+                </dl>
+                @if (v.status === 'AWAITING_CONFIRM') { <p class="small muted lock-note"><app-icon name="i-lock" size="sm" />Đã gửi người thuê. Muốn sửa, tải phiên bản mới lên.</p> }
+              }
+            </section>
+          </div>
+
+          <aside class="panel col" aria-labelledby="h-both">
+            <h2 id="h-both">Xác nhận của hai bên</h2>
+            <ul class="list parties">
+              <li class="list-item">
+                <span class="av" aria-hidden="true">LL</span>
+                <div class="grow">{{ store.landlordName }} · chủ nhà<p class="small muted">Tải phiên bản {{ v?.number }} lên {{ ddmmyyyy(v?.uploadedAt) }}</p></div>
+                <span class="chip ok"><app-icon name="i-check" />Đã tải lên</span>
+              </li>
+              <li class="list-item">
+                <span class="av tenant" aria-hidden="true">{{ initials(c.tenantName) }}</span>
+                <div class="grow">{{ c.tenantName }} · người thuê<p class="small muted">@if (sent(); as s) { Phiên bản {{ s.number }} · {{ ddmmyyyy(s.tenantRespondedAt ?? s.sentAt) }} } @else { Chưa gửi }</p></div>
+                <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: tenant() }" />
+              </li>
+            </ul>
+
+            @if (sent()?.status === 'REJECTED' && sent()!.rejectReason) {
+              <div class="banner info"><app-icon name="i-talk" /><span><b>Lý do của người thuê:</b> “{{ sent()!.rejectReason }}”</span></div>
+            }
+
+            <div>
+              <h3 class="small muted">Lịch sử phiên bản</h3>
+              <ul class="vlist">
+                @for (h of history(); track h.number) {
+                  <li>
+                    <span>Phiên bản {{ h.number }} · {{ h.note ?? ddmmyyyy(h.uploadedAt) }}</span>
+                    <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: versionChip(h.status) }" />
+                  </li>
+                }
+              </ul>
+            </div>
+
+            @if (draft(); as d) {
+              @if (sendError()) { <p class="err-line" role="alert"><app-icon name="i-alert" />{{ sendError() }}</p> }
+              <button type="button" class="btn block" (click)="send()"><app-icon name="i-mail" />Gửi phiên bản {{ d.number }} cho người thuê</button>
+            }
+          </aside>
+        </div>
+      </div>
+    }
+  </div>
+}

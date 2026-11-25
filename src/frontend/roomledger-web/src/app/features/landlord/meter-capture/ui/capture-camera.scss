@@ -1,0 +1,52 @@
+:host { display: flex; flex-direction: column; min-height: 100%; background: #121110; color: #fff; padding-bottom: 24px; }
+.appbar h1 { color: #fff; text-align: center; outline: none; }
+.iconbtn { color: #fff; cursor: pointer; }
+.pad { padding: 0 16px; }
+.seg { background: rgb(255 255 255 / .12); }
+.seg button { flex: 1; height: 44px; border: 0; border-radius: 10px; background: none; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 8px; font: 500 var(--t-16) var(--sans); color: #e8e5de; }
+.seg button.on { background: #fff; color: var(--ink); }
+
+.vf { position: relative; margin: 8px 16px 0; border-radius: 24px; overflow: hidden; height: min(52vh, 420px); min-height: 300px; background: #2a2926; }
+.vf img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vf img.dim { filter: brightness(.8); }
+.guide { position: absolute; inset: 15% 12% 30%; border-radius: 14px; border: 2px dashed rgb(255 255 255 / .45); display: grid; place-items: center; color: rgb(255 255 255 / .55); }
+.guide ::ng-deep svg { width: 40px; height: 40px; }
+.hint { position: absolute; left: 16px; right: 16px; bottom: 16px; background: rgb(18 17 16 / .78); border-radius: 12px; padding: 10px 12px; font-size: 14px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
+.state { position: absolute; left: 12px; right: 12px; bottom: 12px; background: rgb(18 17 16 / .88); border-radius: 16px; padding: 14px 16px; display: grid; gap: 10px; font-size: 14px; }
+.state .t { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
+.state .bar { background: rgb(255 255 255 / .18); }
+.state .bar i { background: #fff; transition: width .1s linear; }
+.state .sub { color: #d5d1c8; }
+.ok-l { color: #8fe3b0; display: inline-flex; align-items: center; gap: 6px; }
+.skel-row { display: flex; align-items: center; gap: 10px; }
+.drum.skel { gap: 4px; }
+.drum.skel i { background: rgb(255 255 255 / .1); color: transparent; border: 1px solid rgb(255 255 255 / .28); }
+.spin { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid rgb(255 255 255 / .25); border-top-color: #fff; flex: none; }
+.scanbox { position: absolute; inset: 15% 12% 30%; border-radius: 14px; overflow: hidden; box-shadow: 0 0 0 999px rgb(0 0 0 / .45); }
+.scanbox::after { content: ""; position: absolute; left: 0; right: 0; top: 38%; height: 56px; background: linear-gradient(rgb(143 227 176 / 0), rgb(143 227 176 / .32)); border-bottom: 2px solid #8fe3b0; }
+@media (prefers-reduced-motion: no-preference) {
+  .spin { animation: sp .9s linear infinite; }
+  .scanbox::after { animation: scan 1.8s ease-in-out infinite alternate; }
+}
+@keyframes sp { to { transform: rotate(1turn); } }
+@keyframes scan { from { top: 8%; } to { top: 68%; } }
+
+.roomstrip { margin: 12px 16px 0; display: flex; align-items: center; gap: 10px; color: #d5d1c8; font-size: 14px; }
+.roomstrip b { color: #fff; font-weight: 500; }
+.roomstrip .bar { flex: 1; background: rgb(255 255 255 / .16); }
+.roomstrip .bar i { background: #fff; }
+
+.shutter-row { display: flex; justify-content: space-around; align-items: center; padding: 18px 24px 0; }
+.shutter { width: 76px; height: 76px; border-radius: 50%; border: 4px solid #fff; display: grid; place-items: center; cursor: pointer; }
+.shutter i { width: 60px; height: 60px; border-radius: 50%; background: #fff; display: block; }
+.round { width: 52px; height: 52px; border-radius: 50%; background: rgb(255 255 255 / .14); display: grid; place-items: center; color: #fff; border: 0; cursor: pointer; }
+.shutter:focus-within, .round:focus-within { outline: 2px solid #fff; outline-offset: 3px; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.acts { display: flex; gap: 10px; padding: 16px 16px 0; }
+.grow { flex: 1.4; }
+.ghosty { flex: 1; background: rgb(255 255 255 / .14); color: #fff; border-color: transparent; }
+.foot { text-align: center; font-size: 14px; color: #d5d1c8; margin-top: 12px; padding: 0 16px; }
+.link { background: none; border: 0; color: #fff; font: 500 var(--t-14) var(--sans); text-decoration: underline; text-underline-offset: 3px;
+  min-height: 44px; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
