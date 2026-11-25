@@ -65,7 +65,7 @@
   @if (d.status === 'OPEN') {
     <div class="choices" [class.one]="!r">
       @if (r) {
-        <div class="card pick">
+        <div class="choice">
           <b>Sửa chỉ số</b>
           <div class="field">
             <label [for]="'dp-v-' + d.disputeId">Chỉ số đúng</label>
@@ -84,7 +84,7 @@
           <button type="button" class="btn block" [disabled]="value() == null || valueError() || value() === r.approved" (click)="correct(d)">Sửa và tính lại hóa đơn</button>
         </div>
       }
-      <div class="card">
+      <div class="choice">
         <b>{{ r ? 'Giữ nguyên ' + r.approved + ' ' + unit(d) : 'Trả lời và giữ nguyên hóa đơn' }}</b>
         <div class="field">
           <label [for]="'dp-r-' + d.disputeId">Trả lời người thuê (bắt buộc)</label>

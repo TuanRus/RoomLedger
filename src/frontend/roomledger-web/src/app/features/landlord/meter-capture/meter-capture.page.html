@@ -1,7 +1,7 @@
 @let groups = store.groups();
 
 <ng-template #progress>
-  <div class="sheet prog">
+  <div class="prog" [class.sheet]="viewport.isPhone()">
     <div class="row between"><b>{{ store.recordedCount() }}/{{ store.total() }} phòng đã ghi</b><span class="small muted">{{ viewport.isPhone() ? 'Ngày ' + roundDate.slice(0, 5) : 'Lượt chụp ' + roundDate }}</span></div>
     <div class="bar" role="progressbar" [attr.aria-valuenow]="store.recordedCount()" aria-valuemin="0" [attr.aria-valuemax]="store.total()" aria-label="Số phòng đã ghi"><i [style.width.%]="percent()"></i></div>
   </div>

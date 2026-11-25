@@ -8,7 +8,7 @@
 .items li:last-child { border-bottom: 0; }
 .items .list-item { border-bottom: 0; text-decoration: none; color: var(--ink); }
 .items .list-item:hover { background: var(--soft); }
-.items .list-item.on { background: var(--soft); box-shadow: inset 3px 0 0 var(--ink); }
+.items .list-item.on { background: var(--soft-2); }
 .grow { flex: 1; min-width: 0; display: grid; gap: 2px; justify-items: start; }
 .grow b { font-weight: 500; }
 .grow app-dispute-chip { margin-top: 6px; }

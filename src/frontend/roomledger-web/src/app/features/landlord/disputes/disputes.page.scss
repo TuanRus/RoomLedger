@@ -9,7 +9,7 @@
   min-height: 64px; padding: 12px 16px; cursor: pointer;
 }
 .dp-item:hover { background: var(--soft); }
-.dp-item.sel { background: #f4f2ec; box-shadow: inset 3px 0 0 var(--ink); }
+.dp-item.sel { background: var(--soft-2); }
 .dp-item:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .dp-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .dp-text b { font-weight: 500; }
@@ -23,11 +23,13 @@
 .evidence .kv { align-content: start; font-size: var(--t-16); }
 .inv-kv { margin-top: 16px; font-size: var(--t-16); max-width: 420px; }
 
-.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; margin-top: 20px; border-top: 1px solid var(--line); }
 .choices.one { grid-template-columns: 1fr; max-width: 520px; }
-.choices .card { display: grid; gap: 10px; align-content: start; }
-.choices .card > b { font-weight: 500; }
-.card.pick { border-color: var(--ink); }
+/* Two ways to close the dispute, side by side and split by a hairline, not two cards inside the panel. */
+.choice { display: grid; gap: 10px; align-content: start; padding: 18px 0 0; }
+.choices:not(.one) .choice + .choice { border-left: 1px solid var(--line); padding-left: 20px; }
+.choices:not(.one) .choice:first-child { padding-right: 20px; }
+.choice > b { font-weight: 600; }
 .bare { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font: inherit; color: inherit; }
 .input:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgb(27 26 24 / .12); }
 textarea.input:focus { outline: none; }
@@ -38,5 +40,7 @@ textarea.input:focus { outline: none; }
 .m-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; }
 .m-head h1 { font-size: var(--t-24); letter-spacing: -.025em; }
 .m-detail .evidence, .m-detail .choices { grid-template-columns: 1fr; }
+.m-detail .choices:not(.one) .choice { padding: 18px 0 0; border-left: 0; }
+.m-detail .choice + .choice { margin-top: 18px; border-top: 1px solid var(--line); }
 .m-detail .evidence .photo { height: 220px; }
 .m-detail { padding-bottom: 8px; }

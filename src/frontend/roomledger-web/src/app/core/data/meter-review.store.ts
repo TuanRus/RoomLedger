@@ -82,6 +82,13 @@ export class MeterReviewStore {
     return c;
   });
 
+  /** Abnormal and unreadable readings across electricity and water, problems first. */
+  readonly problems = computed(() =>
+    (Object.entries(this.data()) as [MeterKind, ReviewRow[]][])
+      .flatMap(([kind, rows]) => rows.filter((r) => PRIORITY[stateOf(r)] < PRIORITY.pending).map((row) => ({ kind, row })))
+      .sort((a, b) => PRIORITY[stateOf(a.row)] - PRIORITY[stateOf(b.row)]),
+  );
+
   /** Readings still to act on across electricity and water, for the nav badge. */
   readonly attentionAll = computed(() => Object.values(this.data()).flat().filter(needsAction).length);
 

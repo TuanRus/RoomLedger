@@ -98,8 +98,8 @@
       @if (checked().size > 0) {
         <div class="bulk" role="region" aria-label="Duyệt hàng loạt">
           <span>Đã chọn <b>{{ checked().size }}</b> chỉ số chờ duyệt trong khoảng ±10% so với 3 kỳ. Bất thường và không đọc được thì xem từng phòng.</span>
-          <button type="button" class="btn ghost inv-ghost sm" (click)="clearChecked()">Bỏ chọn</button>
-          <button type="button" class="btn inv sm" (click)="approveChecked()"><app-icon name="i-check" size="sm" />Duyệt {{ checked().size }} chỉ số</button>
+          <button type="button" class="btn ghost sm" (click)="clearChecked()">Bỏ chọn</button>
+          <button type="button" class="btn sm" (click)="approveChecked()"><app-icon name="i-check" size="sm" />Duyệt {{ checked().size }} chỉ số</button>
         </div>
       }
       <div class="tablewrap">
@@ -130,7 +130,7 @@
                 <td><app-status-chip [review]="stateOf(row)" /></td>
               </tr>
             } @empty {
-              <tr><td colspan="8" class="muted empty-row">Không có phòng nào ở trạng thái này.</td></tr>
+              <tr><td colspan="8" class="muted empty-row">{{ emptyText() }}</td></tr>
             }
           </tbody>
         </table>
@@ -180,13 +180,13 @@
           </button>
         </li>
       } @empty {
-        <li class="mrow muted">Không có phòng nào ở trạng thái này.</li>
+        <li class="mrow muted">{{ emptyText() }}</li>
       }
     </ul>
     @if (checked().size > 0) {
       <div class="m-sticky" role="region" aria-label="Duyệt hàng loạt">
         <span>Đã chọn <b>{{ checked().size }}</b> chỉ số bình thường</span>
-        <button type="button" class="btn inv sm" (click)="approveChecked()">Duyệt {{ checked().size }}</button>
+        <button type="button" class="btn sm" (click)="approveChecked()">Duyệt {{ checked().size }}</button>
       </div>
     }
   }

@@ -21,7 +21,7 @@
   display: flex; align-items: center; gap: 6px;
 }
 .citem:hover, .citem.on { background: #f4f2ec; }
-.citem.on { box-shadow: inset 3px 0 0 var(--ink); }
+.citem.on { background: var(--soft-2); }
 .citem:focus-visible { outline-offset: -2px; }
 .ctext { display: grid; gap: 2px; flex: 1; min-width: 0; }
 .side .chip { font-size: 13px; padding: 0 8px; }

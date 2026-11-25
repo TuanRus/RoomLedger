@@ -12,13 +12,14 @@ import { StatusChip } from '../../../shared/ui/status-chip';
 
 type Filter = 'all' | ReviewState;
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'Tất cả' },
-  { id: 'pending', label: 'Chờ duyệt' },
-  { id: 'abnormal', label: 'Bất thường' },
-  { id: 'unreadable', label: 'Không đọc được' },
-  { id: 'unrecorded', label: 'Chưa ghi' },
-  { id: 'approved', label: 'Đã duyệt' },
+/** `empty` says what an empty filter means for this period, not just that the list is empty. */
+const FILTERS: { id: Filter; label: string; empty: string }[] = [
+  { id: 'all', label: 'Tất cả', empty: 'Chưa có phòng nào trong kỳ này.' },
+  { id: 'pending', label: 'Chờ duyệt', empty: 'Không còn chỉ số bình thường chờ duyệt.' },
+  { id: 'abnormal', label: 'Bất thường', empty: 'Không có chỉ số bất thường kỳ này.' },
+  { id: 'unreadable', label: 'Không đọc được', empty: 'AI đọc được số trên mọi ảnh kỳ này.' },
+  { id: 'unrecorded', label: 'Chưa ghi', empty: 'Đã ghi đủ mọi phòng kỳ này.' },
+  { id: 'approved', label: 'Đã duyệt', empty: 'Chưa duyệt chỉ số nào. Bắt đầu từ phòng đầu danh sách.' },
 ];
 
 const UNDO_SECONDS = 10;
@@ -38,6 +39,7 @@ export class MeterReviewPage {
   private readonly injector = inject(Injector);
 
   protected readonly filters = FILTERS;
+  protected readonly emptyText = computed(() => FILTERS.find((f) => f.id === this.filter())?.empty ?? '');
   protected readonly filter = signal<Filter>('all');
   protected readonly stateOf = stateOf;
   protected readonly usageOf = usageOf;

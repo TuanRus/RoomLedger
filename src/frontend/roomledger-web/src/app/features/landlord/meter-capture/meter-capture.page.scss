@@ -5,12 +5,15 @@
 .ptop h1 { font-size: var(--t-18); font-weight: 600; }
 
 .prog { display: grid; gap: 8px; }
+.prog:not(.sheet) { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 .prog .row > * { white-space: nowrap; }
 .pills { margin: 12px 0; }
 .pill { cursor: pointer; min-height: 44px; }
 .pill.on b { color: inherit; }
 
 ul.rooms { list-style: none; margin: 0; padding: 0; }
+/* Inside the desk card the list is ruled rows, not a second bordered box. */
+.card ul.rooms { border: 0; border-radius: 0; margin: 0 calc(var(--s5) * -1) calc(var(--s5) * -1); }
 .rooms li { border-bottom: 1px solid var(--line); }
 .rooms li:last-child { border-bottom: 0; }
 .room { all: unset; box-sizing: border-box; width: 100%; min-height: 64px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;
@@ -18,7 +21,7 @@ ul.rooms { list-style: none; margin: 0; padding: 0; }
 .room:hover { background: var(--soft); }
 .room:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .room.first, .room.on { background: var(--soft); }
-.room.on { box-shadow: inset 3px 0 0 var(--ink); }
+.room.on { background: var(--soft-2); color: var(--ink-2); }
 .txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .txt b { font-weight: 500; color: var(--ink); }
 .go { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 10px; background: var(--ink); color: #fff;

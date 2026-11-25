@@ -120,7 +120,7 @@
                 <td><ng-container [ngTemplateOutlet]="status" [ngTemplateOutletContext]="{ $implicit: inv }" /></td>
               </tr>
             } @empty {
-              <tr><td colspan="6" class="muted empty">Không có hóa đơn nào ở trạng thái này.</td></tr>
+              <tr><td colspan="6" class="muted empty">{{ emptyText() }}</td></tr>
             }
           </tbody>
         </table>
@@ -161,7 +161,7 @@
         }
       </ul>
     } @empty {
-      <p class="muted empty">Không có hóa đơn nào ở trạng thái này.</p>
+      <p class="muted empty">{{ emptyText() }}</p>
     }
   }
 }

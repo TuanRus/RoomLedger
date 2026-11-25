@@ -15,12 +15,13 @@ import { InvoiceGroup, LandlordInvoicesStore } from './data/invoices.store';
 
 type Filter = 'all' | InvoiceGroup;
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: 'all', label: 'Tất cả' },
-  { id: 'draft', label: 'Nháp' },
-  { id: 'unpaid', label: 'Chưa thanh toán' },
-  { id: 'paid', label: 'Đã thanh toán' },
-  { id: 'overdue', label: 'Quá hạn (kỳ trước)' },
+/** `empty` says what an empty filter means for this landlord, not just that the list is empty. */
+const FILTERS: { id: Filter; label: string; empty: string }[] = [
+  { id: 'all', label: 'Tất cả', empty: 'Chưa có hóa đơn kỳ này. Hóa đơn được tạo khi bạn duyệt chỉ số.' },
+  { id: 'draft', label: 'Nháp', empty: 'Đã gửi hết hóa đơn nháp cho người thuê.' },
+  { id: 'unpaid', label: 'Chưa thanh toán', empty: 'Không ai còn nợ hóa đơn đã gửi.' },
+  { id: 'paid', label: 'Đã thanh toán', empty: 'Chưa ai trả tiền kỳ này. Chọn hóa đơn rồi bấm "Đánh dấu đã thanh toán" khi nhận được tiền.' },
+  { id: 'overdue', label: 'Quá hạn (kỳ trước)', empty: 'Không có hóa đơn kỳ trước nào còn nợ.' },
 ];
 
 const UNDO_SECONDS = 10;
@@ -50,6 +51,7 @@ export class LandlordInvoicesPage {
 
   private readonly vnd = new VndPipe();
   protected readonly filters = FILTERS;
+  protected readonly emptyText = computed(() => FILTERS.find((f) => f.id === this.filter())?.empty ?? '');
   protected readonly filter = signal<Filter>('all');
 
   protected readonly visible = computed(() => {
