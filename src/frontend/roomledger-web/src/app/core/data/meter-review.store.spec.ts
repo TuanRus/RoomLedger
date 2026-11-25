@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
 import { ReviewRow } from './models';
-import { MeterReviewStore, checkValue, deltaOf, stateOf } from './meter-review.store';
+import { MeterReviewStore, byPriority, checkValue, deltaOf, needsAction, stateOf } from './meter-review.store';
 
 describe('MeterReviewStore', () => {
   let store: MeterReviewStore;
@@ -47,6 +47,22 @@ describe('MeterReviewStore', () => {
   it('switches to water readings', () => {
     store.kind.set('WATER');
     expect(store.rows().map((r) => r.roomCode)).toEqual(['P.204', 'P.112']);
+  });
+
+  it('lists problems first and approved readings last', () => {
+    store.approve([store.normalPendingIds()[0]]);
+    const states = byPriority(store.rows()).map(stateOf);
+    expect(states.slice(0, 2)).toEqual(['abnormal', 'unreadable']);
+    expect(states.at(-1)).toBe('approved');
+    expect(states.indexOf('unrecorded')).toBeGreaterThan(states.lastIndexOf('pending'));
+  });
+
+  it('counts readings still to act on across both meter kinds', () => {
+    const own = store.rows().filter(needsAction).length;
+    expect(store.attentionAll()).toBeGreaterThan(own);
+    const before = store.attentionAll();
+    const approved = store.approve(store.normalPendingIds());
+    expect(store.attentionAll()).toBe(before - approved);
   });
 });
 

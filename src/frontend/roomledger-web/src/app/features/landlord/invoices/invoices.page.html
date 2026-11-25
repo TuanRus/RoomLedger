@@ -94,7 +94,6 @@
   <div class="top">
     <div><h1>Hóa đơn</h1><p class="sub">Kỳ {{ store.period | period }} · hạn thanh toán {{ store.dueDate | day }}</p></div>
     <div class="acts">
-      <span class="select" aria-label="Kỳ đang xem"><app-icon name="i-cal" />Kỳ {{ store.period | period }}</span>
       <ng-container [ngTemplateOutlet]="headerAction" />
     </div>
   </div>

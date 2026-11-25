@@ -69,13 +69,13 @@
       }
       <div class="actions">
         @if (unreadable && !manualEntry()) {
-          <a class="btn block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }"><app-icon name="i-camera" />Cần chụp lại</a>
+          <a class="btn block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }" aria-keyshortcuts="R"><app-icon name="i-camera" />Cần chụp lại</a>
           <button type="button" class="btn ghost block" (click)="manualEntry.set(true)"><app-icon name="i-edit" />Tự nhập số theo ảnh</button>
         } @else {
-          <button type="button" class="btn block" [disabled]="!canApprove()" (click)="approveSelected()">
+          <button type="button" class="btn block" [disabled]="!canApprove()" aria-keyshortcuts="A" (click)="approveSelected()">
             <app-icon name="i-check" />{{ c?.problem === 'abnormal' ? 'Duyệt dù bất thường' : 'Duyệt' }} {{ editValue() | num }} {{ unit() }}
           </button>
-          <a class="btn sec block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }"><app-icon name="i-camera" />Cần chụp lại</a>
+          <a class="btn sec block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }" aria-keyshortcuts="R"><app-icon name="i-camera" />Cần chụp lại</a>
         }
       </div>
     }
@@ -89,7 +89,7 @@
 
 @if (!viewport.isPhone()) {
   <div class="top">
-    <div><h1>Duyệt chỉ số</h1><p class="sub">Kỳ {{ store.period | period }} · <b class="ink">{{ attention() }} cần xử lý</b> · {{ counts.unrecorded }} phòng chưa ghi</p></div>
+    <div><h1>Duyệt chỉ số</h1><p class="sub">Kỳ {{ store.period | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }} phòng · <b class="ink">{{ attention() }} cần xử lý</b> · {{ counts.unrecorded }} chưa ghi</p></div>
     <div class="acts"><ng-container [ngTemplateOutlet]="kindSwitch" /></div>
   </div>
   <div class="split review">
@@ -135,6 +135,7 @@
           </tbody>
         </table>
       </div>
+      <p class="small muted rl-keys">Phím tắt: <kbd>J</kbd> <kbd>K</kbd> phòng sau, phòng trước · <kbd>A</kbd> duyệt · <kbd>R</kbd> cần chụp lại · <kbd>Enter</kbd> trong ô số để duyệt</p>
     </div>
     <aside class="panel detail" aria-label="Phòng đang chọn">
       @if (selected(); as row) {
@@ -153,7 +154,7 @@
       <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: row }" />
     </section>
   } @else {
-    <div class="m-head"><h1>Duyệt chỉ số</h1><span class="muted small">Kỳ {{ store.period | period }}</span></div>
+    <div class="m-head"><h1>Duyệt chỉ số</h1><span class="muted small">Kỳ {{ store.period | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }}</span></div>
     <ng-container [ngTemplateOutlet]="kindSwitch" />
     <div class="m-pills"><ng-container [ngTemplateOutlet]="filterPills" /></div>
     <ul class="list m-list">

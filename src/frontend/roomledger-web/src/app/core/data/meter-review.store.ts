@@ -47,6 +47,18 @@ export function stateOf(row: ReviewRow): ReviewState {
   return 'pending';
 }
 
+/** States the landlord still has to act on, in the order they are worked through. */
+const PRIORITY: Record<ReviewState, number> = { abnormal: 0, unreadable: 1, pending: 2, unrecorded: 3, approved: 4 };
+
+export function needsAction(row: ReviewRow): boolean {
+  return PRIORITY[stateOf(row)] <= PRIORITY.pending;
+}
+
+/** Problems first (abnormal, unreadable), then pending, unrecorded and approved; room order kept inside each group. */
+export function byPriority(rows: ReviewRow[]): ReviewRow[] {
+  return [...rows].sort((a, b) => PRIORITY[stateOf(a)] - PRIORITY[stateOf(b)]);
+}
+
 /**
  * Landlord meter review state for one property and period.
  * Backed by sample data until the API is connected: replace load/approve/setValue with
@@ -69,6 +81,9 @@ export class MeterReviewStore {
     for (const row of this.rows()) c[stateOf(row)]++;
     return c;
   });
+
+  /** Readings still to act on across electricity and water, for the nav badge. */
+  readonly attentionAll = computed(() => Object.values(this.data()).flat().filter(needsAction).length);
 
   /** Pending readings inside the normal band: the default bulk selection. */
   readonly normalPendingIds = computed(() =>

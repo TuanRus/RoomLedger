@@ -29,7 +29,7 @@ export const TENANT_SHELL: ShellConfig = {
   person: { initials: 'MA', name: 'Trần Minh Anh', role: 'Người thuê' },
   nav: [
     { path: 'home', icon: 'i-home', label: 'Trang chủ', phone: 1 },
-    { path: 'invoices', icon: 'i-bill', label: 'Hóa đơn', badge: '1', phone: 2 },
+    { path: 'invoices', icon: 'i-bill', label: 'Hóa đơn', phone: 2 },
     { path: 'meters', icon: 'i-meter', label: 'Chỉ số điện nước', short: 'Chỉ số', phone: 3 },
     { path: 'contract', icon: 'i-doc', label: 'Hợp đồng', phone: 4 },
     { path: 'disputes', icon: 'i-talk', label: 'Khiếu nại' },

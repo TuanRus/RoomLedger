@@ -4,6 +4,7 @@ import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, Ro
 import { filter, map } from 'rxjs';
 
 import { Viewport } from '../core/layout/viewport';
+import { landlordBadges, tenantBadges } from './nav-badges';
 import { Icon } from '../shared/ui/icon';
 
 export interface NavItem {
@@ -12,7 +13,6 @@ export interface NavItem {
   label: string;
   /** Short label for the phone bottom bar. */
   short?: string;
-  badge?: string;
   /** Position in the phone bottom bar (max 5 incl. the camera button); omit to hide it there. */
   phone?: number;
   /** Rendered as the round camera button in the middle of the phone bar (landlord meter capture). */
@@ -45,7 +45,7 @@ export interface ShellConfig {
             @for (item of sideItems(); track item.path) {
               <a [routerLink]="item.path" routerLinkActive="on" ariaCurrentWhenActive="page">
                 <app-icon [name]="item.icon" />{{ item.label }}
-                @if (item.badge) { <span class="count">{{ item.badge }}</span> }
+                @if (badges()[item.path]; as n) { <span class="count" aria-hidden="true">{{ n }}</span><span class="sr">, {{ n }} cần xử lý</span> }
               </a>
             }
           </nav>
@@ -62,13 +62,14 @@ export interface ShellConfig {
           } @else {
             <a [routerLink]="item.path" routerLinkActive="on" ariaCurrentWhenActive="page">
               <app-icon [name]="item.icon" />{{ item.short ?? item.label }}
-              @if (item.badge) { <span class="count">{{ item.badge }}</span> }
+              @if (badges()[item.path]; as n) { <span class="count" aria-hidden="true">{{ n }}</span><span class="sr">, {{ n }} cần xử lý</span> }
             </a>
           }
         }
         @if (moreItems().length) {
           <button type="button" class="more" [class.on]="moreActive()" aria-haspopup="dialog" (click)="moreDialog()?.nativeElement?.showModal()">
             <app-icon name="i-more" />Thêm
+            @if (moreWaiting()) { <span class="dot" aria-hidden="true"></span><span class="sr">, có mục cần xử lý</span> }
           </button>
         }
       </nav>
@@ -82,7 +83,7 @@ export interface ShellConfig {
             @for (item of moreItems(); track item.path) {
               <a [routerLink]="item.path" routerLinkActive="on" ariaCurrentWhenActive="page" (click)="more.close()">
                 <app-icon [name]="item.icon" /><span class="lbl">{{ item.label }}</span>
-                @if (item.badge) { <span class="count">{{ item.badge }}</span> }
+                @if (badges()[item.path]; as n) { <span class="count" aria-hidden="true">{{ n }}</span><span class="sr">, {{ n }} cần xử lý</span> }
                 <app-icon name="i-chev" />
               </a>
             }
@@ -103,6 +104,9 @@ export interface ShellConfig {
     .bnav .more { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 48px;
       border: 0; background: none; padding: 0; font: 500 13px/1.2 var(--sans); color: var(--ink-2); cursor: pointer; }
     .bnav .more.on { color: var(--ink); }
+    .bnav .more { position: relative; }
+    .bnav .more .dot { position: absolute; top: 6px; left: calc(50% + 8px); width: 10px; height: 10px; border-radius: 50%;
+      background: var(--warn); box-shadow: 0 0 0 2px var(--surface); }
     .more-sheet { margin: auto 0 0; width: 100%; max-width: 100%; border: 0; border-radius: 24px 24px 0 0; color: var(--ink);
       background: var(--surface); padding: 12px 16px calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -20px 60px -20px rgb(0 0 0 / .35); }
     .more-sheet::backdrop { background: rgb(20 19 17 / .5); }
@@ -128,6 +132,10 @@ export class AppShell {
   protected readonly phoneItems = computed(() => this.config().nav.filter((n) => n.phone != null).sort((a, b) => a.phone! - b.phone!));
   /** Items without a phone slot, shown in the "Thêm" sheet when the bar has room for that button. */
   protected readonly moreItems = computed(() => (this.phoneItems().length < 5 ? this.config().nav.filter((n) => n.phone == null) : []));
+  /** Live counts of what is waiting on this person, per nav path (0 hides the badge). */
+  protected readonly badges = this.config().role === 'landlord' ? landlordBadges() : tenantBadges();
+  /** The "Thêm" button gets a dot when anything inside its sheet is waiting. */
+  protected readonly moreWaiting = computed(() => this.moreItems().some((n) => (this.badges()[n.path] ?? 0) > 0));
   protected readonly moreDialog = viewChild<ElementRef<HTMLDialogElement>>('more');
 
   private readonly router = inject(Router);

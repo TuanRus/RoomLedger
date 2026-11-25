@@ -3,7 +3,6 @@
 .row.wrap { flex-wrap: wrap; gap: 4px 12px; }
 .progress { margin-bottom: 20px; }
 .progress .bar { margin-top: 12px; }
-.period { color: var(--ink); }
 
 .dash-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
 .dash-grid .card { display: flex; flex-direction: column; }
