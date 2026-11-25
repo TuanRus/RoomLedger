@@ -29,3 +29,7 @@ body {
 @media (max-width: 767px) {
   .pill, .btn.sm { min-height: 44px; }
 }
+
+/* "I have checked…" acknowledgement before a risky action, e.g. approving an abnormal reading. */
+.rl-confirm { display: flex; align-items: center; gap: 10px; min-height: 44px; margin-top: 12px; font-size: var(--t-14); font-weight: 500; cursor: pointer; }
+.rl-confirm input { width: 20px; height: 20px; accent-color: var(--ink); flex: none; margin: 0; }

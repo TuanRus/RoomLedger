@@ -1,6 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { Viewport } from '../../../core/layout/viewport';
 import { PeriodPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
 import { OverviewStore, formatChange } from './data/overview.store';
@@ -17,5 +18,6 @@ import { OverviewStore, formatChange } from './data/overview.store';
 })
 export class LandlordOverviewPage {
   protected readonly store = inject(OverviewStore);
+  protected readonly viewport = inject(Viewport);
   protected readonly formatChange = formatChange;
 }

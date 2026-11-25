@@ -7,7 +7,7 @@
       <h1>Khiếu nại</h1>
     </div>
   } @else {
-    <div class="top"><div><h1>Gửi khiếu nại</h1><p class="sub">Hóa đơn {{ i.roomCode }} kỳ {{ i.period | period }} · chủ nhà xem lại và trả lời một lần</p></div></div>
+    <div class="top"><div><h1>Gửi khiếu nại</h1><p class="sub">Hóa đơn {{ i.roomCode }} kỳ {{ i.period | period }} · chủ nhà xem lại ảnh gốc và trả lời bạn</p></div></div>
   }
 
   <div class="layout">
@@ -38,7 +38,7 @@
         <div class="field">
           <label for="dn-value">Chỉ số đúng theo bạn</label>
           <div class="input with-unit" [class.is-error]="vf.touched() && vf.invalid()">
-            <input id="dn-value" type="text" inputmode="numeric" autocomplete="off" [formField]="f.value" [placeholder]="'' + l.current"
+            <input id="dn-value" type="text" inputmode="numeric" autocomplete="off" [formField]="f.value" [placeholder]="'Ví dụ: ' + (l.current - 2)"
               [attr.aria-invalid]="vf.touched() && vf.invalid()" [attr.aria-describedby]="vf.touched() && vf.invalid() ? 'dn-value-err dn-value-help' : 'dn-value-help'">
             <span class="unit">{{ unit() }}</span>
           </div>
@@ -77,7 +77,7 @@
         <ol class="tl">
           <li><span class="dot"><app-icon name="i-image" /></span><div><b>Xem lại ảnh gốc</b><p class="small muted">Ảnh lưu nguyên bản, không ai sửa được sau khi tải lên.</p></div></li>
           <li><span class="dot ok"><app-icon name="i-bill" /></span><div><b>Sửa số</b><p class="small muted">Hóa đơn được tính lại, bạn thấy số tiền mới.</p></div></li>
-          <li><span class="dot info"><app-icon name="i-talk" /></span><div><b>Hoặc giữ nguyên</b><p class="small muted">Chủ nhà trả lời kèm lý do. Mỗi khiếu nại được trả lời một lần.</p></div></li>
+          <li><span class="dot info"><app-icon name="i-talk" /></span><div><b>Hoặc giữ nguyên</b><p class="small muted">Chủ nhà trả lời kèm lý do. Nếu vẫn thấy sai, bạn gửi được khiếu nại mới.</p></div></li>
         </ol>
       </aside>
     }

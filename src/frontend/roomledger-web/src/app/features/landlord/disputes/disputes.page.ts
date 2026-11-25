@@ -45,13 +45,14 @@ export class LandlordDisputesPage {
     return d ? (this.invoices.find(d.invoiceId) ?? null) : null;
   });
 
-  protected readonly value = linkedSignal(() => this.selected()?.reading?.tenantValue ?? null);
+  /** Starts empty: prefilling the tenant's number would nudge the landlord to accept it. */
+  protected readonly value = linkedSignal<string | null, number | null>({ source: this.selectedId, computation: () => null });
   protected readonly reply = linkedSignal({ source: this.selectedId, computation: () => '' });
   protected readonly replyError = linkedSignal({ source: this.selectedId, computation: () => false });
   protected readonly valueError = computed(() => {
     const r = this.selected()?.reading;
     const v = this.value();
-    return !!r && (v == null || v < r.previous);
+    return !!r && v != null && v < r.previous;
   });
   protected readonly recalc = computed(() => {
     const d = this.selected();

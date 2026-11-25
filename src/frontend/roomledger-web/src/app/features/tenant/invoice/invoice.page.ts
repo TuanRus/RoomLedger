@@ -7,6 +7,7 @@ import { TenantInvoiceStore } from '../../../core/data/tenant-invoice.store';
 import { Viewport } from '../../../core/layout/viewport';
 import { PeriodPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
+import { MeterPhoto } from '../../../shared/ui/meter-photo';
 import { Receipt } from '../../../shared/ui/receipt';
 import { StatusChip } from '../../../shared/ui/status-chip';
 
@@ -20,7 +21,7 @@ type CopyTarget = 'account' | 'note';
  */
 @Component({
   selector: 'app-tenant-invoice-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, Receipt, StatusChip, VndPipe, PeriodPipe, StampPipe],
+  imports: [MeterPhoto, NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, Receipt, StatusChip, VndPipe, PeriodPipe, StampPipe],
   templateUrl: './invoice.page.html',
   styleUrl: './invoice.page.scss',
 })

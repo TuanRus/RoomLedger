@@ -1,4 +1,4 @@
-import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, ElementRef, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
@@ -6,6 +6,7 @@ import { MeterKind } from '../../../core/data/models';
 import { Viewport } from '../../../core/layout/viewport';
 import { NumPipe, PeriodPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
+import { MeterPhoto } from '../../../shared/ui/meter-photo';
 import { Receipt } from '../../../shared/ui/receipt';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DayPipe } from '../../../shared/pipes/format.pipes';
@@ -39,7 +40,7 @@ interface Toast {
  */
 @Component({
   selector: 'app-landlord-invoices-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, Receipt, StatusChip, VndPipe, NumPipe, PeriodPipe, StampPipe, DayPipe],
+  imports: [MeterPhoto, NgTemplateOutlet, RouterLink, Icon, Receipt, StatusChip, VndPipe, NumPipe, PeriodPipe, StampPipe, DayPipe],
   templateUrl: './invoices.page.html',
   styleUrl: './invoices.page.scss',
 })

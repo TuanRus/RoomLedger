@@ -34,7 +34,7 @@
         <div>
           <b>Chờ chủ nhà trả lời</b>
           <p class="small muted note">
-            Chủ nhà xem lại {{ d.photoUrl ? 'ảnh gốc' : 'hóa đơn' }} rồi trả lời một lần: sửa số (hóa đơn được tính lại) hoặc giữ nguyên kèm lý do.
+            Chủ nhà xem lại {{ d.photoUrl ? 'ảnh gốc' : 'hóa đơn' }} rồi trả lời bạn: sửa số (hóa đơn được tính lại) hoặc giữ nguyên kèm lý do.
             Bạn nhận email khi có trả lời. Hóa đơn kỳ {{ d.period | period }} tạm ở trạng thái “Đang khiếu nại”.
           </p>
           @if (d.photoUrl) {
@@ -98,12 +98,12 @@
       <div class="diff"><p class="small muted"><s>{{ d.totalBefore | vnd }}</s></p><p class="small save">−{{ saving() | vnd }}</p></div>
       <a class="btn" [routerLink]="['/tenant/invoices', d.invoiceId]">Xem hóa đơn mới</a>
     </div>
-    <p class="small muted foot">Mỗi khiếu nại được trả lời một lần. Có vấn đề khác? Gửi khiếu nại mới từ hóa đơn hoặc trang ảnh đồng hồ.</p>
+    <p class="small muted foot">Có vấn đề khác? Gửi khiếu nại mới từ hóa đơn hoặc trang ảnh đồng hồ.</p>
   }
   @case ('kept') {
     <div class="next">
       <b>Vẫn thấy chưa đúng?</b>
-      <p class="small muted">Mỗi khiếu nại được trả lời một lần. Đối chiếu đồng hồ trong phòng với ảnh gốc; nếu số vẫn khác, gửi khiếu nại mới kèm số bạn thấy, hoặc nói trực tiếp với chủ nhà.</p>
+      <p class="small muted">Đối chiếu đồng hồ trong phòng với ảnh gốc; nếu số vẫn khác, gửi khiếu nại mới kèm số bạn thấy, hoặc nói trực tiếp với chủ nhà.</p>
       <div class="acts">
         <a class="btn sec" routerLink="/tenant/disputes/new" [queryParams]="newDisputeParams()"><app-icon name="i-talk" />Gửi khiếu nại mới</a>
         <a class="btn ghost" [routerLink]="['/tenant/invoices', d.invoiceId]">Xem hóa đơn kỳ {{ d.period | period }}</a>

@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 
-import { MeterReviewStore, deltaOf, stateOf } from './meter-review.store';
+import { ReviewRow } from './models';
+import { MeterReviewStore, checkValue, deltaOf, stateOf } from './meter-review.store';
 
 describe('MeterReviewStore', () => {
   let store: MeterReviewStore;
@@ -46,5 +47,26 @@ describe('MeterReviewStore', () => {
   it('switches to water readings', () => {
     store.kind.set('WATER');
     expect(store.rows().map((r) => r.roomCode)).toEqual(['P.204', 'P.112']);
+  });
+});
+
+describe('checkValue', () => {
+  const row = { averageUsage: 100, reading: { previousValue: 1000 } } as unknown as ReviewRow;
+
+  it('blocks a value below the previous reading', () => {
+    expect(checkValue(row, 900)).toEqual({ usage: -100, delta: -2, problem: 'below-previous' });
+  });
+
+  it('flags usage more than 50% away from the 3-period average', () => {
+    expect(checkValue(row, 1160).problem).toBe('abnormal');
+    expect(checkValue(row, 1040).problem).toBe('abnormal');
+  });
+
+  it('accepts usage near the average', () => {
+    expect(checkValue(row, 1120)).toEqual({ usage: 120, delta: expect.closeTo(0.2), problem: null });
+  });
+
+  it('returns nothing to check without a value', () => {
+    expect(checkValue(row, null).problem).toBeNull();
   });
 });

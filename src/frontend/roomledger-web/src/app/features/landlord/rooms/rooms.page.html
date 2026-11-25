@@ -129,7 +129,7 @@
         </table>
       </div>
     </div>
-    <aside class="panel detail" aria-live="polite">
+    <aside class="panel detail" aria-label="Phòng đang chọn">
       @if (selected(); as room) {
         <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: room }" />
       } @else {

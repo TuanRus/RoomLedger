@@ -52,7 +52,8 @@
 </ng-template>
 
 @if (viewport.isPhone()) {
-  <div class="phone">
+  <!-- The capture step is a modal on a phone: the round behind it leaves the tab order and the screen reader. -->
+  <div class="phone" [inert]="!!store.active()">
     <div class="ptop">
       <h1>Ghi chỉ số</h1>
       <span class="chip neu"><app-icon name="i-cal" />Kỳ {{ period | period }}</span>

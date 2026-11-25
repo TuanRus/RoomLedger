@@ -3,7 +3,7 @@ import { Component, DestroyRef, computed, inject, linkedSignal, signal } from '@
 import { RouterLink } from '@angular/router';
 
 import { MeterKind, ReviewRow, ReviewState } from '../../../core/data/models';
-import { MeterReviewStore, deltaOf, stateOf, usageOf } from '../../../core/data/meter-review.store';
+import { MeterReviewStore, checkValue, deltaOf, stateOf, usageOf } from '../../../core/data/meter-review.store';
 import { Viewport } from '../../../core/layout/viewport';
 import { NumPipe, PeriodPipe, StampPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
@@ -65,6 +65,21 @@ export class MeterReviewPage {
   /** Value typed in the detail panel, in case the photo shows a different number than AI read. */
   protected readonly editValue = linkedSignal(() => this.selected()?.reading?.value ?? null);
 
+  /** Live check of the value about to be approved: usage, % against 3 periods, and whether it can be approved. */
+  protected readonly check = computed(() => {
+    const row = this.selected();
+    return row ? checkValue(row, this.editValue()) : null;
+  });
+  /** An abnormal value needs "Tôi đã đối chiếu với ảnh" ticked; resets when the room or the value changes. */
+  protected readonly confirmed = linkedSignal({ source: this.editValue, computation: () => false });
+  protected readonly canApprove = computed(() => {
+    const c = this.check();
+    if (this.editValue() == null || !c || c.problem === 'below-previous') return false;
+    return c.problem !== 'abnormal' || this.confirmed();
+  });
+  /** Unreadable photo: retake comes first; typing the number is opened on purpose. */
+  protected readonly manualEntry = linkedSignal({ source: this.selectedRoomId, computation: () => false });
+
   protected readonly toast = signal<{ count: number; seconds: number } | null>(null);
   private toastTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -101,7 +116,7 @@ export class MeterReviewPage {
   protected approveSelected(): void {
     const row = this.selected();
     const value = this.editValue();
-    if (!row?.reading || value == null) return;
+    if (!row?.reading || value == null || !this.canApprove()) return;
     if (value !== row.reading.value) this.store.setValue(row.reading.readingId, value);
     this.showToast(this.store.approve([row.reading.readingId]));
     if (this.viewport.isPhone()) this.selectedRoomId.set(null);
@@ -123,7 +138,10 @@ export class MeterReviewPage {
   }
 
   protected percent(row: ReviewRow): string {
-    const d = deltaOf(row);
+    return this.formatDelta(deltaOf(row));
+  }
+
+  protected formatDelta(d: number | null): string {
     if (d == null) return '—';
     const p = Math.round(d * 100);
     return p > 0 ? `+${p}%` : p < 0 ? `−${Math.abs(p)}%` : '0%';

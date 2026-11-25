@@ -81,7 +81,7 @@
               </span>
             }
           </div>
-          <button type="button" class="btn block" [disabled]="valueError() || value() === r.approved" (click)="correct(d)">Sửa và tính lại hóa đơn</button>
+          <button type="button" class="btn block" [disabled]="value() == null || valueError() || value() === r.approved" (click)="correct(d)">Sửa và tính lại hóa đơn</button>
         </div>
       }
       <div class="card">
@@ -117,7 +117,7 @@
   <div class="top"><div><h1>Khiếu nại</h1><p class="sub">{{ counts.open }} mới · {{ counts.resolved }} đã trả lời</p></div></div>
   <div class="split dp-split">
     <div><ng-container [ngTemplateOutlet]="list" /></div>
-    <section class="panel" aria-live="polite" aria-label="Chi tiết khiếu nại">
+    <section class="panel" aria-label="Chi tiết khiếu nại">
       @if (selected(); as d) {
         <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: d }" />
       } @else {

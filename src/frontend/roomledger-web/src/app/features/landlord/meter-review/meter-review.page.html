@@ -27,16 +27,26 @@
   <p class="small muted sub">{{ row.tenantName }}@if (row.capturedAt) { · bạn chụp {{ row.capturedAt | stamp }} }</p>
   @if (r) {
     <div class="photo"><img [ngSrc]="r.photoUrl" width="400" height="300" [alt]="'Ảnh gốc đồng hồ ' + row.roomCode + (r.aiValue != null ? ', hiển thị ' + r.aiValue : ', ảnh mờ')"><span class="tag">Ảnh gốc · bạn chụp</span></div>
-    @if (stateOf(row) !== 'approved') {
+    @let unreadable = stateOf(row) === 'unreadable';
+    @let c = check();
+    @if (stateOf(row) !== 'approved' && (!unreadable || manualEntry())) {
       <div class="field">
         <label [for]="'v-' + row.roomId">Chỉ số {{ r.aiValue != null ? 'AI đọc' : 'đúng (tự nhập)' }}</label>
-        <div class="input lcd-input">
-          <input [id]="'v-' + row.roomId" class="value-input" inputmode="numeric" autocomplete="off" [value]="editValue() ?? ''" (input)="onValueInput($event)" [attr.aria-describedby]="'h-' + row.roomId">
+        <div class="input lcd-input" [class.is-error]="c?.problem === 'below-previous'">
+          <input [id]="'v-' + row.roomId" class="value-input" inputmode="numeric" autocomplete="off" [value]="editValue() ?? ''" (input)="onValueInput($event)"
+            [attr.aria-describedby]="'h-' + row.roomId + ' u-' + row.roomId" [attr.aria-invalid]="c?.problem === 'below-previous'">
           <span class="unit">{{ unit() }}</span>
           <app-icon name="i-edit" />
         </div>
         <span class="help" [id]="'h-' + row.roomId">
           @if (r.aiConfidence != null) { AI khá chắc chắn ({{ confidence(r.aiConfidence) }}). Sửa nếu khác với ảnh. } @else { AI không đọc được số. Nhìn ảnh và nhập số trên đồng hồ. }
+        </span>
+        <span class="usage-line" [id]="'u-' + row.roomId" aria-live="polite">
+          @if (c?.problem === 'below-previous') {
+            <span class="err"><app-icon name="i-alert" size="sm" />Thấp hơn kỳ trước ({{ r.previousValue | num }}). Kiểm tra lại số trên ảnh.</span>
+          } @else if (c?.usage != null) {
+            Tiêu thụ <b>{{ c!.usage | num }} {{ unit() }}</b> · <span [class.delta-up]="c!.problem === 'abnormal'">{{ formatDelta(c!.delta) }}</span> so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }})
+          }
         </span>
       </div>
     } @else {
@@ -46,7 +56,7 @@
       <span class="small muted">Tiêu thụ 4 kỳ gần nhất ({{ unit() }})</span>
       <div class="hist">
         @for (h of row.history; track h.period; let last = $last) {
-          <div [class.now]="last && stateOf(row) === 'abnormal'">T{{ +h.period.slice(5) }}<b>{{ last ? (usageOf(row) | num) : (h.usage | num) }}</b></div>
+          <div [class.now]="last && (stateOf(row) === 'abnormal' || !!c?.problem)">T{{ +h.period.slice(5) }}<b>{{ last ? ((stateOf(row) === 'approved' ? usageOf(row) : c?.usage) | num) : (h.usage | num) }}</b></div>
         }
       </div>
     </div>
@@ -54,9 +64,19 @@
       <div class="banner warn"><app-icon name="i-alert" /><span>Tăng {{ percent(row) }} so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }}). Kiểm tra số trên ảnh trước khi duyệt.</span></div>
     }
     @if (stateOf(row) !== 'approved') {
+      @if (c?.problem === 'abnormal') {
+        <label class="rl-confirm"><input type="checkbox" [checked]="confirmed()" (change)="confirmed.set(!confirmed())">Tôi đã đối chiếu số {{ editValue() | num }} với ảnh</label>
+      }
       <div class="actions">
-        <button type="button" class="btn block" [disabled]="editValue() == null" (click)="approveSelected()"><app-icon name="i-check" />Duyệt {{ editValue() | num }} {{ unit() }}</button>
-        <a class="btn sec block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }"><app-icon name="i-camera" />Cần chụp lại</a>
+        @if (unreadable && !manualEntry()) {
+          <a class="btn block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }"><app-icon name="i-camera" />Cần chụp lại</a>
+          <button type="button" class="btn ghost block" (click)="manualEntry.set(true)"><app-icon name="i-edit" />Tự nhập số theo ảnh</button>
+        } @else {
+          <button type="button" class="btn block" [disabled]="!canApprove()" (click)="approveSelected()">
+            <app-icon name="i-check" />{{ c?.problem === 'abnormal' ? 'Duyệt dù bất thường' : 'Duyệt' }} {{ editValue() | num }} {{ unit() }}
+          </button>
+          <a class="btn sec block" routerLink="/landlord/meter-capture" [queryParams]="{ room: row.roomId, meter: store.kind() }"><app-icon name="i-camera" />Cần chụp lại</a>
+        }
       </div>
     }
   } @else {
@@ -116,7 +136,7 @@
         </table>
       </div>
     </div>
-    <aside class="panel detail" aria-live="polite">
+    <aside class="panel detail" aria-label="Phòng đang chọn">
       @if (selected(); as row) {
         <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: row }" />
       } @else {
@@ -141,7 +161,7 @@
         @let r = row.reading;
         <li class="mrow" [class.warn]="stateOf(row) === 'abnormal'">
           @if (stateOf(row) === 'pending') {
-            <input type="checkbox" class="cb" [checked]="checked().has(r!.readingId)" (change)="toggle(r!.readingId)" [attr.aria-label]="'Chọn ' + row.roomCode">
+            <label class="cb-hit"><input type="checkbox" class="cb" [checked]="checked().has(r!.readingId)" (change)="toggle(r!.readingId)" [attr.aria-label]="'Chọn ' + row.roomCode"></label>
           } @else {
             <span class="cb-gap" aria-hidden="true"></span>
           }
@@ -175,7 +195,7 @@
   <div class="rl-toast" role="status">
     <app-icon name="i-check-c" /><span>Đã duyệt <b>{{ t.count }} chỉ số</b>. Hóa đơn chưa được tạo.</span>
     <span class="acts">
-      <button type="button" class="btn sm ghost inv-ghost" (click)="undo()">Hoàn tác · {{ t.seconds }} giây</button>
+      <button type="button" class="btn sm ghost inv-ghost" aria-label="Hoàn tác" (click)="undo()">Hoàn tác<span aria-hidden="true"> · {{ t.seconds }} giây</span></button>
       <a class="btn sm ghost inv-ghost" routerLink="/landlord/invoices">Sang hóa đơn</a>
     </span>
   </div>

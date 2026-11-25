@@ -104,14 +104,14 @@
 
   <span class="sr" aria-live="polite">{{ copied() ? 'Đã sao chép' : '' }}</span>
 
-  <dialog #photoDialog class="photo-dialog" (close)="photoKind.set(null)" [attr.aria-label]="photoLine()?.name">
+  <dialog #photoDialog class="photo-dialog" (close)="photoKind.set(null)" aria-labelledby="pd-t">
     @if (photoLine(); as pl) {
       <div class="pd-head">
-        <h2>{{ pl.name }} · kỳ {{ inv.period | period }}</h2>
+        <h2 id="pd-t">{{ pl.name }} · kỳ {{ inv.period | period }}</h2>
         <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
       </div>
-      <img [ngSrc]="pl.line.photoUrl!" width="640" height="480" [alt]="'Ảnh gốc ' + pl.name.toLowerCase() + ' ' + inv.roomCode + ', chỉ số ' + pl.line.current + ' ' + pl.unit">
-      <p class="small muted">Chủ nhà chụp và duyệt. Ảnh lưu nguyên bản, không ai sửa được sau khi tải lên. Chỉ số: {{ pl.line.previous }} → {{ pl.line.current }} {{ pl.unit }}.</p>
+      <app-meter-photo [kind]="pl.kind" [photoUrl]="pl.line.photoUrl" [previous]="pl.line.previous" [current]="pl.line.current" [roomCode]="inv.roomCode"
+        [dispute]="{ invoice: inv.invoiceId, reading: pl.line.readingId }" />
     }
   </dialog>
 } @else {

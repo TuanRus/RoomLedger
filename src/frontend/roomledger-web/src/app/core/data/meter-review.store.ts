@@ -17,6 +17,27 @@ export function deltaOf(row: ReviewRow): number | null {
   return usage == null || row.averageUsage === 0 ? null : usage / row.averageUsage - 1;
 }
 
+/** How far usage may stray from the 3-period average before approving needs a second look. */
+export const ABNORMAL_DELTA = 0.5;
+
+export interface ValueCheck {
+  usage: number | null;
+  /** Usage against the 3-period average, e.g. 0.64 = +64%; null when there is no average. */
+  delta: number | null;
+  /** 'below-previous' blocks approval; 'abnormal' needs the landlord to confirm they checked the photo. */
+  problem: 'below-previous' | 'abnormal' | null;
+}
+
+/** Checks a value the landlord is about to approve (AI value or typed), before it reaches the tenant. */
+export function checkValue(row: ReviewRow, value: number | null): ValueCheck {
+  const previous = row.reading?.previousValue;
+  if (value == null || previous == null) return { usage: null, delta: null, problem: null };
+  const usage = value - previous;
+  const delta = row.averageUsage > 0 ? usage / row.averageUsage - 1 : null;
+  if (usage < 0) return { usage, delta, problem: 'below-previous' };
+  return { usage, delta, problem: delta != null && Math.abs(delta) > ABNORMAL_DELTA ? 'abnormal' : null };
+}
+
 export function stateOf(row: ReviewRow): ReviewState {
   const r = row.reading;
   if (!r) return 'unrecorded';

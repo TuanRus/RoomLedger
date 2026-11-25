@@ -127,7 +127,7 @@
         </table>
       </div>
     </div>
-    <aside class="panel side-panel" aria-live="polite" aria-label="Hóa đơn đang chọn">
+    <aside class="panel side-panel" aria-label="Hóa đơn đang chọn">
       @if (selected(); as inv) {
         <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: inv }" />
       } @else {
@@ -173,7 +173,7 @@
     <dt>Số hóa đơn</dt><dd>{{ drafts }} phòng</dd>
     <dt>Tổng tiền</dt><dd><b>{{ store.draftTotal() | vnd }}</b></dd>
     <dt>Hạn thanh toán</dt><dd>{{ store.dueDate | day }}</dd>
-    <dt>Thông tin chuyển khoản</dt><dd>Có, kèm mã QR</dd>
+    <dt>Thông tin chuyển khoản</dt><dd>Có: mã QR trên máy tính, nút sao chép số tài khoản trên điện thoại</dd>
   </dl>
   <ul class="rules">
     <li><app-icon name="i-mail" />Mỗi người thuê nhận email và thấy hóa đơn trong ứng dụng, kèm ảnh đồng hồ của từng chỉ số.</li>
@@ -193,12 +193,7 @@
       <h2 id="photo-t">{{ p.kind === 'ELECTRICITY' ? 'Công tơ điện' : 'Đồng hồ nước' }} · {{ p.inv.roomCode }}</h2>
       <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
     </div>
-    @if (line.photoUrl) {
-      <img class="dlg-img" [ngSrc]="line.photoUrl" width="640" height="480" [alt]="'Ảnh gốc ' + p.inv.roomCode + ', chỉ số ' + line.current + ' ' + unit(p.kind)">
-    } @else {
-      <p class="muted">Dữ liệu mẫu không có ảnh cho phòng này.</p>
-    }
-    <p class="small muted">Bạn chụp và duyệt. Chỉ số: {{ line.previous | num }} → {{ line.current | num }} {{ unit(p.kind) }}.</p>
+    <app-meter-photo [kind]="p.kind" [photoUrl]="line.photoUrl" [previous]="line.previous" [current]="line.current" [roomCode]="p.inv.roomCode" viewer="landlord" />
   }
 </dialog>
 
@@ -206,7 +201,7 @@
   <div class="rl-toast" role="status">
     <app-icon name="i-check-c" /><span>{{ t.text }}</span>
     @if (t.undoId) {
-      <button type="button" class="btn sm ghost inv-ghost" (click)="undo()">Hoàn tác · {{ t.seconds }} giây</button>
+      <button type="button" class="btn sm ghost inv-ghost" aria-label="Hoàn tác" (click)="undo()">Hoàn tác<span aria-hidden="true"> · {{ t.seconds }} giây</span></button>
     }
   </div>
 }

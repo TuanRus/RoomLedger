@@ -45,7 +45,7 @@
         <li><span><b>{{ r.roomCode }}</b> · {{ r.tenantName }}</span><span class="muted">{{ r.meters }}</span></li>
       }
     </ul>
-    <a class="btn sec block" routerLink="/landlord/meter-capture"><app-icon name="i-camera" />Chụp trên điện thoại</a>
+    <a class="btn sec block" routerLink="/landlord/meter-capture"><app-icon name="i-camera" />{{ viewport.isPhone() ? 'Bắt đầu ghi chỉ số' : 'Chụp trên điện thoại' }}</a>
   </section>
 
   <section class="card" aria-labelledby="due-h">
