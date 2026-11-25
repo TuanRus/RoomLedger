@@ -32,6 +32,16 @@ describe('LandlordDisputesStore', () => {
     expect(store.counts()).toEqual({ open: 2, resolved: 2 });
   });
 
+  it('undoes a correction: the dispute is open again and the invoice total is back', () => {
+    const before = invoices.find('inv-112-2026-11')!.total;
+    expect(store.correct('dp-112-2026-11', 142)).toBe('ok');
+    expect(invoices.find('inv-112-2026-11')!.total).not.toBe(before);
+    expect(store.undoResolve()).toBe('dp-112-2026-11');
+    expect(store.find('dp-112-2026-11')!.status).toBe('OPEN');
+    expect(invoices.find('inv-112-2026-11')!.total).toBe(before);
+    expect(store.undoResolve()).toBeNull();
+  });
+
   it('rejects a corrected value below the previous reading', () => {
     expect(store.correct('dp-112-2026-11', 100)).toBe('invalid-value');
   });

@@ -138,5 +138,10 @@
 }
 
 @if (toast(); as t) {
-  <div class="rl-toast" role="status"><app-icon name="i-check-c" /><span>{{ t }}</span></div>
+  <div class="rl-toast" role="status">
+    <app-icon name="i-check-c" /><span>{{ t.text }} Người thuê được báo khi hết giờ hoàn tác<span aria-hidden="true"> ({{ t.seconds }} giây)</span>.</span>
+    <span class="acts">
+      <button type="button" class="btn sm ghost inv-ghost" aria-label="Hoàn tác" (click)="undo()">Hoàn tác</button>
+    </span>
+  </div>
 }

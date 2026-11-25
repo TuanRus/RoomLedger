@@ -13,8 +13,6 @@
 <ng-template #headerAction>
   @if (drafts > 0) {
     <button type="button" class="btn" (click)="openSend()"><app-icon name="i-mail" />Gửi {{ drafts }} hóa đơn nháp</button>
-  } @else if (unpaidThisPeriod().length > 0) {
-    <button type="button" class="btn sec" (click)="remindAll()"><app-icon name="i-bell" />Nhắc {{ unpaidThisPeriod().length }} phòng chưa thanh toán</button>
   }
 </ng-template>
 
@@ -33,6 +31,9 @@
       <span><b>Đã gửi cả {{ counts.all }} hóa đơn kỳ {{ store.period | period }}.</b>
         @if (store.lastBatch(); as b) { {{ b.count }} hóa đơn gửi lúc {{ b.at | stamp }}; người thuê đã nhận email. }
         {{ missing.length }} phòng còn chờ chỉ số ({{ missing.join(', ') }}): <a routerLink="/landlord/meter-readings">duyệt nốt chỉ số</a>.</span>
+      @if (remindable().length > 0) {
+        <button type="button" class="btn sm sec" (click)="openRemind()"><app-icon name="i-bell" size="sm" />Nhắc {{ remindable().length }} phòng quá hạn</button>
+      }
     </div>
   }
 </ng-template>
@@ -186,6 +187,20 @@
   </div>
 </dialog>
 
+<dialog #remindDialog class="rl-dlg" aria-labelledby="remind-t">
+  <h2 id="remind-t">Nhắc {{ remindable().length }} phòng quá hạn?</h2>
+  <p class="small muted">Mỗi người thuê nhận một email nhắc kèm hóa đơn và thông tin chuyển khoản. Phòng chưa tới hạn không bị nhắc.</p>
+  <ul class="rules">
+    @for (i of remindable(); track i.invoiceId) {
+      <li><app-icon name="i-flag" /><span><b>{{ i.roomCode }}</b> · {{ i.tenantName }} · kỳ {{ i.period | period }} · {{ i.total | vnd }} · quá {{ overdue(i) }} ngày</span></li>
+    }
+  </ul>
+  <div class="dlg-acts">
+    <button type="button" class="btn ghost" (click)="closeRemind()">Hủy</button>
+    <button type="button" class="btn" (click)="remindAll()"><app-icon name="i-bell" />Gửi nhắc {{ remindable().length }} phòng</button>
+  </div>
+</dialog>
+
 <dialog #photoDialog class="rl-dlg" (close)="photo.set(null)" aria-labelledby="photo-t">
   @if (photo(); as p) {
     @let line = p.kind === 'ELECTRICITY' ? p.inv.electricity : p.inv.water;
@@ -200,7 +215,7 @@
 @if (toast(); as t) {
   <div class="rl-toast" role="status">
     <app-icon name="i-check-c" /><span>{{ t.text }}</span>
-    @if (t.undoId) {
+    @if (t.undo) {
       <button type="button" class="btn sm ghost inv-ghost" aria-label="Hoàn tác" (click)="undo()">Hoàn tác<span aria-hidden="true"> · {{ t.seconds }} giây</span></button>
     }
   </div>

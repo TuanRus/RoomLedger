@@ -1,5 +1,6 @@
 import { Service, computed, inject, signal } from '@angular/core';
 
+import { LandlordInvoice } from '../../invoices/data/invoices.sample';
 import { LandlordInvoicesStore } from '../../invoices/data/invoices.store';
 import { LANDLORD_DISPUTES, LandlordDispute, SAMPLE_RESOLVED_AT } from './disputes.sample';
 
@@ -16,6 +17,8 @@ export class LandlordDisputesStore {
   private readonly invoices = inject(LandlordInvoicesStore);
 
   readonly disputes = signal<LandlordDispute[]>(LANDLORD_DISPUTES);
+  /** The dispute and invoice as they were before the last resolution, for undo. */
+  private lastResolved: { dispute: LandlordDispute; invoice: LandlordInvoice | undefined } | null = null;
 
   /** Open first (oldest first), then answered (newest first). */
   readonly ordered = computed(() => {
@@ -45,6 +48,7 @@ export class LandlordDisputesStore {
     if (!d.reading) return 'no-reading';
     if (!Number.isInteger(value) || value < d.reading.previous) return 'invalid-value';
     const totals = this.recalc(d, value);
+    this.remember(d);
     this.invoices.applyCorrection(d.invoiceId, d.reading.kind, value, SAMPLE_RESOLVED_AT);
     const unit = d.reading.kind === 'ELECTRICITY' ? 'kWh' : 'm³';
     const fmt = new Intl.NumberFormat('vi-VN');
@@ -64,9 +68,27 @@ export class LandlordDisputesStore {
     if (!d || d.status !== 'OPEN') return 'not-open';
     const text = reply.trim();
     if (!text) return 'empty-reply';
+    this.remember(d);
     this.invoices.closeDispute(d.invoiceId);
     this.patch(id, { status: 'RESOLVED', resolution: 'KEPT', response: text, resolvedAt: SAMPLE_RESOLVED_AT });
     return 'ok';
+  }
+
+  /**
+   * Reverts the last correct() or keep() while its undo toast is showing: the dispute is open again and the
+   * invoice is back to what it was. With the API, the tenant is only notified once that window has passed.
+   */
+  undoResolve(): string | null {
+    const last = this.lastResolved;
+    if (!last) return null;
+    this.disputes.update((list) => list.map((d) => (d.disputeId === last.dispute.disputeId ? last.dispute : d)));
+    if (last.invoice) this.invoices.restore(last.invoice);
+    this.lastResolved = null;
+    return last.dispute.disputeId;
+  }
+
+  private remember(d: LandlordDispute): void {
+    this.lastResolved = { dispute: d, invoice: this.invoices.find(d.invoiceId) };
   }
 
   find(id: string): LandlordDispute | undefined {
