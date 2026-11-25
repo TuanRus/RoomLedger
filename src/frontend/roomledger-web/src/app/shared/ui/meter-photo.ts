@@ -1,10 +1,10 @@
-import { NgOptimizedImage } from '@angular/common';
-import { Component, computed, input, linkedSignal } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { MeterKind } from '../../core/data/models';
 import { NumPipe } from '../pipes/format.pipes';
 import { Icon } from './icon';
+import { ZoomPhoto } from './zoom-photo';
 
 /**
  * The original meter photo with its reading, used inside the invoice photo dialogs (tenant and landlord).
@@ -12,17 +12,10 @@ import { Icon } from './icon';
  */
 @Component({
   selector: 'app-meter-photo',
-  imports: [NgOptimizedImage, RouterLink, Icon, NumPipe],
+  imports: [RouterLink, Icon, NumPipe, ZoomPhoto],
   template: `
     @if (photoUrl(); as url) {
-      <div class="wrap">
-        <div class="frame" [class.zoomed]="zoomed()" [attr.tabindex]="zoomed() ? 0 : null" [attr.aria-label]="zoomed() ? 'Ảnh phóng to, kéo để xem' : null">
-          <img [ngSrc]="url" width="640" height="480" [alt]="alt()" />
-        </div>
-        <button type="button" class="zoom" [attr.aria-pressed]="zoomed()" (click)="zoomed.set(!zoomed())">
-          <app-icon name="i-search" /><span>{{ zoomed() ? 'Thu nhỏ' : 'Phóng to' }}</span>
-        </button>
-      </div>
+      <app-zoom-photo [src]="url" [alt]="alt()" />
     } @else {
       <p class="muted">Chưa có ảnh cho chỉ số này.</p>
     }
@@ -39,16 +32,6 @@ import { Icon } from './icon';
   `,
   styles: `
     :host { display: grid; gap: 10px; }
-    .wrap { position: relative; }
-    .frame { border-radius: 12px; overflow: hidden; background: #1c1b19; }
-    .frame img { width: 100%; height: auto; display: block; }
-    .frame.zoomed { overflow: auto; max-height: min(70vh, 640px); }
-    .frame.zoomed img { width: 220%; max-width: none; }
-    .frame:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    .zoom { position: absolute; right: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px;
-      min-height: 44px; padding: 0 14px; border: 0; border-radius: var(--r-full); background: rgb(18 17 16 / .78); color: #fff;
-      font: 500 var(--t-14) var(--sans); cursor: pointer; }
-    .zoom:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
     .reading { margin: 0; font-size: var(--t-16); }
     p.small { margin: 0; }
   `,
@@ -68,6 +51,4 @@ export class MeterPhoto {
   protected readonly alt = computed(
     () => `Ảnh gốc ${this.kind() === 'ELECTRICITY' ? 'công tơ điện' : 'đồng hồ nước'} ${this.roomCode()}, chỉ số ${this.current()} ${this.unit()}`,
   );
-  /** Starts unzoomed for every new photo. */
-  protected readonly zoomed = linkedSignal({ source: this.photoUrl, computation: () => false });
 }

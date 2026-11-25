@@ -35,8 +35,8 @@
 
 .detail { position: sticky; top: 24px; }
 .detail .sub, .m-detail .sub { margin-top: 4px; }
-.detail .photo { height: 240px; margin: 16px 0; }
-.detail .photo img, .m-detail .photo img { width: 100%; height: 100%; object-fit: cover; }
+.photo-z { margin: 16px 0; }
+.unread-note { display: flex; gap: 8px; align-items: flex-start; margin: 0; color: var(--ink-2); font-size: var(--t-14); }
 .value-input {
   flex: 1; width: 0; min-width: 0; border: 0; background: transparent; outline: none;
   font: 400 26px/1 "Share Tech Mono", ui-monospace, monospace; letter-spacing: .08em; color: var(--ink);
@@ -82,5 +82,5 @@
   font-size: 14px; box-shadow: 0 14px 30px -14px rgb(40 32 20 / .35);
 }
 .m-sticky .btn { margin-left: auto; }
-.m-detail .photo { height: 220px; margin: 12px 0 16px; }
 .m-detail .actions { margin-bottom: 8px; }
+.m-val .chip { height: 24px; padding: 0 8px; gap: 4px; font-size: 13px; }

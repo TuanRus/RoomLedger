@@ -45,3 +45,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .rl-why summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
 .rl-why ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 72ch; }
 .rl-why b { color: var(--ink); font-weight: 600; }
+
+/* No lone last words in Vietnamese copy: balanced headings, no orphan on the last line of a paragraph. */
+h1, h2, h3 { text-wrap: balance; }
+p, li { text-wrap: pretty; }

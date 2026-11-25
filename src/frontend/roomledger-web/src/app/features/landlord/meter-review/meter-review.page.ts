@@ -1,5 +1,5 @@
 import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
-import { Component, DestroyRef, Injector, afterNextRender, computed, inject, linkedSignal, signal } from '@angular/core';
+import { Component, DestroyRef, Injector, afterNextRender, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
 import { MeterKind, ReviewRow, ReviewState } from '../../../core/data/models';
@@ -9,6 +9,7 @@ import { NumPipe, PeriodPipe, StampPipe } from '../../../shared/pipes/format.pip
 import { Icon } from '../../../shared/ui/icon';
 import { MeterDigits } from '../../../shared/ui/meter-digits';
 import { StatusChip } from '../../../shared/ui/status-chip';
+import { ZoomPhoto } from '../../../shared/ui/zoom-photo';
 
 type Filter = 'all' | ReviewState;
 
@@ -27,7 +28,7 @@ const UNDO_SECONDS = 10;
 /** LL-04 (computer) and LM-01/LM-02 (phone): review the meter readings of one period. */
 @Component({
   selector: 'app-meter-review-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, MeterDigits, StatusChip, NumPipe, PeriodPipe, StampPipe],
+  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, MeterDigits, StatusChip, ZoomPhoto, NumPipe, PeriodPipe, StampPipe],
   host: { '(document:keydown)': 'onKey($event)' },
   templateUrl: './meter-review.page.html',
   styleUrl: './meter-review.page.scss',
@@ -37,6 +38,7 @@ export class MeterReviewPage {
   protected readonly viewport = inject(Viewport);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
+  private readonly photo = viewChild(ZoomPhoto);
 
   protected readonly filters = FILTERS;
   protected readonly emptyText = computed(() => FILTERS.find((f) => f.id === this.filter())?.empty ?? '');
@@ -150,7 +152,7 @@ export class MeterReviewPage {
   }
 
   /**
-   * Computer shortcuts: J/K next and previous room, A approve, R retake; Enter in the number field approves.
+   * Computer shortcuts: J/K next and previous room, A approve, R retake, Z zoom the photo; Enter in the number field approves.
    * Ignored while typing elsewhere, with a modifier held, or when a dialog is open.
    */
   protected onKey(e: KeyboardEvent): void {
@@ -179,6 +181,10 @@ export class MeterReviewPage {
       case 'r':
         if (!row || stateOf(row) === 'approved') return;
         this.retake(row);
+        break;
+      case 'z':
+        if (!this.photo()) return;
+        this.photo()!.toggle();
         break;
       default:
         return;

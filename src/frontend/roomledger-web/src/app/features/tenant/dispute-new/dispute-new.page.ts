@@ -15,8 +15,8 @@ import { REASON_MAX, REASON_MIN, proposedValueError, reasonError, reasonLength }
 const DEFAULT_INVOICE = 'inv-204-2026-11';
 
 const SUBJECTS: { id: DisputeSubject; label: string }[] = [
-  { id: 'WATER', label: 'Chỉ số nước' },
   { id: 'ELECTRICITY', label: 'Chỉ số điện' },
+  { id: 'WATER', label: 'Chỉ số nước' },
   { id: 'OTHER', label: 'Khác' },
 ];
 

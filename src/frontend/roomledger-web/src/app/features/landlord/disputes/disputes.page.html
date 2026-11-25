@@ -41,7 +41,7 @@
 
   @if (r) {
     <div class="evidence">
-      <div class="photo"><img [ngSrc]="r.photoUrl" width="400" height="300" [alt]="'Ảnh gốc đồng hồ ' + d.roomCode + ', chỉ số AI đọc ' + r.aiValue + ' ' + unit(d)"><span class="tag">Ảnh gốc · bạn chụp {{ r.capturedAt | day }}</span></div>
+      <app-zoom-photo [src]="r.photoUrl" [alt]="'Ảnh gốc đồng hồ ' + d.roomCode + ', chỉ số AI đọc ' + r.aiValue + ' ' + unit(d)" [tag]="'Ảnh gốc · bạn chụp ' + (r.capturedAt | day)" />
       <dl class="kv">
         <dt>Kỳ trước</dt><dd>{{ r.previous | num }} {{ unit(d) }}</dd>
         <dt>AI đọc</dt><dd><app-meter-digits [kind]="r.kind" [value]="r.aiValue" size="sm" /></dd>

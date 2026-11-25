@@ -7,7 +7,8 @@ import { PeriodPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
 import { LandlordDisputesStore } from '../disputes/data/disputes.store';
 import { LandlordInvoicesStore } from '../invoices/data/invoices.store';
-import { OverviewStore, formatChange } from './data/overview.store';
+import { MeterCaptureStore } from '../meter-capture/data/meter-capture.store';
+import { OverviewStore, capturePercent, formatChange } from './data/overview.store';
 
 /** One thing waiting on the landlord this period, with where to go to do it. */
 export interface QueueItem {
@@ -45,6 +46,7 @@ export class LandlordOverviewPage {
   private readonly meters = inject(MeterReviewStore);
   private readonly invoices = inject(LandlordInvoicesStore);
   private readonly disputes = inject(LandlordDisputesStore);
+  private readonly capture = inject(MeterCaptureStore);
 
   protected readonly queue = computed<QueueItem[]>(() => {
     const o = this.store.overview();
@@ -70,17 +72,20 @@ export class LandlordOverviewPage {
       });
     }
 
-    const { recorded, total, deadline } = o.capture;
+    // Same numbers as the capture screen: read them from its store, not from a separate summary.
+    const recorded = this.capture.recordedCount();
+    const total = this.capture.total();
+    const { deadline } = o.capture;
     if (recorded < total) {
       items.push({
         id: 'capture',
         icon: 'i-camera',
         title: this.viewport.isPhone() ? 'Ghi chỉ số' : 'Ghi chỉ số trên điện thoại',
-        detail: `${total - recorded} phòng chưa ghi: ${roomList(o.unrecorded.map((r) => r.roomCode))} · hạn ${deadline}`,
+        detail: `${total - recorded} phòng chưa ghi: ${roomList(this.capture.groups().todo.map((r) => r.roomCode))} · hạn ${deadline}`,
         value: `${recorded}/${total}`,
         link: '/landlord/meter-capture',
         tone: 'neu',
-        progress: this.store.capturePercent(),
+        progress: capturePercent(recorded, total),
       });
     }
 

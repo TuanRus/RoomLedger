@@ -1,10 +1,11 @@
-import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, computed, inject, input, linkedSignal, signal } from '@angular/core';
 
 import { Viewport } from '../../../core/layout/viewport';
 import { NumPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
 import { MeterDigits } from '../../../shared/ui/meter-digits';
+import { ZoomPhoto } from '../../../shared/ui/zoom-photo';
 import { DayPipe } from '../../../shared/pipes/format.pipes';
 import { LandlordInvoicesStore } from '../invoices/data/invoices.store';
 import { LandlordDispute } from './data/disputes.sample';
@@ -16,7 +17,7 @@ import { LandlordDisputesStore } from './data/disputes.store';
  */
 @Component({
   selector: 'app-landlord-disputes-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, Icon, MeterDigits, VndPipe, NumPipe, StampPipe, DayPipe],
+  imports: [NgTemplateOutlet, ZoomPhoto, Icon, MeterDigits, VndPipe, NumPipe, StampPipe, DayPipe],
   templateUrl: './disputes.page.html',
   styleUrl: './disputes.page.scss',
 })

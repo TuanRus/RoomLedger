@@ -18,8 +18,6 @@
 .head { flex-wrap: wrap; }
 .banner { margin-top: 14px; }
 .evidence { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
-.evidence .photo { height: 250px; }
-.evidence .photo img { width: 100%; height: 100%; object-fit: cover; }
 .evidence .kv { align-content: start; font-size: var(--t-16); }
 .inv-kv { margin-top: 16px; font-size: var(--t-16); max-width: 420px; }
 
@@ -42,5 +40,4 @@ textarea.input:focus { outline: none; }
 .m-detail .evidence, .m-detail .choices { grid-template-columns: 1fr; }
 .m-detail .choices:not(.one) .choice { padding: 18px 0 0; border-left: 0; }
 .m-detail .choice + .choice { margin-top: 18px; border-top: 1px solid var(--line); }
-.m-detail .evidence .photo { height: 220px; }
 .m-detail { padding-bottom: 8px; }
