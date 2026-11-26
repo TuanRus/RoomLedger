@@ -1,5 +1,10 @@
 @let counts = store.counts();
 
+<app-load-state [status]="store.status()" [error]="store.error()" (retry)="store.load()" />
+@if (store.loadingMore()) {
+  <p class="muted small" role="status">Đang tải các khiếu nại đã trả lời…</p>
+}
+
 <ng-template #chip let-d>
   @if (d.status === 'OPEN') {
     <span class="chip warn"><app-icon name="i-clock" />Mới</span>
@@ -13,7 +18,7 @@
     @for (d of store.ordered(); track d.disputeId) {
       <li>
         <button type="button" class="dp-item" [class.sel]="!viewport.isPhone() && selectedId() === d.disputeId" [attr.aria-current]="selectedId() === d.disputeId" (click)="selectedId.set(d.disputeId)">
-          <span class="dp-text"><b>{{ short(d) }}</b><span class="small muted">{{ d.tenantName }} · {{ d.createdAt | day }}</span></span>
+          <span class="dp-text"><b>{{ short(d) }}</b><span class="small muted">{{ who(d) }} · {{ d.createdAt | day }}</span></span>
           <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: d }" />
         </button>
       </li>
@@ -36,18 +41,22 @@
   </div>
 
   @if (d.status === 'OPEN') {
-    <div class="banner info"><app-icon name="i-talk" /><span><b>{{ d.tenantName }}:</b> “{{ d.reason }}”</span></div>
+    <div class="banner info"><app-icon name="i-talk" /><span><b>{{ who(d) }}:</b> “{{ d.reason }}”</span></div>
   }
 
   @if (r) {
     <div class="evidence">
-      <app-zoom-photo [src]="r.photoUrl" [alt]="'Ảnh gốc đồng hồ ' + d.roomCode + ', chỉ số AI đọc ' + r.aiValue + ' ' + unit(d)" [tag]="'Ảnh gốc · bạn chụp ' + (r.capturedAt | day)" />
+      @if (r.photoUrl) {
+        <app-zoom-photo [src]="r.photoUrl" [alt]="'Ảnh gốc đồng hồ ' + d.roomCode + (r.aiValue != null ? ', chỉ số AI đọc ' + r.aiValue + ' ' + unit(d) : '')" [tag]="r.capturedAt ? 'Ảnh gốc · bạn chụp ' + (r.capturedAt | day) : 'Ảnh gốc'" />
+      } @else {
+        <p class="muted small no-photo">Chưa có ảnh gốc của chỉ số này.</p>
+      }
       <dl class="kv">
         <dt>Kỳ trước</dt><dd>{{ r.previous | num }} {{ unit(d) }}</dd>
-        <dt>AI đọc</dt><dd><app-meter-digits [kind]="r.kind" [value]="r.aiValue" size="sm" /></dd>
-        <dt>Đã duyệt</dt><dd>{{ r.approved | num }} {{ unit(d) }} · {{ r.approvedAt | day }}</dd>
-        <dt>Người thuê báo</dt><dd><app-meter-digits [kind]="r.kind" [value]="r.tenantValue" size="sm" /></dd>
-        <dt>Chênh lệch</dt><dd>{{ r.approved - r.tenantValue | num }} {{ unit(d) }} = {{ (r.approved - r.tenantValue) * r.rate | vnd }}</dd>
+        <dt>AI đọc</dt><dd>@if (r.aiValue != null) { <app-meter-digits [kind]="r.kind" [value]="r.aiValue" size="sm" /> } @else { — }</dd>
+        <dt>Đã duyệt</dt><dd>@if (r.approved != null) { {{ r.approved | num }} {{ unit(d) }}@if (r.approvedAt) { · {{ r.approvedAt | day }} } } @else { — }</dd>
+        <dt>Người thuê báo</dt><dd>@if (r.tenantValue != null) { <app-meter-digits [kind]="r.kind" [value]="r.tenantValue" size="sm" /> } @else { — }</dd>
+        <dt>Chênh lệch</dt><dd>@if (r.approved != null && r.tenantValue != null) { {{ r.approved - r.tenantValue | num }} {{ unit(d) }} = {{ (r.approved - r.tenantValue) * r.rate | vnd }} } @else { — }</dd>
         @if (r.corrected != null) {
           <dt>Đã sửa thành</dt><dd><b>{{ r.corrected | num }} {{ unit(d) }}</b></dd>
         }
@@ -81,11 +90,11 @@
               </span>
             }
           </div>
-          <button type="button" class="btn block" [disabled]="value() == null || valueError() || value() === r.approved" (click)="correct(d)">Sửa và tính lại hóa đơn</button>
+          <button type="button" class="btn block" [disabled]="value() == null || valueError() || value() === r.approved || store.resolving()" (click)="correct(d)">Sửa và tính lại hóa đơn</button>
         </div>
       }
       <div class="choice">
-        <b>{{ r ? 'Giữ nguyên ' + r.approved + ' ' + unit(d) : 'Trả lời và giữ nguyên hóa đơn' }}</b>
+        <b>{{ r && r.approved != null ? 'Giữ nguyên ' + r.approved + ' ' + unit(d) : 'Trả lời và giữ nguyên hóa đơn' }}</b>
         <div class="field">
           <label [for]="'dp-r-' + d.disputeId">Trả lời người thuê (bắt buộc)</label>
           <textarea [id]="'dp-r-' + d.disputeId" class="input" [class.is-error]="replyError()" placeholder="Giải thích vì sao giữ nguyên" [value]="reply()" (input)="onReplyInput($event)" [attr.aria-invalid]="replyError()" [attr.aria-describedby]="replyError() ? 'dp-re-' + d.disputeId : null"></textarea>
@@ -93,14 +102,14 @@
             <span class="err" [id]="'dp-re-' + d.disputeId">Nhập câu trả lời để người thuê biết vì sao giữ nguyên.</span>
           }
         </div>
-        <button type="button" class="btn sec block" (click)="keep(d)">{{ r ? 'Giữ nguyên và trả lời' : 'Gửi trả lời' }}</button>
+        <button type="button" class="btn sec block" [disabled]="store.resolving()" (click)="keep(d)">{{ r ? 'Giữ nguyên và trả lời' : 'Gửi trả lời' }}</button>
       </div>
     </div>
   } @else {
     <ol class="tl">
       <li>
         <span class="dot info"><app-icon name="i-talk" /></span>
-        <div><b>{{ d.tenantName }} gửi khiếu nại</b><time>{{ d.createdAt | stamp }}</time><p class="quote">{{ d.reason }}</p></div>
+        <div><b>{{ who(d) }} gửi khiếu nại</b><time>{{ d.createdAt | stamp }}</time><p class="quote">{{ d.reason }}</p></div>
       </li>
       <li>
         <span class="dot ok"><app-icon name="i-check" /></span>

@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, DestroyRef, computed, inject, input, linkedSignal, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, untracked } from '@angular/core';
 
 import { Viewport } from '../../../core/layout/viewport';
 import { NumPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
@@ -7,6 +7,7 @@ import { Icon } from '../../../shared/ui/icon';
 import { MeterDigits } from '../../../shared/ui/meter-digits';
 import { ZoomPhoto } from '../../../shared/ui/zoom-photo';
 import { DayPipe } from '../../../shared/pipes/format.pipes';
+import { LoadState } from '../shared/load-state';
 import { LandlordInvoicesStore } from '../invoices/data/invoices.store';
 import { LandlordDispute } from './data/disputes.sample';
 import { LandlordDisputesStore } from './data/disputes.store';
@@ -17,7 +18,7 @@ import { LandlordDisputesStore } from './data/disputes.store';
  */
 @Component({
   selector: 'app-landlord-disputes-page',
-  imports: [NgTemplateOutlet, ZoomPhoto, Icon, MeterDigits, VndPipe, NumPipe, StampPipe, DayPipe],
+  imports: [NgTemplateOutlet, LoadState, ZoomPhoto, Icon, MeterDigits, VndPipe, NumPipe, StampPipe, DayPipe],
   templateUrl: './disputes.page.html',
   styleUrl: './disputes.page.scss',
 })
@@ -66,6 +67,10 @@ export class LandlordDisputesPage {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.clearToast());
+    // Disputes already answered live in invoices that are only read when needed: read them now this screen is open.
+    effect(() => {
+      if (this.store.status() === 'ready') untracked(() => this.store.loadAnswered());
+    });
   }
 
   protected unit(d: LandlordDispute): string {
@@ -93,19 +98,32 @@ export class LandlordDisputesPage {
     if (this.replyError() && this.reply().trim()) this.replyError.set(false);
   }
 
+  /** The tenant's name, or a plain "Người thuê" when the room list has no name for the room. */
+  protected who(d: LandlordDispute): string {
+    return d.tenantName ?? 'Người thuê';
+  }
+
   protected correct(d: LandlordDispute): void {
     const v = this.value();
     if (v == null || this.valueError()) return;
-    if (this.store.correct(d.disputeId, v) === 'ok') this.showToast(`Đã sửa chỉ số ${d.roomCode} và tính lại hóa đơn. Người thuê được báo.`);
+    const done = (result: string) => {
+      if (result === 'ok') this.showToast(`Đã sửa chỉ số ${d.roomCode} và tính lại hóa đơn. Người thuê được báo.`);
+    };
+    if (this.store.sample) done(this.store.correct(d.disputeId, v));
+    else this.store.correctByApi(d.disputeId, v).subscribe(done);
   }
 
   protected keep(d: LandlordDispute): void {
-    const result = this.store.keep(d.disputeId, this.reply());
-    if (result === 'empty-reply') {
+    if (!this.reply().trim()) {
       this.replyError.set(true);
       return;
     }
-    if (result === 'ok') this.showToast(`Đã trả lời ${d.tenantName} (${d.roomCode}).`);
+    const done = (result: string) => {
+      if (result === 'empty-reply') this.replyError.set(true);
+      else if (result === 'ok') this.showToast(`Đã trả lời ${this.who(d)} (${d.roomCode}).`);
+    };
+    if (this.store.sample) done(this.store.keep(d.disputeId, this.reply()));
+    else this.store.keepByApi(d.disputeId, this.reply()).subscribe(done);
   }
 
   private showToast(text: string): void {
