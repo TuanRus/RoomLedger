@@ -1,5 +1,6 @@
 import { Service, computed, inject } from '@angular/core';
 
+import { injectApi } from '../../../core/api/api-client';
 import { InvoiceDetail, MeterKind, MeterReading } from '../../../core/data/models';
 import { TenantInvoiceStore, nextPeriod } from '../../../core/data/tenant-invoice.store';
 
@@ -32,11 +33,15 @@ export function datePart(iso: string | null | undefined, withYear = false): stri
 }
 
 
-function readingOf(inv: InvoiceDetail, kind: MeterKind): TenantReading {
+/**
+ * With the API only what the invoice line carries is known: digit crop, capture time and approval time
+ * are not in it (API-GAPS.md), so they stay null. Sample data invents them for the mockups.
+ */
+function readingOf(inv: InvoiceDetail, kind: MeterKind, sample: boolean): TenantReading {
   const line = kind === 'ELECTRICITY' ? inv.electricity : inv.water;
   const next = nextPeriod(inv.period);
   const minute = kind === 'ELECTRICITY' ? '01' : '02';
-  const isCurrent = inv.period === '2026-11';
+  const isCurrent = sample && inv.period === '2026-11';
   return {
     readingId: line.readingId,
     kind,
@@ -50,8 +55,8 @@ function readingOf(inv: InvoiceDetail, kind: MeterKind): TenantReading {
     photoUrl: line.photoUrl,
     // Only kỳ 11 has a matching digit crop in the sample images.
     digitCropUrl: isCurrent ? `sample/d-${kind === 'ELECTRICITY' ? 'elec' : 'water'}-204.jpg` : null,
-    capturedAt: `${next}-01T08:${minute}:00+07:00`,
-    confirmedAt: `${next}-02T09:20:00+07:00`,
+    capturedAt: sample ? `${next}-01T08:${minute}:00+07:00` : null,
+    confirmedAt: sample ? `${next}-02T09:20:00+07:00` : null,
   };
 }
 
@@ -60,11 +65,21 @@ function pending(r: TenantReading): TenantReading {
   return tenantView({ ...r, status: 'PENDING_CONFIRM' });
 }
 
-/** P.204's readings, newest period first, derived from the invoices so numbers always match. */
+/** The room's readings, newest period first, derived from the invoices so numbers always match. */
 @Service()
 export class TenantReadingsStore {
   private readonly invoices = inject(TenantInvoiceStore);
+  private readonly sample = !injectApi();
 
+  readonly status = this.invoices.status;
+  readonly error = this.invoices.error;
+  readonly listReady = this.invoices.listReady;
+  /** Older periods are read after the screen opens: the screen shows what it has and says so meanwhile. */
+  readonly loadingMore = computed(() => this.invoices.detailsLoading() > 0);
+  readonly moreError = this.invoices.detailsError;
+  retryMore(): void {
+    this.invoices.retryFailedDetails();
+  }
   readonly nextCapture = this.invoices.nextCapture;
 
   private readonly all = computed(() =>
@@ -72,7 +87,7 @@ export class TenantReadingsStore {
       .history()
       .map((h) => this.invoices.detail(h.invoiceId))
       .filter((d): d is InvoiceDetail => d != null)
-      .flatMap((d) => [readingOf(d, 'ELECTRICITY'), readingOf(d, 'WATER')]),
+      .flatMap((d) => [readingOf(d, 'ELECTRICITY', this.sample), readingOf(d, 'WATER', this.sample)]),
   );
 
   /**
@@ -82,6 +97,15 @@ export class TenantReadingsStore {
   list(kind: MeterKind, beforeApproval = false): TenantReading[] {
     const rows = this.all().filter((r) => r.kind === kind);
     return beforeApproval ? rows.map((r, i) => (i === 0 ? pending(r) : r)) : rows.map(tenantView);
+  }
+
+  load(): void {
+    this.invoices.load();
+  }
+
+  /** API: reads the invoices (and so the readings) of the older periods, which are not read at start-up. */
+  ensureAll(): void {
+    this.invoices.ensureAllDetails();
   }
 
   /** Newest reading of each kind. */
