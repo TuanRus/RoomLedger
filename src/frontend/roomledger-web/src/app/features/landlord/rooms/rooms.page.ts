@@ -4,7 +4,8 @@ import { FormField, email, form, required } from '@angular/forms/signals';
 import { RouterLink } from '@angular/router';
 
 import { Viewport } from '../../../core/layout/viewport';
-import { NumPipe, PeriodPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
+import { DayPipe, NumPipe, PeriodPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
+import { DateField } from '../../../shared/ui/date-field';
 import { Icon } from '../../../shared/ui/icon';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { LoadState } from '../shared/load-state';
@@ -40,7 +41,7 @@ function day(iso: string | null): string {
 /** LL-03 (computer) and its phone layout: rooms, tenants, contract and reading state, invite a tenant to an empty room. */
 @Component({
   selector: 'app-rooms-page',
-  imports: [NgTemplateOutlet, RouterLink, FormField, Icon, LoadState, StatusChip, NumPipe, PeriodPipe, StampPipe, VndPipe],
+  imports: [NgTemplateOutlet, RouterLink, FormField, Icon, LoadState, StatusChip, NumPipe, PeriodPipe, StampPipe, VndPipe, DayPipe, DateField],
   templateUrl: './rooms.page.html',
   styleUrl: './rooms.page.scss',
 })

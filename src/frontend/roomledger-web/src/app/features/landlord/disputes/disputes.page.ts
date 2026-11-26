@@ -12,6 +12,11 @@ import { LandlordInvoicesStore } from '../invoices/data/invoices.store';
 import { LandlordDispute } from './data/disputes.sample';
 import { LandlordDisputesStore } from './data/disputes.store';
 
+/** Seconds the landlord has to undo a resolution before the tenant is notified. */
+const UNDO_SECONDS = 10;
+/** Seconds a plain notice (API data, nothing to undo) stays on screen. */
+const INFO_SECONDS = 6;
+
 /**
  * LL-08 (computer) and its phone layout (list, then detail): answer a tenant's dispute.
  * Either correct the reading (the invoice is recalculated) or keep it with a required reply.
@@ -62,8 +67,9 @@ export class LandlordDisputesPage {
     return d && v != null && !this.valueError() ? this.store.recalc(d, v) : null;
   });
 
-  protected readonly toast = signal<string | null>(null);
-  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Result of the last resolution, with an undo countdown before the tenant is told. */
+  protected readonly toast = signal<{ text: string; seconds: number; undo: boolean } | null>(null);
+  private toastTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.clearToast());
@@ -107,7 +113,7 @@ export class LandlordDisputesPage {
     const v = this.value();
     if (v == null || this.valueError()) return;
     const done = (result: string) => {
-      if (result === 'ok') this.showToast(`Đã sửa chỉ số ${d.roomCode} và tính lại hóa đơn. Người thuê được báo.`);
+      if (result === 'ok') this.resolved(`Đã sửa chỉ số ${d.roomCode} và tính lại hóa đơn.`, this.store.sample);
     };
     if (this.store.sample) done(this.store.correct(d.disputeId, v));
     else this.store.correctByApi(d.disputeId, v).subscribe(done);
@@ -120,20 +126,42 @@ export class LandlordDisputesPage {
     }
     const done = (result: string) => {
       if (result === 'empty-reply') this.replyError.set(true);
-      else if (result === 'ok') this.showToast(`Đã trả lời ${this.who(d)} (${d.roomCode}).`);
+      else if (result === 'ok') this.resolved(`Đã trả lời ${this.who(d)} (${d.roomCode}).`, this.store.sample);
     };
     if (this.store.sample) done(this.store.keep(d.disputeId, this.reply()));
     else this.store.keepByApi(d.disputeId, this.reply()).subscribe(done);
   }
 
-  private showToast(text: string): void {
+  /** Puts the dispute and its invoice back while the toast is showing; the tenant has not been told yet. */
+  protected undo(): void {
+    const id = this.store.undoResolve();
+    if (id) this.selectedId.set(id);
+    this.closeToast();
+  }
+
+  protected closeToast(): void {
     this.clearToast();
-    this.toast.set(text);
-    this.toastTimer = setTimeout(() => this.toast.set(null), 6000);
+    this.toast.set(null);
+  }
+
+  /**
+   * Shows the result and moves on to the next dispute still waiting, if any. Sample data: with a "Hoàn tác" countdown
+   * (the tenant is told when it runs out). API: the answer is already sent, so a plain notice without undo.
+   */
+  private resolved(text: string, undo: boolean): void {
+    this.clearToast();
+    this.toast.set({ text: undo ? text : `${text} Người thuê được báo.`, seconds: undo ? UNDO_SECONDS : INFO_SECONDS, undo });
+    this.toastTimer = setInterval(() => {
+      const t = this.toast();
+      if (!t || t.seconds <= 1) this.closeToast();
+      else this.toast.set({ ...t, seconds: t.seconds - 1 });
+    }, 1000);
+    const next = this.store.ordered().find((x) => x.status === 'OPEN');
+    if (next) this.selectedId.set(next.disputeId);
   }
 
   private clearToast(): void {
-    if (this.toastTimer) clearTimeout(this.toastTimer);
+    if (this.toastTimer) clearInterval(this.toastTimer);
     this.toastTimer = null;
   }
 }

@@ -39,11 +39,19 @@ export class StampPipe implements PipeTransform {
 }
 
 /** "2026-12-10" or an ISO date-time -> "10/12/2026" ('full', default) or "10/12" ('short'), read from the string so the time zone cannot shift it. */
+const WEEKDAYS = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+
 @Pipe({ name: 'day' })
 export class DayPipe implements PipeTransform {
-  transform(value: string | null | undefined, format: 'full' | 'short' = 'full'): string {
+  transform(value: string | null | undefined, format: 'full' | 'short' | 'long' = 'full'): string {
     const m = value ? /^(\d{4})-(\d{2})-(\d{2})/.exec(value) : null;
     if (!m) return '—';
-    return format === 'short' ? `${m[3]}/${m[2]}` : `${m[3]}/${m[2]}/${m[1]}`;
+    if (format === 'short') return `${m[3]}/${m[2]}`;
+    if (format === 'long') {
+      // "Thứ Hai, 01/12/2026": spelled out so a date never depends on the browser's mm/dd or dd/mm order.
+      const weekday = WEEKDAYS[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
+      return `${weekday}, ${m[3]}/${m[2]}/${m[1]}`;
+    }
+    return `${m[3]}/${m[2]}/${m[1]}`;
   }
 }

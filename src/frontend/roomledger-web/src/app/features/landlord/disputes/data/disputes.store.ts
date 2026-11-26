@@ -69,6 +69,8 @@ export class LandlordDisputesStore {
   readonly sample = !this.api;
   private readonly sampleData = signal<LandlordDispute[]>(this.api ? [] : LANDLORD_DISPUTES);
   private readonly actionError = signal<string | null>(null);
+  /** The dispute and invoice as they were before the last resolution (sample data), for undo. */
+  private lastResolved: { dispute: LandlordDispute; invoice: LandlordInvoice | undefined } | null = null;
 
   readonly disputes = computed<LandlordDispute[]>(() => (this.api ? disputesOf(this.invoices.invoices()) : this.sampleData()));
   /** Loading state of the invoices the disputes come from. */
@@ -117,6 +119,7 @@ export class LandlordDisputesStore {
     if (check !== 'ok') return check;
     const d = this.find(id)!;
     const response = this.correctionText(d, value);
+    this.remember(d);
     this.invoices.applyCorrection(d.invoiceId, d.reading!.kind, value, SAMPLE_RESOLVED_AT);
     this.patch(id, {
       status: 'RESOLVED', resolution: 'CORRECTED', response, resolvedAt: SAMPLE_RESOLVED_AT,
@@ -131,6 +134,7 @@ export class LandlordDisputesStore {
     if (!d || d.status !== 'OPEN') return 'not-open';
     const text = reply.trim();
     if (!text) return 'empty-reply';
+    this.remember(d);
     this.invoices.closeDispute(d.invoiceId);
     this.patch(id, { status: 'RESOLVED', resolution: 'KEPT', response: text, resolvedAt: SAMPLE_RESOLVED_AT });
     return 'ok';
@@ -151,6 +155,24 @@ export class LandlordDisputesStore {
     const text = reply.trim();
     if (!text) return of<ResolveResult>('empty-reply');
     return this.resolve(d, { resolution: 'KEPT', response: text });
+  }
+
+  /**
+   * Sample data: reverts the last correct() or keep() while its undo toast is showing: the dispute is open again
+   * and the invoice is back to what it was. With the API there is no undo (the answer is already sent).
+   */
+  undoResolve(): string | null {
+    if (!this.sample) return null;
+    const last = this.lastResolved;
+    if (!last) return null;
+    this.sampleData.update((list) => list.map((d) => (d.disputeId === last.dispute.disputeId ? last.dispute : d)));
+    if (last.invoice) this.invoices.restore(last.invoice);
+    this.lastResolved = null;
+    return last.dispute.disputeId;
+  }
+
+  private remember(d: LandlordDispute): void {
+    this.lastResolved = { dispute: d, invoice: this.invoices.find(d.invoiceId) };
   }
 
   find(id: string): LandlordDispute | undefined {

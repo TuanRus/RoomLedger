@@ -527,6 +527,18 @@ export class LandlordInvoicesStore {
     });
   }
 
+  /** Undo of remind() (sample data): puts each invoice's previous "last reminded" time back. */
+  restoreReminders(previous: Record<string, string | null>): void {
+    if (this.api) return;
+    this.base.update((list) => list.map((i) => (i.invoiceId in previous ? { ...i, remindedAt: previous[i.invoiceId] } : i)));
+  }
+
+  /** Puts an invoice back exactly as it was, e.g. when the landlord undoes a dispute resolution (sample data). */
+  restore(inv: LandlordInvoice): void {
+    if (this.api) return;
+    this.base.update((list) => list.map((i) => (i.invoiceId === inv.invoiceId ? inv : i)));
+  }
+
   private patch(id: string, changes: Partial<LandlordInvoice>): void {
     this.base.update((list) => list.map((i) => (i.invoiceId === id ? { ...i, ...changes } : i)));
   }

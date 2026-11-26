@@ -38,7 +38,7 @@ import { StatusChip } from './status-chip';
         } @else {
           <app-status-chip [invoice]="inv.status" />
         }
-        <span class="sum"><span class="small muted">{{ inv.status === 'PAID' ? 'Đã trả' : 'Tổng' }}</span><b>{{ inv.total | vnd }}</b></span>
+        <span class="sum"><span class="small muted">{{ inv.status === 'PAID' ? 'Đã thanh toán' : 'Tổng' }}</span><b>{{ inv.total | vnd }}</b></span>
       </div>
     </div>
   `,

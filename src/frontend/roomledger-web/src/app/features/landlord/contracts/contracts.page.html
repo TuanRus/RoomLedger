@@ -111,8 +111,9 @@
                   <div class="field">
                     <label for="c-s">Ngày bắt đầu</label>
                     @let sErr = errOf(tf.startDate);
-                    <input id="c-s" type="date" class="input" [class.is-error]="sErr" [formField]="tf.startDate" [attr.aria-invalid]="!!sErr" aria-describedby="c-s-h">
+                    <app-date-field inputId="c-s" [formField]="tf.startDate" [class.is-error]="!!sErr" describedBy="c-s-h" />
                     @if (sErr) { <span class="err" id="c-s-h"><app-icon name="i-alert" />{{ sErr }}</span> }
+                    @else if (tf.startDate().value()) { <span class="help" id="c-s-h">{{ tf.startDate().value() | day: 'long' }}</span> }
                   </div>
                   <div class="field">
                     <label for="c-t">Thời hạn</label>

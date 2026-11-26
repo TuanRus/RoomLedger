@@ -13,7 +13,7 @@ const REVIEW: Record<ReviewState, [Tone, string, string]> = {
 };
 const INVOICE: Record<InvoiceStatus, [Tone, string, string]> = {
   DRAFT: ['neu', 'i-edit', 'Nháp'],
-  SENT: ['warn', 'i-clock', 'Chưa thanh toán'],
+  SENT: ['neu', 'i-clock', 'Chưa thanh toán'],
   PAID: ['ok', 'i-check', 'Đã thanh toán'],
   DISPUTED: ['info', 'i-talk', 'Đang khiếu nại'],
 };

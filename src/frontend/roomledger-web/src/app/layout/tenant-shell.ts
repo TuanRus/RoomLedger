@@ -4,12 +4,14 @@ import { injectApi } from '../core/api/api-client';
 import { MeStore } from '../core/data/me.store';
 import { TenantHomeStore } from '../core/data/tenant-home.store';
 import { TenantInvoiceStore } from '../core/data/tenant-invoice.store';
+import { TenantContractStore } from '../features/tenant/contract/tenant-contract.store';
 import { NavBadgeCounts, ShellIdentity } from './shell-types';
 
-/** Tenant: invoices still to pay. Call in an injection context. */
+/** Tenant: invoices still to pay, and a contract waiting for their confirmation. Call in an injection context. */
 export function tenantBadges(): NavBadgeCounts {
   const invoices = inject(TenantInvoiceStore);
-  return computed(() => ({ invoices: invoices.unpaidCount() }));
+  const contract = inject(TenantContractStore);
+  return computed(() => ({ invoices: invoices.unpaidCount(), contract: contract.decision().status === 'AWAITING_CONFIRM' ? 1 : 0 }));
 }
 
 const SAMPLE_IDENTITY: ShellIdentity = {

@@ -27,8 +27,9 @@ export const TENANT_SHELL: ShellConfig = {
     { path: 'home', icon: 'i-home', label: 'Trang chủ', phone: 1 },
     { path: 'invoices', icon: 'i-bill', label: 'Hóa đơn', phone: 2 },
     { path: 'meters', icon: 'i-meter', label: 'Chỉ số điện nước', short: 'Chỉ số', phone: 3 },
-    { path: 'contract', icon: 'i-doc', label: 'Hợp đồng', phone: 4 },
-    { path: 'disputes', icon: 'i-talk', label: 'Khiếu nại' },
-    { path: 'account', icon: 'i-user', label: 'Tài khoản', phone: 5 },
+    { path: 'disputes', icon: 'i-talk', label: 'Khiếu nại', phone: 4 },
+    // Not in the phone bar: reached from the "Thêm" sheet (contract is confirmed once; account rarely).
+    { path: 'contract', icon: 'i-doc', label: 'Hợp đồng' },
+    { path: 'account', icon: 'i-user', label: 'Tài khoản' },
   ],
 };

@@ -74,7 +74,7 @@
   <h2 class="h prev-h">Hóa đơn trước</h2>
   <ul class="mini">
     @for (h of previous(); track h.invoiceId) {
-      <li><a [routerLink]="['/tenant/invoices', h.invoiceId]"><span>Kỳ {{ h.period | period }} · @if (h.paidAt) { trả {{ h.paidAt | day: 'short' }} } @else { chưa trả }</span><b>{{ h.total | vnd }}</b></a></li>
+      <li><a [routerLink]="['/tenant/invoices', h.invoiceId]"><span>Kỳ {{ h.period | period }} · @if (h.paidAt) { đã thanh toán {{ h.paidAt | day: 'short' }} } @else { chưa thanh toán }</span><b>{{ h.total | vnd }}</b></a></li>
     }
   </ul>
   }

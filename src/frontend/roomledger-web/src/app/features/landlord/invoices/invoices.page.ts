@@ -29,8 +29,8 @@ const INFO_SECONDS = 6;
 
 interface Toast {
   text: string;
-  /** Invoice to unmark when the landlord presses "Hoàn tác". */
-  undoId: string | null;
+  /** What "Hoàn tác" reverts (mark paid, reminders); null for a plain notice. */
+  undo: (() => void) | null;
   seconds: number;
 }
 
@@ -67,8 +67,11 @@ export class LandlordInvoicesPage {
       .filter((g) => g.items.length > 0),
   );
 
-  /** Header action after sending: remind every unpaid invoice of this period (LL-05d). */
-  protected readonly unpaidThisPeriod = computed(() => this.store.unpaid().filter((i) => i.period === this.store.period));
+  /**
+   * Bulk reminder targets: only invoices already past their due date. Reminding the whole period right after
+   * sending, before the due date, would nag tenants who still have days left to pay.
+   */
+  protected readonly remindable = computed(() => this.store.unpaid().filter((i) => this.store.overdueDays(i) > 0));
 
   protected readonly selectedId = linkedSignal<LandlordInvoice[], string | null>({
     source: this.store.invoices,
@@ -84,6 +87,7 @@ export class LandlordInvoicesPage {
   protected readonly photo = signal<{ inv: LandlordInvoice; kind: MeterKind } | null>(null);
   private readonly photoDialog = viewChild<ElementRef<HTMLDialogElement>>('photoDialog');
   private readonly sendDialog = viewChild<ElementRef<HTMLDialogElement>>('sendDialog');
+  private readonly remindDialog = viewChild<ElementRef<HTMLDialogElement>>('remindDialog');
 
   protected readonly toast = signal<Toast | null>(null);
   private toastTimer: ReturnType<typeof setInterval> | null = null;
@@ -153,7 +157,7 @@ export class LandlordInvoicesPage {
 
   protected markPaid(inv: LandlordInvoice): void {
     if (!this.store.markPaid(inv.invoiceId)) return;
-    this.showToast(`${inv.roomCode} đã thanh toán ${this.money(inv.total)}.`, inv.invoiceId);
+    this.showToast(`${inv.roomCode} đã thanh toán ${this.money(inv.total)}.`, () => this.store.unmarkPaid(inv.invoiceId));
   }
 
   protected unmarkPaid(inv: LandlordInvoice): void {
@@ -162,12 +166,28 @@ export class LandlordInvoicesPage {
   }
 
   protected remind(inv: LandlordInvoice): void {
-    if (this.store.remind([inv.invoiceId])) this.showToast(`Đã nhắc ${inv.tenantName ?? inv.roomCode} (${inv.roomCode}) qua email.`);
+    this.sendReminders([inv], `Đã nhắc ${inv.tenantName ?? inv.roomCode} (${inv.roomCode}).`);
+  }
+
+  protected openRemind(): void {
+    this.remindDialog()?.nativeElement.showModal();
+  }
+
+  protected closeRemind(): void {
+    this.remindDialog()?.nativeElement.close();
   }
 
   protected remindAll(): void {
-    const n = this.store.remind(this.unpaidThisPeriod().map((i) => i.invoiceId));
-    if (n) this.showToast(`Đã nhắc ${n} phòng chưa thanh toán qua email.`);
+    const list = this.remindable();
+    this.closeRemind();
+    this.sendReminders(list, `Đã nhắc ${list.length} phòng quá hạn.`);
+  }
+
+  /** Reminders exist in sample data only (the API has no reminder endpoint); undo puts the old times back. */
+  private sendReminders(list: LandlordInvoice[], text: string): void {
+    const previous = Object.fromEntries(list.map((i) => [i.invoiceId, i.remindedAt]));
+    if (!this.store.remind(list.map((i) => i.invoiceId))) return;
+    this.showToast(`${text} Email gửi khi hết giờ hoàn tác.`, () => this.store.restoreReminders(previous));
   }
 
   protected openPhoto(inv: LandlordInvoice, kind: MeterKind): void {
@@ -180,8 +200,7 @@ export class LandlordInvoicesPage {
   }
 
   protected undo(): void {
-    const id = this.toast()?.undoId;
-    if (id) this.store.unmarkPaid(id);
+    this.toast()?.undo?.();
     this.closeToast();
   }
 
@@ -207,9 +226,9 @@ export class LandlordInvoicesPage {
     return this.vnd.transform(value);
   }
 
-  private showToast(text: string, undoId: string | null = null): void {
+  private showToast(text: string, undo: (() => void) | null = null): void {
     this.clearToastTimer();
-    this.toast.set({ text, undoId, seconds: undoId ? PAID_UNDO_SECONDS : INFO_SECONDS });
+    this.toast.set({ text, undo, seconds: undo ? PAID_UNDO_SECONDS : INFO_SECONDS });
     this.toastTimer = setInterval(() => {
       const t = this.toast();
       if (!t || t.seconds <= 1) this.closeToast();
