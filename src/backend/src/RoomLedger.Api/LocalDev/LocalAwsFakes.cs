@@ -37,6 +37,9 @@ public sealed class LocalStorage : IStorage, IObjectStore
             ? Task.FromResult<Stream>(new MemoryStream(content.Content, writable: false))
             : throw new FileNotFoundException($"{bucket}/{key}");
 
+    public Task<long?> GetSizeAsync(StorageBucket bucket, string key, CancellationToken ct) =>
+        Task.FromResult(_objects.TryGetValue((bucket, key), out var o) ? (long?)o.Content.Length : null);
+
     public Task PutAsync(StorageBucket bucket, string key, byte[] content, string contentType, CancellationToken ct)
     {
         _objects[(bucket, key)] = (content, contentType);
@@ -51,11 +54,7 @@ public sealed class LocalStorage : IStorage, IObjectStore
 
     public Task<string?> CopyAsync(StorageBucket from, string fromKey, StorageBucket to, string toKey, CancellationToken ct)
     {
-        if (_objects.TryGetValue((from, fromKey), out var content))
-        {
-            _objects[(to, toKey)] = content;
-        }
-
+        _objects[(to, toKey)] = _objects.TryGetValue((from, fromKey), out var content) ? content : throw new FileNotFoundException($"{from}/{fromKey}");
         return Task.FromResult<string?>(Guid.NewGuid().ToString("N"));
     }
 }

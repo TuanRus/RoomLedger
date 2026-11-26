@@ -18,6 +18,9 @@ public sealed class FakeObjectStore : IObjectStore
             ? Task.FromResult<Stream>(new MemoryStream(content, writable: false))
             : throw new FileNotFoundException($"{bucket}/{key}");
 
+    public Task<long?> GetSizeAsync(StorageBucket bucket, string key, CancellationToken ct) =>
+        Task.FromResult(Objects.TryGetValue((bucket, key), out var content) ? (long?)content.Length : null);
+
     public Task PutAsync(StorageBucket bucket, string key, byte[] content, string contentType, CancellationToken ct)
     {
         Objects[(bucket, key)] = content;
@@ -30,9 +33,17 @@ public sealed class FakeObjectStore : IObjectStore
         return Task.CompletedTask;
     }
 
-    public Task<string?> CopyAsync(StorageBucket from, string fromKey, StorageBucket to, string toKey, CancellationToken ct)
+    /** Chạy trước khi chép, để test chen một yêu cầu khác vào giữa (mô phỏng hai request cùng lúc). */
+    public Func<Task>? BeforeCopy { get; set; }
+
+    public async Task<string?> CopyAsync(StorageBucket from, string fromKey, StorageBucket to, string toKey, CancellationToken ct)
     {
-        Objects[(to, toKey)] = Objects[(from, fromKey)];
-        return Task.FromResult<string?>(Guid.NewGuid().ToString("N"));
+        if (BeforeCopy is not null)
+        {
+            await BeforeCopy();
+        }
+
+        Objects[(to, toKey)] = Objects.TryGetValue((from, fromKey), out var content) ? content : throw new FileNotFoundException($"{from}/{fromKey}");
+        return Guid.NewGuid().ToString("N");
     }
 }
