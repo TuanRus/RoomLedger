@@ -1147,7 +1147,7 @@ components:
         endDate: { type: string, format: date }
         kind: { $ref: "#/components/schemas/EndKind" }
         finalPeriod: { type: string, example: "2026-11" }
-        targetRoom: { allOf: [{ $ref: "#/components/schemas/EndTargetRoom" }], nullable: true }
+        targetRoom: { type: object, allOf: [{ $ref: "#/components/schemas/EndTargetRoom" }], nullable: true }
         electricity: { $ref: "#/components/schemas/FinalReading" }
         water: { $ref: "#/components/schemas/FinalReading" }
         rates: { $ref: "#/components/schemas/EndRates" }
