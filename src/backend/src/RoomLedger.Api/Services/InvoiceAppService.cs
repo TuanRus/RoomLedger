@@ -16,7 +16,7 @@ namespace RoomLedger.Api.Services;
  * @author Tuấn
  * @version 1.0
  */
-public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublisher events, MeterAppService meters, PropertyAppService properties)
+public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublisher events, MeterAppService meters, PropertyAppService properties, PaymentInfoAppService payments)
 {
     public const string SkipMissingReadings = "MISSING_READINGS";
     public const string SkipMissingPrevious = "MISSING_PREVIOUS_READING";
@@ -149,7 +149,7 @@ public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublish
     }
 
     /**
-     * Chi tiết hóa đơn kèm ảnh đồng hồ (presigned GET 5 phút) và khiếu nại.
+     * Chi tiết hóa đơn kèm ảnh đồng hồ (presigned GET 5 phút), khiếu nại và thông tin chuyển khoản của nhà trọ (null nếu chưa nhập đủ).
      *
      * @author Tuấn
      * @version 1.0
@@ -158,7 +158,7 @@ public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublish
     {
         var row = await VisibleInvoices()
             .Where(i => i.Id == invoiceId)
-            .Select(i => new { Invoice = i, RoomCode = i.Tenancy!.Room!.Code, PropertyName = i.Tenancy.Room.Property!.Name })
+            .Select(i => new { Invoice = i, RoomCode = i.Tenancy!.Room!.Code, PropertyName = i.Tenancy.Room.Property!.Name, Property = i.Tenancy.Room.Property })
             .FirstOrDefaultAsync(ct) ?? throw new NotFoundException("Không tìm thấy hóa đơn");
         var inv = row.Invoice;
         var readings = await db.MeterReadings.AsNoTracking()
@@ -177,7 +177,8 @@ public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublish
             new UtilityLine(inv.WaterReadingId, inv.WaterPrevious, inv.WaterCurrent,
                 inv.WaterCurrent - inv.WaterPrevious, inv.WaterRate, inv.WaterAmount, Photo(inv.WaterReadingId)),
             inv.ServiceFee, inv.Total, inv.SentAt, inv.PaidAt,
-            disputes.Select(ToDisputeResponse).ToList());
+            disputes.Select(ToDisputeResponse).ToList(),
+            payments.ForInvoice(row.Property, row.RoomCode, inv.Period));
     }
 
     /**

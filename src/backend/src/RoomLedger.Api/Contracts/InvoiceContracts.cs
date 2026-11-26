@@ -77,7 +77,7 @@ public record DisputeResponse(
     DateTimeOffset? ResolvedAt);
 
 /**
- * Chi tiết hóa đơn (MD-05-FE-04).
+ * Chi tiết hóa đơn (MD-05-FE-04). payment là null khi nhà trọ chưa nhập đủ ngân hàng, số tài khoản, chủ tài khoản.
  *
  * @author Tuấn
  * @version 1.0
@@ -96,7 +96,8 @@ public record InvoiceDetailResponse(
     long Total,
     DateTimeOffset? SentAt,
     DateTimeOffset? PaidAt,
-    IReadOnlyList<DisputeResponse> Disputes);
+    IReadOnlyList<DisputeResponse> Disputes,
+    PaymentResponse? Payment);
 
 /**
  * Body POST /invoices/{invoiceId}/disputes (người thuê khiếu nại chỉ số).

@@ -244,7 +244,29 @@ public class StorageAuthApiStackTests
         Assert.Contains("Incoming", json);
         Assert.Contains("Derived", json);
         Assert.Contains("/*.jpg", json);
+        Assert.Contains("/qr/*", json);   // mã QR nhà trọ
         Assert.DoesNotContain("Evidence", json);
         Assert.DoesNotContain("reports", json);
+    }
+
+    /** Mã QR nhà trọ: API chỉ được s3:PutObject (không Get/Delete kèm theo) vào derived/qr/*, không ghi được chỗ khác của derived. */
+    [Fact]
+    public void Api_CanPutOnlyUnderDerivedQrPrefix()
+    {
+        var statements = Templates.Value.Api.FindResources("AWS::IAM::Policy").Values
+            .Select(r => (IDictionary<string, object>)r["Properties"])
+            .Select(p => (IDictionary<string, object>)p["PolicyDocument"])
+            .SelectMany(d => ((object[])d["Statement"]).Cast<IDictionary<string, object>>())
+            .ToList();
+
+        var puts = statements.Where(s => Json(s).Contains("s3:PutObject")).ToList();
+        var qr = Json(Assert.Single(puts, s => Json(s).Contains("PutPropertyQr")));
+        Assert.Contains("Derived", qr);
+        Assert.Contains("/qr/*", qr);
+        Assert.DoesNotContain("Evidence", qr);
+        Assert.DoesNotContain("s3:GetObject", qr);
+        Assert.DoesNotContain("s3:DeleteObject", qr);
+        // Không còn statement nào cho phép ghi vào derived ngoài qr/*
+        Assert.DoesNotContain(puts.Where(s => !Json(s).Contains("PutPropertyQr")), s => Json(s).Contains("Derived"));
     }
 }

@@ -30,6 +30,7 @@ public static class ErrorCodes
     public const string OpenDisputes = "OPEN_DISPUTES";                   // Sang: BR-29, quyết định B4
     public const string AlreadyInvoiced = "ALREADY_INVOICED";
     public const string PeriodClosed = "PERIOD_CLOSED";
+    public const string QrNotUploaded = "QR_NOT_UPLOADED";
     public const string InviteInvalid = "INVITE_INVALID";
     public const string Unauthorized = "UNAUTHORIZED";
     public const string InternalError = "INTERNAL_ERROR";

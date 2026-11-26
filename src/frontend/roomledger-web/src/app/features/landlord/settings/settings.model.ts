@@ -1,10 +1,9 @@
 /**
  * LL-06 pricing, billing-cycle and bank-transfer settings.
  *
- * API gaps (2026-11-24): PropertyResponse only has electricityRate, waterRate and serviceFee.
- * Not in the contract yet: reading days, payment due day, reading reminder, per-room floor area,
- * the period a rent applies from, the period a price change applies from, and all bank-transfer
- * fields (bank, account number, holder, transfer note template, QR image).
+ * API (2026-11-26): prices (PATCH /properties/{id}) and bank-transfer details with QR (payment-info) are real.
+ * Still not in the contract: reading days, payment due day, reading reminder, per-room floor area,
+ * the period a rent applies from and the period a price change applies from.
  */
 
 export interface RoomRent {
@@ -31,6 +30,8 @@ export interface BankTransferSettings {
 export interface PricingSettings {
   electricityRate: number;
   waterRate: number;
+  /** Monthly service fee in VND, may be 0. */
+  serviceFee: number;
   /** First of the three reading days, e.g. 1 -> "Ngày 1–3 hằng tháng". */
   readingStartDay: number;
   dueDay: number;
@@ -43,6 +44,7 @@ export interface PricingSettings {
 export interface SettingsForm {
   electricityRate: string;
   waterRate: string;
+  serviceFee: string;
   readingStartDay: string;
   dueDay: string;
   remindReading: boolean;
@@ -90,7 +92,7 @@ export function accountNumberError(text: string): string | null {
   const digits = text.replace(/\s/g, '');
   if (digits === '') return 'Nhập số tài khoản.';
   if (!/^\d+$/.test(digits)) return 'Số tài khoản chỉ gồm chữ số.';
-  if (digits.length < 6 || digits.length > 19) return 'Số tài khoản có từ 6 đến 19 chữ số.';
+  if (digits.length < 6 || digits.length > 20) return 'Số tài khoản có từ 6 đến 20 chữ số.';
   return null;
 }
 
@@ -116,6 +118,7 @@ export function toForm(s: PricingSettings): SettingsForm {
   return {
     electricityRate: formatMoney(s.electricityRate),
     waterRate: formatMoney(s.waterRate),
+    serviceFee: formatMoney(s.serviceFee),
     readingStartDay: String(s.readingStartDay),
     dueDay: String(s.dueDay),
     remindReading: s.remindReading,
@@ -134,6 +137,7 @@ export function fromForm(f: SettingsForm, current: PricingSettings, qrImageUrl: 
   return {
     electricityRate: parseMoney(f.electricityRate) ?? current.electricityRate,
     waterRate: parseMoney(f.waterRate) ?? current.waterRate,
+    serviceFee: parseMoney(f.serviceFee) ?? current.serviceFee,
     readingStartDay: Number(f.readingStartDay),
     dueDay: Number(f.dueDay),
     remindReading: f.remindReading,
@@ -156,7 +160,40 @@ export function sameForm(a: SettingsForm, b: SettingsForm): boolean {
       ...f,
       electricityRate: parseMoney(f.electricityRate) ?? f.electricityRate,
       waterRate: parseMoney(f.waterRate) ?? f.waterRate,
+      serviceFee: parseMoney(f.serviceFee) ?? f.serviceFee,
       rents: f.rents.map((r) => parseMoney(r.rent) ?? r.rent),
     });
   return norm(a) === norm(b);
+}
+
+/** Template the API uses when none is set. */
+export const API_DEFAULT_TEMPLATE = '{room} T{month}';
+const API_PLACEHOLDERS = ['{room}', '{month}', '{year}', '{period}'];
+
+/** API mode: the template is optional (empty = default), at most 100 characters, only {room} {month} {year} {period}. */
+export function apiTransferNoteError(template: string): string | null {
+  const t = template.trim();
+  if (t.length > 100) return 'Nội dung tối đa 100 ký tự.';
+  const rest = API_PLACEHOLDERS.reduce((s, p) => s.split(p).join(''), t);
+  if (rest.includes('{') || rest.includes('}')) return 'Chỉ dùng {room}, {month}, {year}, {period}.';
+  return null;
+}
+
+/** Same filling as the API: "{room} T{month}" with "P.204", "2026-11" -> "P204 T11". */
+export function apiTransferNoteExample(template: string, roomCode: string, period: string): string {
+  const room = roomCode.replace(/[.\s]/g, '');
+  return (template.trim() || API_DEFAULT_TEMPLATE)
+    .split('{room}').join(room)
+    .split('{month}').join(period.slice(5, 7))
+    .split('{year}').join(period.slice(0, 4))
+    .split('{period}').join(period);
+}
+
+/** API mode: the three bank fields go together; all empty means no bank details. */
+export function bankFieldsMissing(f: Pick<SettingsForm, 'bankName' | 'accountNumber' | 'accountHolder'>): boolean {
+  const filled = [f.bankName, f.accountNumber, f.accountHolder].filter((v) => v.trim() !== '').length;
+  return filled > 0 && filled < 3;
+}
+export function bankFieldsEmpty(f: Pick<SettingsForm, 'bankName' | 'accountNumber' | 'accountHolder'>): boolean {
+  return [f.bankName, f.accountNumber, f.accountHolder].every((v) => v.trim() === '');
 }

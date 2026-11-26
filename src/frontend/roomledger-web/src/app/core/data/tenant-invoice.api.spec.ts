@@ -42,7 +42,15 @@ describe('TenantInvoiceStore with the API', () => {
     expect(store.detail('b')?.electricity.usage).toBe(60);
     expect(store.detail('b')?.dueDate).toBeNull();
     expect(store.detail('a')).toBeNull();
-    expect(store.payment()).toBeNull();
+    expect(store.paymentOf('b')).toBeNull();
+  });
+
+  it('takes the payment details from the invoice being viewed', () => {
+    http.expectOne(`${BASE}/invoices?limit=24`).flush(ok({ items: [row('b', '2026-10', 'SENT')] }));
+    const payment = { bankName: 'Vietcombank', accountNumber: '0123456789', accountHolder: 'LE THI LAN', transferNote: 'P204 T10', qrUrl: 'https://s3.test/qr.png' };
+    http.expectOne(`${BASE}/invoices/b`).flush(ok({ ...detail('b', '2026-10', 'SENT'), payment }));
+    expect(store.paymentOf('b')).toEqual({ bankName: 'Vietcombank', accountNumber: '0123456789', accountHolder: 'LE THI LAN', transferNote: 'P204 T10', qrImageUrl: 'https://s3.test/qr.png' });
+    expect(store.paymentOf('other')).toBeNull();
   });
 
   it('reads an older invoice once, when a screen asks for it', () => {

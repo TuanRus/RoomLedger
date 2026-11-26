@@ -25,6 +25,20 @@ public class S3ObjectStore(IAmazonS3 s3, IOptions<StorageOptions> options) : IOb
         return buffer;
     }
 
+    /** HEAD object; không có (404) thì null. Lỗi khác (403 thiếu quyền...) cứ ném ra để không nhầm với "chưa tải". */
+    public async Task<long?> GetSizeAsync(StorageBucket bucket, string key, CancellationToken ct)
+    {
+        try
+        {
+            var head = await s3.GetObjectMetadataAsync(BucketName(bucket), key, ct);
+            return head.ContentLength;
+        }
+        catch (AmazonS3Exception e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     /** Ghi kèm checksum SHA-256 để S3 kiểm toàn vẹn khi nhận. */
     public async Task PutAsync(StorageBucket bucket, string key, byte[] content, string contentType, CancellationToken ct)
     {
@@ -45,15 +59,22 @@ public class S3ObjectStore(IAmazonS3 s3, IOptions<StorageOptions> options) : IOb
     /** CopyObject (≤ 5 GB, ảnh ≤ 25 MB); retention Object Lock lấy theo mặc định của bucket đích. */
     public async Task<string?> CopyAsync(StorageBucket from, string fromKey, StorageBucket to, string toKey, CancellationToken ct)
     {
-        var response = await s3.CopyObjectAsync(new CopyObjectRequest
+        try
         {
-            SourceBucket = BucketName(from),
-            SourceKey = fromKey,
-            DestinationBucket = BucketName(to),
-            DestinationKey = toKey,
-            ChecksumAlgorithm = ChecksumAlgorithm.SHA256,
-        }, ct);
-        return response.VersionId;
+            var response = await s3.CopyObjectAsync(new CopyObjectRequest
+            {
+                SourceBucket = BucketName(from),
+                SourceKey = fromKey,
+                DestinationBucket = BucketName(to),
+                DestinationKey = toKey,
+                ChecksumAlgorithm = ChecksumAlgorithm.SHA256,
+            }, ct);
+            return response.VersionId;
+        }
+        catch (AmazonS3Exception e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound || e.ErrorCode == "NoSuchKey")
+        {
+            throw new FileNotFoundException($"{from}/{fromKey}", e);
+        }
     }
 
     private string BucketName(StorageBucket bucket) => bucket switch

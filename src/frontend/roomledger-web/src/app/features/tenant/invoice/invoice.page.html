@@ -79,7 +79,7 @@
           } @else {
           @if (p.qrImageUrl) {
             <p class="small muted">Mở ứng dụng ngân hàng trên điện thoại và quét mã. Số tiền và nội dung đã điền sẵn.</p>
-            <img class="qr" [ngSrc]="p.qrImageUrl" width="200" height="200" [alt]="'Mã QR chuyển khoản ' + (inv.total | vnd) + ' tới ' + p.accountHolder + ', nội dung ' + p.transferNote">
+            <img class="qr" [ngSrc]="p.qrImageUrl" width="200" height="200" (error)="onQrError()" [alt]="'Mã QR chuyển khoản ' + (inv.total | vnd) + ' tới ' + p.accountHolder + ', nội dung ' + p.transferNote">
           }
           <dl class="bank">
             <div><dt>Ngân hàng</dt><dd>{{ p.bankName }}</dd></div>

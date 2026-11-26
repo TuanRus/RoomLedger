@@ -38,7 +38,7 @@ export class TenantInvoicePage {
   protected readonly detailStatus = computed(() => this.store.detailStatus(this.invoiceId()));
   protected readonly detailError = computed(() => this.store.detailError(this.invoiceId()));
   protected readonly history = this.store.history;
-  protected readonly payment = this.store.payment;
+  protected readonly payment = computed(() => this.store.paymentOf(this.invoiceId()));
   protected readonly isPaid = computed(() => this.invoice()?.status === 'PAID');
   /** TN-22: what comes after a paid invoice (the next invoice, or when the meters are read). */
   protected readonly next = computed(() => this.store.nextAfter(this.invoiceId()));
@@ -50,7 +50,7 @@ export class TenantInvoicePage {
 
   /** "2026-12-10" -> "10/12/2026". */
   protected readonly dueDate = computed(() => this.invoice()?.dueDate?.split('-').reverse().join('/') ?? 'chưa có');
-  /** Shown instead of the bank details while the API has no payment settings (API-GAPS.md). */
+  /** Shown instead of the bank details when the landlord has not entered them. */
   protected readonly noPaymentText = 'Chủ nhà chưa thêm thông tin chuyển khoản. Hỏi chủ nhà số tài khoản để thanh toán.';
 
   protected readonly copied = signal<CopyTarget | null>(null);
@@ -75,6 +75,17 @@ export class TenantInvoicePage {
 
   protected retry(): void {
     this.store.load();
+  }
+
+  /** Invoices whose QR link was already refreshed once after the image failed (the link expires; the cached detail may be old). */
+  private readonly qrRefreshed = new Set<string>();
+
+  /** The QR image did not load (expired presigned link): read the invoice again once for a fresh link. */
+  protected onQrError(): void {
+    const id = this.invoiceId();
+    if (this.qrRefreshed.has(id)) return;
+    this.qrRefreshed.add(id);
+    this.store.reloadInvoice(id).subscribe({ error: () => undefined });
   }
 
   protected retryDetail(): void {

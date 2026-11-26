@@ -80,16 +80,24 @@ public sealed class ApiStack : Stack
         storage.Incoming.GrantRead(ApiFunction);
         storage.Evidence.GrantRead(ApiFunction);
         storage.Derived.GrantRead(ApiFunction);
+        // Mã QR nhận tiền của nhà trọ (xác nhận QR chép từ incoming sang derived/qr/*)
+        ApiFunction.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Sid = "PutPropertyQr",
+            Effect = Effect.ALLOW,
+            Actions = ["s3:PutObject"],
+            Resources = [storage.Derived.ArnForObjects("qr/*")],
+        }));
         bus.GrantPutEventsTo(ApiFunction);
 
-        // D1 (BR-17): xóa ảnh trước khi khóa. Chỉ incoming và ảnh chuyển đổi trong derived (*.jpg gồm .thumb.jpg).
+        // D1 (BR-17): xóa ảnh trước khi khóa. Chỉ incoming, ảnh chuyển đổi trong derived (*.jpg gồm .thumb.jpg) và mã QR (derived/qr/*).
         // Không có quyền xóa trên evidence; PDF thanh lý (derived/reports/*.pdf) không khớp *.jpg nên không xóa được.
         ApiFunction.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
         {
             Sid = "DeleteUnlockedPhotoObjects",
             Effect = Effect.ALLOW,
             Actions = ["s3:DeleteObject"],
-            Resources = [storage.Incoming.ArnForObjects("*"), storage.Derived.ArnForObjects("*.jpg")],
+            Resources = [storage.Incoming.ArnForObjects("*"), storage.Derived.ArnForObjects("*.jpg"), storage.Derived.ArnForObjects("qr/*")],
         }));
         
         Api = new RestApi(this, "Rest", new RestApiProps

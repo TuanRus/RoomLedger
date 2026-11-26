@@ -39,8 +39,8 @@ const HISTORY_LIMIT = 24;
  * The signed-in tenant's invoices: sample data by default; with environment.dataSource 'api' GET /invoices (the list) and
  * GET /invoices/{id} for the newest invoice and the disputed ones. Any other invoice is read when a screen needs it
  * (ensureDetail / ensureAllDetails), so opening the app is not one request per invoice.
- * Payment details and the meter-reading schedule are not in the API yet, so in API mode payment and nextCapture are
- * null (the screens print the period without a window).
+ * Payment details come with each invoice detail (paymentOf). The meter-reading schedule is not in the API, so in API mode
+ * nextCapture is null (the screens print the period without a window).
  */
 @Service()
 export class TenantInvoiceStore {
@@ -61,12 +61,19 @@ export class TenantInvoiceStore {
   /** Newest first. */
   readonly history = this.listed.asReadonly();
   readonly unpaidCount = computed(() => this.listed().filter((i) => i.status === 'SENT' || i.status === 'DISPUTED').length);
+  /**
+   * The bank transfer details printed on one invoice: the API sends them with the invoice (null when the landlord has none).
+   * Sample data uses one fixed sample.
+   */
+  paymentOf(invoiceId: string): PaymentInfo | null {
+    return this.api ? (this.loaded().get(invoiceId)?.payment ?? null) : LANDLORD_PAYMENT_INFO;
+  }
+
   /** The newest invoice in full; null until it has been read. */
   readonly latest = computed<InvoiceDetail | null>(() => {
     const first = this.listed()[0];
     return first ? (this.loaded().get(first.invoiceId) ?? null) : null;
   });
-  readonly payment = signal<PaymentInfo | null>(this.api ? null : LANDLORD_PAYMENT_INFO);
   /** When the landlord reads the meters next: not in the API, so null in API mode. */
   readonly nextCapture: { readonly period: string; readonly window: string } | null = this.api ? null : TENANT_NEXT_CAPTURE;
   /** True with sample data: demo controls (?sample=, "Báo tôi") may show. */

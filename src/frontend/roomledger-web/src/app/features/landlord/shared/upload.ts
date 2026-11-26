@@ -53,3 +53,13 @@ export function imageType(file: { name: string; type: string }): UploadImageType
 export function scanType(file: { name: string; type: string }): UploadScanType | null {
   return file.type === 'application/pdf' ? 'application/pdf' : imageType(file);
 }
+
+const QR_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export type UploadQrType = (typeof QR_TYPES)[number];
+/** Largest bank QR image the API takes (PROPERTY_QR). */
+export const QR_MAX_BYTES = 2 * 1024 * 1024;
+
+/** The content type for a bank QR image (PNG, JPG or WEBP only), or null. */
+export function qrType(file: { type: string }): UploadQrType | null {
+  return (QR_TYPES as readonly string[]).includes(file.type) ? (file.type as UploadQrType) : null;
+}

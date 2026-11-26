@@ -89,6 +89,9 @@ public sealed class FakeObjectStore : IObjectStore
             ? Task.FromResult<Stream>(new MemoryStream(o.Content, writable: false))
             : throw new FileNotFoundException($"{bucket}/{key}");
 
+    public Task<long?> GetSizeAsync(StorageBucket bucket, string key, CancellationToken ct) =>
+        Task.FromResult(Objects.TryGetValue((bucket, key), out var o) ? (long?)o.Content.Length : null);
+
     public Task PutAsync(StorageBucket bucket, string key, byte[] content, string contentType, CancellationToken ct)
     {
         Objects[(bucket, key)] = (content, contentType);

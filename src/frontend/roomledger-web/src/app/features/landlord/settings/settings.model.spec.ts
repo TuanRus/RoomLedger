@@ -40,7 +40,7 @@ describe('settings model', () => {
   it('checks bank account number and transfer note template', () => {
     expect(accountNumberError('0000 1234 5678')).toBeNull();
     expect(accountNumberError('12a4')).toBe('Số tài khoản chỉ gồm chữ số.');
-    expect(accountNumberError('123')).toContain('6 đến 19');
+    expect(accountNumberError('123')).toContain('6 đến 20');
     expect(transferNoteError('P[phòng] T[tháng]')).toBeNull();
     expect(transferNoteError('Tien nha')).toContain('[phòng]');
     expect(transferNoteExample('P[phòng] T[tháng]', '204', 11)).toBe('P204 T11');
