@@ -22,6 +22,7 @@ public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublish
     public const string SkipMissingPrevious = "MISSING_PREVIOUS_READING";
     public const string SkipNoLockedContract = "NO_LOCKED_CONTRACT";
     public const string SkipAlreadyInvoiced = "ALREADY_INVOICED";
+    public const string SkipEndingTenancy = "ENDING_TENANCY";
 
     /**
      * Lập hóa đơn nháp hàng loạt cho kỳ (BR-22). Phòng thiếu chỉ số xác nhận hoặc đã có hóa đơn được trả trong skipped.
@@ -43,6 +44,8 @@ public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublish
             {
                 t.Id,
                 t.RoomId,
+                t.Status,
+                t.EndDate,
                 t.Room!.Code,
                 Terms = t.Versions.Where(v => v.Status == TenancyVersionStatus.Locked).OrderByDescending(v => v.Number)
                     .Select(v => new { v.MonthlyRent, v.ElectricityRate, v.WaterRate }).FirstOrDefault(),
@@ -50,8 +53,9 @@ public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublish
             })
             .ToListAsync(ct);
         var roomIds = tenancies.Select(t => t.RoomId).ToList();
+        var tenancyIds = tenancies.Select(t => t.Id).ToList();
         var readings = await db.MeterReadings.AsNoTracking()
-            .Where(m => roomIds.Contains(m.RoomId) && m.Period == period && m.Status == MeterReadingStatus.Confirmed)
+            .Where(m => tenancyIds.Contains(m.TenancyId) && m.Period == period && m.Status == MeterReadingStatus.Confirmed)
             .ToListAsync(ct);
         var previous = await meters.PreviousValuesAsync(roomIds, period, ct);
 
@@ -59,11 +63,15 @@ public class InvoiceAppService(AppDbContext db, ICurrentUser user, IEventPublish
         var skipped = new List<SkippedRoom>();
         foreach (var t in tenancies)
         {
-            var elec = readings.FirstOrDefault(m => m.RoomId == t.RoomId && m.Kind == MeterKind.Electricity);
-            var water = readings.FirstOrDefault(m => m.RoomId == t.RoomId && m.Kind == MeterKind.Water);
+            var elec = readings.FirstOrDefault(m => m.TenancyId == t.Id && m.Kind == MeterKind.Electricity);
+            var water = readings.FirstOrDefault(m => m.TenancyId == t.Id && m.Kind == MeterKind.Water);
             var elecPrev = previous.GetValueOrDefault((t.RoomId, MeterKind.Electricity));
             var waterPrev = previous.GetValueOrDefault((t.RoomId, MeterKind.Water));
-            string? reason = t.Invoiced ? SkipAlreadyInvoiced
+            // Hợp đồng đang kết thúc không lập hóa đơn hàng loạt từ kỳ cuối trở đi: hóa đơn cuối do luồng kết thúc lập
+            var ending = t.Status == TenancyStatus.MovingOut && t.EndDate is { } endDate
+                && string.CompareOrdinal(period, endDate.ToString("yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)) >= 0;
+            string? reason = ending ? SkipEndingTenancy
+                : t.Invoiced ? SkipAlreadyInvoiced
                 : t.Terms?.MonthlyRent is null || t.Terms.ElectricityRate is null || t.Terms.WaterRate is null ? SkipNoLockedContract
                 : elec?.Value is null || water?.Value is null ? SkipMissingReadings
                 : elecPrev is null || waterPrev is null ? SkipMissingPrevious
