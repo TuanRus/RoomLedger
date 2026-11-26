@@ -20,7 +20,7 @@
       <b>Bạn gửi khiếu nại</b>
       <div class="quote">
         @if (d.proposedValue != null) {
-          Chỉ số đúng là <b class="em">{{ d.proposedValue | num }} {{ u }}</b>, không phải {{ d.recordedValue | num }}.
+          Chỉ số đúng là <b class="em">{{ d.proposedValue | num }} {{ u }}</b>@if (d.recordedValue != null) {, không phải {{ d.recordedValue | num }}}.
         }
         {{ d.reason }}
       </div>
@@ -40,7 +40,7 @@
           @if (d.photoUrl) {
             <button type="button" class="ph-btn" (click)="photo.emit(d)">
               <img [ngSrc]="d.photoUrl" width="64" height="48" alt="">
-              <span>Ảnh đồng hồ chủ nhà chụp<span class="small muted">Chủ nhà ghi {{ d.recordedValue | num }} {{ u }} · bấm để xem</span></span>
+              <span>Ảnh đồng hồ chủ nhà chụp<span class="small muted">@if (d.recordedValue != null) { Chủ nhà ghi {{ d.recordedValue | num }} {{ u }} · }bấm để xem</span></span>
             </button>
           }
         </div>
@@ -75,10 +75,12 @@
         <span class="dot"><app-icon name="i-image" /></span>
         <div>
           <b>Chỉ số trên hóa đơn không đổi</b>
-          <p class="small muted calc">
-            <app-meter-digits [kind]="kindOf()" [value]="d.previousValue!" size="sm" />→<app-meter-digits [kind]="kindOf()" [value]="d.recordedValue!" size="sm" />
-            <span>= {{ d.recordedValue! - d.previousValue! | num }} {{ u }}</span>
-          </p>
+          @if (d.previousValue != null && d.recordedValue != null) {
+            <p class="small muted calc">
+              <app-meter-digits [kind]="kindOf()" [value]="d.previousValue" size="sm" />→<app-meter-digits [kind]="kindOf()" [value]="d.recordedValue" size="sm" />
+              <span>= {{ d.recordedValue - d.previousValue | num }} {{ u }}</span>
+            </p>
+          }
           @if (d.photoUrl) {
             <button type="button" class="ph-btn" (click)="photo.emit(d)">
               <img [ngSrc]="d.photoUrl" width="64" height="48" alt="">
@@ -95,7 +97,9 @@
   @case ('corrected') {
     <div class="newinv">
       <div><p class="small muted">Hóa đơn mới</p><p class="amt">{{ d.totalAfter | vnd }}</p></div>
-      <div class="diff"><p class="small muted"><s>{{ d.totalBefore | vnd }}</s></p><p class="small save">−{{ saving() | vnd }}</p></div>
+      @if (saving() != null) {
+        <div class="diff"><p class="small muted"><s>{{ d.totalBefore | vnd }}</s></p><p class="small save">−{{ saving() | vnd }}</p></div>
+      }
       <a class="btn" [routerLink]="['/tenant/invoices', d.invoiceId]">Xem hóa đơn mới</a>
     </div>
     <p class="small muted foot">Có vấn đề khác? Gửi khiếu nại mới từ hóa đơn hoặc trang ảnh đồng hồ.</p>

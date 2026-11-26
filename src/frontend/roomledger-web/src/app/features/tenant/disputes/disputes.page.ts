@@ -1,5 +1,5 @@
 import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
-import { Component, ElementRef, computed, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { Viewport } from '../../../core/layout/viewport';
@@ -24,7 +24,7 @@ export class TenantDisputesPage {
   /** Query param ?sent=1 after the tenant submits a dispute. */
   readonly sent = input<string>();
 
-  private readonly store = inject(TenantDisputeStore);
+  protected readonly store = inject(TenantDisputeStore);
   protected readonly viewport = inject(Viewport);
 
   protected readonly disputes = this.store.disputes;
@@ -50,6 +50,17 @@ export class TenantDisputesPage {
   protected dateRange(d: TenantDispute): string {
     const from = dmy(d.createdAt).slice(0, 5);
     return d.resolvedAt ? `${from} → ${dmy(d.resolvedAt).slice(0, 5)}` : `Gửi ${from}`;
+  }
+
+  constructor() {
+    // Answered disputes sit in older invoices, which are only read when this screen opens.
+    effect(() => {
+      if (this.store.listReady()) untracked(() => this.store.ensureAll());
+    });
+  }
+
+  protected retry(): void {
+    this.store.load();
   }
 
   protected openPhoto(d: TenantDispute): void {

@@ -1,4 +1,14 @@
 @let sel = selected();
+@let loaded = store.status() === 'ready';
+
+<ng-template #state>
+  @if (store.status() === 'error') {
+    <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ store.error() }}</span><button type="button" class="btn sec sm" (click)="retry()">Thử lại</button></div>
+  } @else {
+    <p class="muted" role="status">Đang tải khiếu nại…</p>
+  }
+</ng-template>
+
 
 <ng-template #sentBanner>
   @if (justSent()) {
@@ -6,13 +16,25 @@
   }
 </ng-template>
 
+<ng-template #more>
+  @if (store.loadingMore()) {
+    <p class="muted small" role="status">Đang tải kỳ cũ…</p>
+  } @else if (store.moreError(); as message) {
+    <div class="banner warn" role="alert"><app-icon name="i-alert" /><span>{{ message }}</span><button type="button" class="btn sec sm" (click)="store.retryMore()">Thử lại</button></div>
+  }
+</ng-template>
+
+<ng-container [ngTemplateOutlet]="more" />
+
 @if (!viewport.isPhone()) {
   <div class="top">
     <div><h1>Khiếu nại</h1><p class="sub">{{ summary() || 'Chưa có khiếu nại' }}</p></div>
     <div class="acts"><a class="btn sec" routerLink="/tenant/disputes/new"><app-icon name="i-plus" />Gửi khiếu nại</a></div>
   </div>
   <ng-container [ngTemplateOutlet]="sentBanner" />
-  @if (disputes().length) {
+  @if (!loaded) {
+    <ng-container [ngTemplateOutlet]="state" />
+  } @else if (disputes().length) {
     <div class="disp">
       <nav aria-label="Danh sách khiếu nại">
         <ul class="list items">
@@ -34,7 +56,10 @@
     <ng-container [ngTemplateOutlet]="empty" />
   }
 } @else {
-  @if (sel) {
+  @if (!loaded) {
+    <div class="m-head"><h1>Khiếu nại</h1></div>
+    <ng-container [ngTemplateOutlet]="state" />
+  } @else if (sel) {
     <div class="m-head">
       <a class="iconbtn" routerLink="/tenant/disputes" aria-label="Về danh sách khiếu nại"><app-icon name="i-back" /></a>
       <h1>Khiếu nại · {{ subjectLabel(sel.subject).toLowerCase() }} kỳ {{ sel.period | period }}</h1>
@@ -77,7 +102,7 @@
       <h2 id="dp-title">{{ p.subject === 'WATER' ? 'Đồng hồ nước' : 'Công tơ điện' }} · kỳ {{ p.period | period }}</h2>
       <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
     </div>
-    <img [ngSrc]="p.photoUrl!" width="640" height="480" [alt]="'Ảnh gốc ' + (p.subject === 'WATER' ? 'đồng hồ nước' : 'công tơ điện') + ', chủ nhà ghi ' + p.recordedValue + ' ' + photoUnit()">
-    <p class="small muted">Ảnh chủ nhà chụp, lưu nguyên bản. Chủ nhà ghi {{ p.recordedValue | num }} {{ photoUnit() }}@if (p.proposedValue != null) {, bạn thấy {{ p.proposedValue | num }} {{ photoUnit() }}}.</p>
+    <img [ngSrc]="p.photoUrl!" width="640" height="480" [alt]="'Ảnh gốc ' + (p.subject === 'WATER' ? 'đồng hồ nước' : 'công tơ điện') + (p.recordedValue != null ? ', chủ nhà ghi ' + p.recordedValue + ' ' + photoUnit() : '')">
+    <p class="small muted">Ảnh chủ nhà chụp, lưu nguyên bản. @if (p.recordedValue != null) {Chủ nhà ghi {{ p.recordedValue | num }} {{ photoUnit() }}}@if (p.proposedValue != null) {, bạn thấy {{ p.proposedValue | num }} {{ photoUnit() }}}.</p>
   }
 </dialog>

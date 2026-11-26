@@ -1,11 +1,19 @@
-@let c = contract();
+@if (store.status() === 'idle' || store.status() === 'loading') {
+  <p class="muted" role="status">Đang tải hợp đồng…</p>
+} @else if (store.status() === 'error') {
+  <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ store.error() }}</span><button type="button" class="btn sec sm" (click)="retry()">Thử lại</button></div>
+} @else if (contract(); as c) {
 @let d = decision();
 
 <ng-template #scan>
-  <button type="button" class="scan" (click)="openScan()" aria-label="Phóng to trang 1 bản scan hợp đồng">
-    <img [ngSrc]="c.scanUrl" width="900" height="1270" [alt]="'Trang 1 bản scan hợp đồng thuê phòng ' + c.roomCode" priority>
-    <span class="tag">Trang 1/{{ c.pages }} · bấm để phóng to</span>
-  </button>
+  @if (c.scanUrl) {
+    <button type="button" class="scan" (click)="openScan()" aria-label="Phóng to trang 1 bản scan hợp đồng">
+      <img [ngSrc]="c.scanUrl" width="900" height="1270" [alt]="'Trang 1 bản scan hợp đồng thuê phòng ' + c.roomCode" priority>
+      <span class="tag">{{ store.sample ? 'Trang 1/' + c.pages : c.pages + ' tệp' }} · bấm để phóng to</span>
+    </button>
+  } @else {
+    <p class="small muted">Chưa có bản scan để xem trực tiếp.</p>
+  }
 </ng-template>
 
 <ng-template #terms>
@@ -20,14 +28,22 @@
 <ng-template #actions>
   @switch (d.status) {
     @case ('CONFIRMED') {
-      <div class="banner ok" role="status"><app-icon name="i-check-c" /><span><b>Bạn đã xác nhận hợp đồng ngày {{ d.at }}.</b> Các điều khoản này dùng để tính hóa đơn hằng tháng.</span></div>
+      <div class="banner ok" role="status"><app-icon name="i-check-c" /><span><b>Bạn đã xác nhận hợp đồng@if (d.at) { ngày {{ d.at }}}.</b> Các điều khoản này dùng để tính hóa đơn hằng tháng.</span></div>
     }
     @case ('REJECTED') {
-      <div class="banner info" role="status"><app-icon name="i-talk" /><span><b>Đã gửi lý do cho chủ nhà ngày {{ d.at }}.</b> Chủ nhà sửa xong sẽ gửi lại để bạn xác nhận.</span></div>
+      <div class="banner info" role="status"><app-icon name="i-talk" /><span><b>Đã gửi lý do cho chủ nhà@if (d.at) { ngày {{ d.at }}}.</b> Chủ nhà sửa xong sẽ gửi lại để bạn xác nhận.</span></div>
       <p class="quote">{{ d.reason }}</p>
-      <button type="button" class="btn ghost" (click)="review()"><app-icon name="i-refresh" />Xem lại và xác nhận</button>
+      @if (store.sample) {
+        <button type="button" class="btn ghost" (click)="review()"><app-icon name="i-refresh" />Xem lại và xác nhận</button>
+      }
+    }
+    @case ('NONE') {
+      <p class="small muted">Hợp đồng này chưa gửi cho bạn xác nhận.</p>
     }
     @default {
+      @if (store.actionError(); as err) {
+        <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ err }}</span></div>
+      }
       @if (rejecting()) {
         @let rf = f.reason();
         <form class="reject" (submit)="sendReject($event)" novalidate>
@@ -46,14 +62,14 @@
           </div>
           <div class="btns">
             <button type="button" class="btn sec" (click)="cancelReject()">Hủy</button>
-            <button type="submit" class="btn">Gửi cho chủ nhà</button>
+            <button type="submit" class="btn" [disabled]="store.busy()">Gửi cho chủ nhà</button>
           </div>
         </form>
       } @else {
         <p class="small muted">Có chỗ chưa đúng? Bấm “Không đúng” để ghi lý do (ít nhất {{ min }} ký tự) gửi chủ nhà.</p>
         <div class="btns">
           <button type="button" class="btn sec" (click)="startReject()">Không đúng</button>
-          <button type="button" class="btn grow" (click)="confirm()"><app-icon name="i-check" />Xác nhận đúng</button>
+          <button type="button" class="btn grow" [disabled]="store.busy()" (click)="confirm()"><app-icon name="i-check" />Xác nhận đúng</button>
         </div>
       }
     }
@@ -80,10 +96,15 @@
   </div>
 }
 
-<dialog #scanDialog class="scan-dialog" aria-label="Bản scan hợp đồng">
-  <div class="sd-head">
-    <h2>Hợp đồng {{ c.roomCode }} · trang 1/{{ c.pages }}</h2>
-    <button type="button" class="iconbtn" aria-label="Đóng" (click)="closeScan()"><app-icon name="i-x" /></button>
-  </div>
-  <img [ngSrc]="c.scanUrl" width="900" height="1270" alt="Trang 1 bản scan hợp đồng, phóng to">
-</dialog>
+@if (c.scanUrl) {
+  <dialog #scanDialog class="scan-dialog" aria-label="Bản scan hợp đồng">
+    <div class="sd-head">
+      <h2>Hợp đồng {{ c.roomCode }} · trang 1/{{ c.pages }}</h2>
+      <button type="button" class="iconbtn" aria-label="Đóng" (click)="closeScan()"><app-icon name="i-x" /></button>
+    </div>
+    <img [ngSrc]="c.scanUrl" width="900" height="1270" alt="Trang 1 bản scan hợp đồng, phóng to">
+  </dialog>
+}
+} @else {
+  <div class="empty" role="status"><h1>Chưa có hợp đồng</h1><p class="muted">Khi chủ nhà gửi hợp đồng, bạn xem và xác nhận ở đây.</p></div>
+}

@@ -1,6 +1,9 @@
-import { Service, computed, signal } from '@angular/core';
+import { Service, computed, inject, signal } from '@angular/core';
+import { Observable, catchError, map, of, switchMap } from 'rxjs';
 
-import { MeterKind } from '../../../core/data/models';
+import { injectApi } from '../../../core/api/api-client';
+import { InvoiceDetail, MeterKind } from '../../../core/data/models';
+import { TenantInvoiceStore } from '../../../core/data/tenant-invoice.store';
 import type { components } from '../../../generated/api-types';
 
 type Schemas = components['schemas'];
@@ -109,24 +112,87 @@ export const SAMPLE_DISPUTES: TenantDispute[] = [
   },
 ];
 
+/** The disputes of one invoice (GET /invoices/{id} carries them), with the line each one is about. */
+export function disputesOf(inv: InvoiceDetail): TenantDispute[] {
+  return (inv.disputes ?? []).map((d) => {
+    const line = [
+      { subject: 'ELECTRICITY' as const, line: inv.electricity },
+      { subject: 'WATER' as const, line: inv.water },
+    ].find((x) => d.readingId != null && x.line.readingId === d.readingId);
+    const corrected = d.resolution === 'CORRECTED';
+    return {
+      disputeId: d.disputeId,
+      invoiceId: inv.invoiceId,
+      readingId: d.readingId,
+      reason: d.reason,
+      status: d.status,
+      resolution: d.resolution,
+      response: d.response,
+      createdAt: d.createdAt,
+      resolvedAt: d.resolvedAt,
+      subject: line?.subject ?? 'OTHER',
+      period: inv.period,
+      // Not in the API: what the tenant proposed, the value before a correction, the total before a correction.
+      proposedValue: null,
+      recordedValue: corrected ? null : (line?.line.current ?? null),
+      previousValue: line?.line.previous ?? null,
+      correctedValue: corrected ? (line?.line.current ?? null) : null,
+      photoUrl: line?.line.photoUrl ?? null,
+      rate: line?.line.rate ?? null,
+      totalBefore: corrected ? null : inv.total,
+      totalAfter: corrected ? inv.total : null,
+    } satisfies TenantDispute;
+  });
+}
+
 /**
- * The signed-in tenant's disputes. Sample data until the API is connected:
- * replace with the disputes in GET /invoices/{id} (or a tenant dispute list) and POST /invoices/{invoiceId}/disputes.
+ * The signed-in tenant's disputes. Sample data by default. In API mode they come from the invoices
+ * (GET /invoices/{id} lists each invoice's disputes) and new ones go to POST /invoices/{invoiceId}/disputes.
  */
 @Service()
 export class TenantDisputeStore {
-  private readonly items = signal<TenantDispute[]>(SAMPLE_DISPUTES);
+  private readonly api = injectApi();
+  private readonly invoices = inject(TenantInvoiceStore);
+  private readonly local = signal<TenantDispute[]>(this.api ? [] : SAMPLE_DISPUTES);
   private seq = 0;
 
-  /** Newest first: samples are listed newest first and new disputes are added on top. */
-  readonly disputes = this.items.asReadonly();
-  readonly waitingCount = computed(() => this.items().filter((d) => d.status === 'OPEN').length);
+  /** Same loading state as the invoice list the disputes come from. */
+  readonly status = this.invoices.status;
+  readonly error = this.invoices.error;
+  readonly listReady = this.invoices.listReady;
+  /** Older invoices (answered disputes) are read after the screen opens: it shows what it has and says so meanwhile. */
+  readonly loadingMore = computed(() => this.invoices.detailsLoading() > 0);
+  readonly moreError = this.invoices.detailsError;
+  retryMore(): void {
+    this.invoices.retryFailedDetails();
+  }
+  readonly sample = !this.api;
 
-  byId(disputeId: string | null | undefined): TenantDispute | null {
-    return this.items().find((d) => d.disputeId === disputeId) ?? null;
+  /** Newest first: samples are listed newest first and new disputes are added on top. */
+  readonly disputes = computed<TenantDispute[]>(() =>
+    this.api
+      ? this.invoices
+          .details()
+          .flatMap(disputesOf)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      : this.local(),
+  );
+  readonly waitingCount = computed(() => this.disputes().filter((d) => d.status === 'OPEN').length);
+
+  load(): void {
+    this.invoices.load();
   }
 
-  /** Stands in for POST /invoices/{invoiceId}/disputes; the new dispute waits for the landlord. */
+  /** API: reads the older invoices, whose disputes are not read at start-up (only the newest and disputed ones are). */
+  ensureAll(): void {
+    this.invoices.ensureAllDetails();
+  }
+
+  byId(disputeId: string | null | undefined): TenantDispute | null {
+    return this.disputes().find((d) => d.disputeId === disputeId) ?? null;
+  }
+
+  /** Stands in for POST /invoices/{invoiceId}/disputes with sample data; the new dispute waits for the landlord. */
   create(draft: DisputeDraft, now: Date = new Date()): TenantDispute {
     this.seq += 1;
     const dispute: TenantDispute = {
@@ -141,7 +207,16 @@ export class TenantDisputeStore {
       correctedValue: null,
       totalAfter: null,
     };
-    this.items.update((list) => [dispute, ...list]);
+    this.local.update((list) => [dispute, ...list]);
     return dispute;
+  }
+
+  /** API mode: POST /invoices/{invoiceId}/disputes, then reload that invoice (it becomes DISPUTED). Emits the new dispute id. */
+  send(invoiceId: string, readingId: string, reason: string): Observable<string> {
+    const api = this.api;
+    if (!api) throw new Error('send() needs the API');
+    return api.post<components['schemas']['DisputeResponse']>(`/invoices/${invoiceId}/disputes`, { readingId, reason: reason.trim() }).pipe(
+      switchMap((d) => this.invoices.reloadInvoice(invoiceId).pipe(catchError(() => of(undefined)), map(() => d.disputeId ?? ''))),
+    );
   }
 }
