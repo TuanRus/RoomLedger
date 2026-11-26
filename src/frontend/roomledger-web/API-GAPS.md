@@ -25,6 +25,8 @@ confirmed reading cannot be reopened. Review reasons from the contract (`LOW_CON
 `UNUSUAL_USAGE`, `AI_FAILED`): a flagged reading with no value shows as "Không đọc được", one with a value as
 "Bất thường", and `PENDING_AI` with no value as "Chưa ghi".
 
+**Update (2026-11-26):** end of tenancy and room moves (LL-10) use the API in API mode: `POST/GET/DELETE /tenancies/{id}/end`, final readings through the meter endpoints, `POST /tenancies/{id}/end:finish` (`EndTenancyApiStore`). Unpaid earlier invoices are shown as "Nợ kỳ trước", apart from the final invoice.
+
 **Update (2026-11-25, later):** every landlord and tenant screen now reads the API in API mode, and shows an
 empty state, "—" or "Chưa có dữ liệu" for the fields listed below instead of sample values. Sample data is used only
 by the default dev build (`pnpm start`) and the unit tests. Still stubs until Cognito sign-in lands (PR #31): sign-in,
@@ -63,11 +65,10 @@ forgot password and accepting an invite (disabled in API mode).
 - Approving right after the AI read (e.g. `PATCH /meter-readings/{id}` with `{ value, confirm: true }`), a polling rule for the AI result, and reason codes for unreadable photos (blur, glare).
 - `CreateMeterReadingRequest` has no `captureSource`; uploads must be retryable for the offline queue.
 
-### Landlord overview, rooms, end of tenancy (LL-02, LL-03, LL-10)
+### Landlord overview, rooms (LL-02, LL-03)
 
 - No dashboard response; today it means combining readings, rooms, invoices (overdue days), tenancies and disputes.
 - `RoomResponse` lacks floor, deposit, tenancy start, latest approved readings, contract and current-period reading status, and the pending invite (email, start, expiry). `CreateInviteRequest` has no start date.
-- No endpoint to end a tenancy or move rooms: final reading for a date, a final invoice with landlord-entered rent, carried-over balance, the new room's opening readings.
 
 ### Landlord settings and contracts (LL-06, LL-07)
 
