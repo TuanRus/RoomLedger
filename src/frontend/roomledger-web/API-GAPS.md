@@ -15,6 +15,21 @@ data lives so it can be swapped out.
 Sample data: `src/app/core/data/sample-ledger.ts`. View types: `src/app/core/data/models.ts`
 (they reuse the generated schema types where the contract has them).
 
+**Status (2026-11-25):** both stores above call the API when `environment.dataSource` is `'api'`
+(`pnpm start:local-api` against the backend's LocalDev mode, or the production build). Fields below that the API
+does not send yet are left empty in API mode: tenant name, digit crop, 3-period average and history, captured at,
+due date and payment details. Without the 3-period average, bulk approval offers every pending reading at or above
+the previous value. The landlord's first property is used and the review period is last month. Meter approvals are
+sent (`PATCH /meter-readings/{id}` with `{ value, confirm: true }`) only after the 10-second undo window, because a
+confirmed reading cannot be reopened. Review reasons from the contract (`LOW_CONFIDENCE`, `LOWER_THAN_PREVIOUS`,
+`UNUSUAL_USAGE`, `AI_FAILED`): a flagged reading with no value shows as "Không đọc được", one with a value as
+"Bất thường", and `PENDING_AI` with no value as "Chưa ghi".
+
+**Update (2026-11-25, later):** every landlord and tenant screen now reads the API in API mode, and shows an
+empty state, "—" or "Chưa có dữ liệu" for the fields listed below instead of sample values. Sample data is used only
+by the default dev build (`pnpm start`) and the unit tests. Still stubs until Cognito sign-in lands (PR #31): sign-in,
+forgot password and accepting an invite (disabled in API mode).
+
 ## Fields the screens use that the contract does not have
 
 ### Meter review (`RoomReadingsResponse` / `MeterReadingResponse`)

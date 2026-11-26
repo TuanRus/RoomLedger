@@ -43,7 +43,10 @@ public static class DependencyInjection
         services.TryAddTimeProvider();
         services.AddDbContext<AppDbContext>(o => o
             .UseNpgsql(dataSource, npgsql => npgsql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName))
-            .UseSnakeCaseNamingConvention());
+            .UseSnakeCaseNamingConvention()
+            // Mỗi data source tạo một service provider nội bộ của EF. Lambda/API chỉ có một data source, nhưng test tích hợp
+            // dựng một host (một database tạm) cho mỗi lớp test nên vượt ngưỡng 20 và EF ném lỗi; chỉ ghi log cảnh báo này.
+            .ConfigureWarnings(w => w.Log(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.ManyServiceProvidersCreatedWarning)));
         return services;
     }
 

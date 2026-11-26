@@ -1,9 +1,10 @@
 import { Service, computed, inject, signal } from '@angular/core';
 
+import { injectApi } from '../../../../core/api/api-client';
 import { MeterKind } from '../../../../core/data/models';
 import { RoomRow } from '../../rooms/data/rooms.models';
 import { RoomsStore } from '../../rooms/data/rooms.store';
-import { EndKind, EndTenancyDraft, FinalInvoice, FinalReading, InvoiceLine, MoveTarget, StepId } from './end-tenancy.models';
+import { EndKind, EndTenancyDraft, EndTenancyHeader, FinalInvoice, FinalReading, InvoiceLine, MoveTarget, StepId } from './end-tenancy.models';
 import { DEMO_FINAL, END_DATE, MOVE_TARGETS, P204_FINAL_ELECTRICITY, RATES } from './end-tenancy.sample';
 
 const KIND_LABEL: Record<MeterKind, string> = { ELECTRICITY: 'điện', WATER: 'nước' };
@@ -63,8 +64,8 @@ export function initialDraft(room: RoomRow): EndTenancyDraft {
     monthlyRent: room.monthlyRent,
     kind: null,
     targetRoomId: null,
-    electricity: reading('ELECTRICITY', room.electricity.value),
-    water: reading('WATER', room.water.value),
+    electricity: reading('ELECTRICITY', room.electricity?.value ?? 0),
+    water: reading('WATER', room.water?.value ?? 0),
     lastRent: null,
     unpaidPrevious: 0,
     rates: { ...RATES },
@@ -80,21 +81,40 @@ export function initialDraft(room: RoomRow): EndTenancyDraft {
 }
 
 /**
- * End of tenancy and room moves (LL-10), sample-backed until the API exists.
+ * End of tenancy and room moves (LL-10), sample-backed: the API has no end-tenancy or room-move endpoint
+ * (API-GAPS.md). With environment.dataSource 'api' the screen only shows the room and its tenant (header()),
+ * and nothing can be finished.
  * Drafts live in memory per room, so "Lưu nháp" and leaving the page keep the work.
  */
 @Service()
 export class EndTenancyStore {
+  private readonly api = injectApi();
   private readonly rooms = inject(RoomsStore);
   private readonly drafts = signal<Record<string, EndTenancyDraft>>({});
 
-  /** Empty rooms (not waiting on an invite) the tenant can move into. */
+  /** True with sample data: the end-of-tenancy steps work. */
+  readonly sample = !this.api;
+
+  /** Empty rooms (not waiting on an invite) the tenant can move into. Sample data only. */
   readonly targets = computed<MoveTarget[]>(() =>
-    MOVE_TARGETS.filter((t) => this.rooms.rooms().some((r) => r.roomId === t.roomId && r.displayStatus === 'VACANT')),
+    this.api ? [] : MOVE_TARGETS.filter((t) => this.rooms.rooms().some((r) => r.roomId === t.roomId && r.displayStatus === 'VACANT')),
   );
 
-  /** The saved draft, a fresh one for a rented room, or null when the room has nobody to move out. */
+  /** API: the room and its tenant for the page header (tenancy start loads with the room detail), or null when nobody lives there. */
+  header(roomId: string): EndTenancyHeader | null {
+    const room = this.rooms.byId(roomId);
+    if (!room || room.status !== 'OCCUPIED') return null;
+    return { roomId, roomCode: room.code, tenantName: room.tenantName ?? '', tenancyStart: room.tenancyStart, monthlyRent: room.monthlyRent };
+  }
+
+  /** API: loads the room's tenancy (start date) for the header. */
+  loadHeader(roomId: string): void {
+    this.rooms.loadDetail(roomId);
+  }
+
+  /** The saved draft, a fresh one for a rented room, or null when the room has nobody to move out (always null with the API). */
   draft(roomId: string): EndTenancyDraft | null {
+    if (this.api) return null;
     const saved = this.drafts()[roomId];
     if (saved) return saved;
     const room = this.rooms.byId(roomId);
@@ -102,7 +122,7 @@ export class EndTenancyStore {
   }
 
   target(roomId: string | null): MoveTarget | null {
-    return MOVE_TARGETS.find((t) => t.roomId === roomId) ?? null;
+    return this.api ? null : (MOVE_TARGETS.find((t) => t.roomId === roomId) ?? null);
   }
 
   setKind(roomId: string, kind: EndKind): void {
@@ -134,7 +154,7 @@ export class EndTenancyStore {
   /** Ends the tenancy when nothing blocks it. Returns false otherwise. */
   finish(roomId: string, now = '2026-12-15T08:10:00+07:00'): boolean {
     const d = this.draft(roomId);
-    if (!d || d.finishedAt || blockers(d).length) return false;
+    if (this.api || !d || d.finishedAt || blockers(d).length) return false;
     this.update(roomId, (x) => ({ ...x, finishedAt: now }));
     this.rooms.endTenancy(roomId, d.kind === 'MOVE' ? d.targetRoomId : null, d.endDate);
     return true;

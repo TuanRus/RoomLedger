@@ -20,7 +20,7 @@
   <div class="vf">
     @if (!job) {
       <div class="guide" aria-hidden="true"><app-icon name="i-meter" /></div>
-      <div class="hint"><app-icon name="i-info" /><span>Bấm nút chụp để mở camera. Đặt cả dãy số của {{ kindMeter[kind] }} {{ slot.meterNo }} vào khung, giữ máy yên, tránh lóa.</span></div>
+      <div class="hint"><app-icon name="i-info" /><span>Bấm nút chụp để mở camera. Đặt cả dãy số của {{ kindMeter[kind] }}@if (slot.meterNo) { {{ slot.meterNo }} } vào khung, giữ máy yên, tránh lóa.</span></div>
     } @else {
       <!-- Plain img: the photo can be a blob: URL, which NgOptimizedImage rejects. -->
       <img [src]="job.photoUrl" [class.dim]="job.phase === 'uploading'" [alt]="'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + (job.phase === 'reading' ? ' đang được AI đọc' : ' vừa chụp')">
@@ -34,6 +34,10 @@
           }
           <div class="bar" role="progressbar" [attr.aria-valuenow]="pct()" aria-valuemin="0" aria-valuemax="100" aria-label="Tiến độ tải ảnh"><i [style.width.%]="job.progress"></i></div>
           <span class="sub">{{ mb(uploaded()) }} / {{ mb(job.sizeBytes) }} MB · ảnh gốc, không nén</span>
+          @if (job.error) {
+            <span class="sub" role="alert">{{ job.error }}</span>
+            <button type="button" class="btn sm inv" (click)="store.retryJob(room.roomId, kind)">Thử lại</button>
+          }
         } @else {
           <span class="ok-l small"><app-icon name="i-check" size="sm" />Đã tải lên {{ mb(job.sizeBytes) }} MB</span>
           <div class="t"><span class="spin" aria-hidden="true"></span>AI đang đọc số…</div>
@@ -58,7 +62,9 @@
       </label>
       <button type="button" class="round" [attr.aria-label]="next ? 'Bỏ qua, sang ' + next : 'Bỏ qua, về danh sách'" (click)="store.goNext()"><app-icon name="i-chev" /></button>
     </div>
-    <p class="foot"><button type="button" class="link" (click)="store.captureSample()"><app-icon name="i-image" size="sm" />Dùng ảnh mẫu (không cần camera)</button></p>
+    @if (store.sample) {
+      <p class="foot"><button type="button" class="link" (click)="store.captureSample()"><app-icon name="i-image" size="sm" />Dùng ảnh mẫu (không cần camera)</button></p>
+    }
   } @else if (job.phase === 'uploading') {
     <div class="acts">
       <button type="button" class="btn lg ghosty" (click)="store.discard()">Hủy tải</button>

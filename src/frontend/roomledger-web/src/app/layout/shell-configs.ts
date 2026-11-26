@@ -7,8 +7,6 @@ import { ShellConfig } from './app-shell';
 export const LANDLORD_SHELL: ShellConfig = {
   role: 'landlord',
   navLabel: 'Chủ nhà',
-  place: { title: 'Nhà trọ Cô Lan', sub: '36 phòng · 32 đang thuê' },
-  person: { initials: 'LL', name: 'Lê Thị Lan', role: 'Chủ nhà' },
   nav: [
     { path: 'overview', icon: 'i-grid', label: 'Tổng quan', phone: 1 },
     { path: 'meter-capture', icon: 'i-camera', label: 'Ghi chỉ số', phone: 3, fab: true },
@@ -25,8 +23,6 @@ export const LANDLORD_SHELL: ShellConfig = {
 export const TENANT_SHELL: ShellConfig = {
   role: 'tenant',
   navLabel: 'Người thuê',
-  place: { title: 'Phòng P.204', sub: 'Nhà trọ Cô Lan' },
-  person: { initials: 'MA', name: 'Trần Minh Anh', role: 'Người thuê' },
   nav: [
     { path: 'home', icon: 'i-home', label: 'Trang chủ', phone: 1 },
     { path: 'invoices', icon: 'i-bill', label: 'Hóa đơn', phone: 2 },

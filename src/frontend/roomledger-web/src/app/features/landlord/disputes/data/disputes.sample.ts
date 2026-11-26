@@ -13,7 +13,8 @@ export interface LandlordDispute {
   invoiceId: string;
   readingId: string | null;
   roomCode: string;
-  tenantName: string;
+  /** With the API: the room's current tenant, null when not found. */
+  tenantName: string | null;
   period: string;
   reason: string;
   status: Schemas['DisputeStatus'];
@@ -25,13 +26,15 @@ export interface LandlordDispute {
   reading: {
     kind: MeterKind;
     previous: number;
-    aiValue: number;
-    approved: number;
-    approvedAt: string;
-    tenantValue: number;
+    /** The next five are not in the API (null there), except approved and photoUrl which come from the invoice line. */
+    aiValue: number | null;
+    /** The value on the invoice; null once the reading was corrected (see corrected). */
+    approved: number | null;
+    approvedAt: string | null;
+    tenantValue: number | null;
     rate: number;
-    photoUrl: string;
-    capturedAt: string;
+    photoUrl: string | null;
+    capturedAt: string | null;
     /** Value after "Sửa chỉ số". */
     corrected: number | null;
   } | null;

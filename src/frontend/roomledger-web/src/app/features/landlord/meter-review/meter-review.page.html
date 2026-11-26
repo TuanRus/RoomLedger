@@ -40,8 +40,12 @@
   </div>
   <p class="small muted sub">{{ row.tenantName }}@if (row.capturedAt) { · bạn chụp {{ row.capturedAt | stamp }} }</p>
   @if (r) {
-    <app-zoom-photo class="photo-z" [src]="r.photoUrl" [alt]="'Ảnh gốc đồng hồ ' + row.roomCode + (r.aiValue != null ? ', hiển thị ' + r.aiValue : ', ảnh mờ')"
-      tag="Ảnh gốc · bạn chụp" [shortcut]="viewport.isPhone() ? null : 'Z'" />
+    @if (r.photoUrl) {
+      <app-zoom-photo class="photo-z" [src]="r.photoUrl" [alt]="'Ảnh gốc đồng hồ ' + row.roomCode + (r.aiValue != null ? ', hiển thị ' + r.aiValue : ', ảnh mờ')"
+        tag="Ảnh gốc · bạn chụp" [shortcut]="viewport.isPhone() ? null : 'Z'" />
+    } @else {
+      <p class="small muted">Chưa xem được ảnh đồng hồ của chỉ số này.</p>
+    }
     @let unreadable = stateOf(row) === 'unreadable';
     @let c = check();
     @if (stateOf(row) === 'approved') {
@@ -65,11 +69,13 @@
           @if (c?.problem === 'below-previous') {
             <span class="err"><app-icon name="i-alert" size="sm" />Thấp hơn kỳ trước ({{ r.previousValue | num }}). Kiểm tra lại số trên ảnh.</span>
           } @else if (c?.usage != null) {
-            Tiêu thụ <b>{{ c!.usage | num }} {{ unit() }}</b> · <span [class.delta-up]="c!.problem === 'abnormal'">{{ formatDelta(c!.delta) }}</span> so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }})
+            Tiêu thụ <b>{{ c!.usage | num }} {{ unit() }}</b>
+            @if (row.averageUsage > 0) { · <span [class.delta-up]="c!.problem === 'abnormal'">{{ formatDelta(c!.delta) }}</span> so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }}) }
           }
         </span>
       </div>
     }
+    @if (row.history.length) {
     <div class="hist-wrap">
       <span class="small muted">Tiêu thụ 4 kỳ gần nhất ({{ unit() }})</span>
       <div class="hist">
@@ -78,8 +84,13 @@
         }
       </div>
     </div>
+    }
     @if (stateOf(row) === 'abnormal') {
-      <div class="banner warn"><app-icon name="i-alert" /><span>Tăng {{ percent(row) }} so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }}). Kiểm tra số trên ảnh trước khi duyệt.</span></div>
+      @if (row.averageUsage > 0) {
+        <div class="banner warn"><app-icon name="i-alert" /><span>Tăng {{ percent(row) }} so với trung bình 3 kỳ ({{ row.averageUsage | num }} {{ unit() }}). Kiểm tra số trên ảnh trước khi duyệt.</span></div>
+      } @else {
+        <div class="banner warn"><app-icon name="i-alert" /><span>Chỉ số này được đánh dấu cần kiểm tra. Đối chiếu số trên ảnh trước khi duyệt.</span></div>
+      }
     }
     @if (stateOf(row) !== 'approved') {
       @if (c?.problem === 'abnormal') {
@@ -100,14 +111,15 @@
   } @else {
     <div class="empty-state">
       <app-icon name="i-camera" />
-      <p>Chưa có ảnh kỳ {{ store.period | period }}. Chụp đồng hồ trên điện thoại khi đi ghi chỉ số.</p>
+      <p>Chưa có ảnh kỳ {{ store.period() | period }}. Chụp đồng hồ trên điện thoại khi đi ghi chỉ số.</p>
     </div>
   }
 </ng-template>
 
+<app-load-state [status]="store.status()" [error]="store.error()" (retry)="store.load()" />
 @if (!viewport.isPhone()) {
   <div class="top">
-    <div><h1>Duyệt chỉ số</h1><p class="sub">Kỳ {{ store.period | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }} phòng · <b class="ink">{{ attention() }} chỉ số {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }} cần xử lý</b> · {{ counts.unrecorded }} chưa ghi</p></div>
+    <div><h1>Duyệt chỉ số</h1><p class="sub">Kỳ {{ store.period() | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }} phòng · <b class="ink">{{ attention() }} chỉ số {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }} cần xử lý</b> · {{ counts.unrecorded }} chưa ghi</p></div>
     <div class="acts"><ng-container [ngTemplateOutlet]="kindSwitch" /></div>
   </div>
   <div class="split review">
@@ -122,7 +134,7 @@
       }
       <div class="tablewrap">
         <table class="table">
-          <caption class="sr">Chỉ số {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }} kỳ {{ store.period | period }}</caption>
+          <caption class="sr">Chỉ số {{ kind === 'ELECTRICITY' ? 'điện' : 'nước' }} kỳ {{ store.period() | period }}</caption>
           <thead><tr><th scope="col"><span class="sr">Chọn</span></th><th scope="col">Phòng</th><th scope="col">Số trên ảnh</th><th scope="col" class="num">Kỳ trước</th><th scope="col" class="num">AI đọc</th><th scope="col" class="num">Tiêu thụ</th><th scope="col" class="num">So với 3 kỳ</th><th scope="col">Trạng thái</th></tr></thead>
           <tbody>
             @for (row of visibleRows(); track row.roomId) {
@@ -173,7 +185,7 @@
       <ng-container [ngTemplateOutlet]="detail" [ngTemplateOutletContext]="{ $implicit: row }" />
     </section>
   } @else {
-    <div class="m-head"><h1>Duyệt chỉ số</h1><span class="muted small">Kỳ {{ store.period | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }}</span></div>
+    <div class="m-head"><h1>Duyệt chỉ số</h1><span class="muted small">Kỳ {{ store.period() | period }} · đã duyệt {{ counts.approved }}/{{ store.rows().length }}</span></div>
     <ng-container [ngTemplateOutlet]="kindSwitch" />
     <div class="m-pills"><ng-container [ngTemplateOutlet]="filterPills" /></div>
     <ul class="list m-list">

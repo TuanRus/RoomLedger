@@ -7,7 +7,7 @@
   <div class="head">
     <div>
       <h2 id="cap-title" class="cap-focus" tabindex="-1">{{ room.roomCode }} · {{ kindLabel[kind] }}</h2>
-      <p class="small muted">{{ room.tenantName }} · số {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }} {{ slot.meterNo }}</p>
+      <p class="small muted">{{ room.tenantName }}@if (slot.meterNo) { · số {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }} {{ slot.meterNo }} }</p>
     </div>
     <button type="button" class="iconbtn" aria-label="Đóng bảng tải ảnh" (click)="store.close()"><app-icon name="i-x" /></button>
   </div>
@@ -25,7 +25,9 @@
         <input type="file" accept="image/*" class="vh" (change)="onPick($event)">
         <app-icon name="i-upload" />Tải ảnh lên từ máy
       </label>
-      <button type="button" class="btn ghost" (click)="store.captureSample()"><app-icon name="i-image" />Dùng ảnh mẫu</button>
+      @if (store.sample) {
+        <button type="button" class="btn ghost" (click)="store.captureSample()"><app-icon name="i-image" />Dùng ảnh mẫu</button>
+      }
     </div>
     <p class="small muted">Chụp trực tiếp cần camera điện thoại: mở trang này trên điện thoại khi đi ghi số.</p>
   } @else if (job.phase === 'uploading' || job.phase === 'reading') {
@@ -40,6 +42,10 @@
         </div>
         <div class="bar" role="progressbar" [attr.aria-valuenow]="pct()" aria-valuemin="0" aria-valuemax="100" aria-label="Tiến độ tải ảnh"><i [style.width.%]="job.progress"></i></div>
         <span class="small muted">{{ mb(job.sizeBytes) }} MB · ảnh gốc, không nén</span>
+        @if (job.error) {
+          <span class="err" role="alert"><app-icon name="i-alert" size="sm" />{{ job.error }}</span>
+          <button type="button" class="btn sm sec" (click)="store.retryJob(room.roomId, kind)">Thử lại</button>
+        }
       } @else {
         <span class="ok-l small"><app-icon name="i-check" size="sm" />Đã tải lên {{ mb(job.sizeBytes) }} MB</span>
         <div class="t"><span class="spin dark" aria-hidden="true"></span>AI đang đọc số…</div>

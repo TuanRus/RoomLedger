@@ -10,11 +10,11 @@
 export interface RoomRent {
   roomId: string;
   roomCode: string;
-  /** Floor area in m². Not in RoomResponse (its `areas` are inspection areas). */
-  areaM2: number;
+  /** Floor area in m². Not in RoomResponse (its `areas` are inspection areas): null with the API. */
+  areaM2: number | null;
   monthlyRent: number;
-  /** Period the current rent applies from, "YYYY-MM". */
-  since: string;
+  /** Period the current rent applies from, "YYYY-MM". Null with the API. */
+  since: string | null;
 }
 
 export interface BankTransferSettings {

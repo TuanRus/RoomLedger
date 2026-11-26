@@ -65,4 +65,14 @@ export interface FinalInvoice {
   total: number | null;
 }
 
+/** What the API knows about the room being ended: the room, its tenant and rent. Everything else of the draft has no endpoint. */
+export interface EndTenancyHeader {
+  roomId: string;
+  roomCode: string;
+  tenantName: string;
+  /** YYYY-MM-DD, null until the tenancy is loaded. */
+  tenancyStart: string | null;
+  monthlyRent: number;
+}
+
 export type StepId = 1 | 2 | 3 | 4;

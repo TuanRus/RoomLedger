@@ -1,4 +1,8 @@
-@if (inv(); as i) {
+@if (status() === 'idle' || status() === 'loading') {
+  <p class="muted loading" role="status">Đang tải hóa đơn…</p>
+} @else if (status() === 'error') {
+  <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ loadError() }}</span><button type="button" class="btn sec sm" (click)="retry()">Thử lại</button></div>
+} @else if (inv(); as i) {
   @let vf = f.value();
   @let rf = f.reason();
   @if (viewport.isPhone()) {
@@ -14,24 +18,29 @@
     <form class="form" novalidate (submit)="submit($event)">
       <fieldset class="field">
         <legend class="lbl">Bạn khiếu nại về</legend>
-        <div class="seg">
+        <div class="seg" id="dn-subject" tabindex="-1">
           @for (s of subjects; track s.id) {
             <label [class.on]="subject() === s.id">
               <input type="radio" name="dn-subject" [value]="s.id" [checked]="subject() === s.id" (change)="setSubject(s.id)">{{ s.label }}
             </label>
           }
         </div>
+        @if (f.subject().touched() && f.subject().invalid()) {
+          <span class="err" id="dn-subject-err"><app-icon name="i-alert" size="sm" />{{ f.subject().errors()[0].message }}</span>
+        }
       </fieldset>
 
       @if (line(); as l) {
         <div class="sheet meter-row">
-          <button type="button" class="ph" (click)="openPhoto()" [attr.aria-label]="'Xem ảnh gốc ' + meterName().toLowerCase() + ' kỳ ' + (i.period | period)">
-            <img [ngSrc]="l.photoUrl!" width="64" height="48" alt="">
-            <span class="zoom" aria-hidden="true"><app-icon name="i-search" size="sm" /></span>
-          </button>
+          @if (l.photoUrl) {
+            <button type="button" class="ph" (click)="openPhoto()" [attr.aria-label]="'Xem ảnh gốc ' + meterName().toLowerCase() + ' kỳ ' + (i.period | period)">
+              <img [ngSrc]="l.photoUrl" width="64" height="48" alt="">
+              <span class="zoom" aria-hidden="true"><app-icon name="i-search" size="sm" /></span>
+            </button>
+          }
           <div class="grow">
             <b>{{ subject() === 'WATER' ? 'Nước' : 'Điện' }} kỳ {{ i.period | period }}</b>
-            <p class="small muted reads">Chủ nhà ghi <app-meter-digits [kind]="kind()" [value]="l.current" size="sm" /> {{ unit() }} · bấm vào ảnh để xem</p>
+            <p class="small muted reads">Chủ nhà ghi <app-meter-digits [kind]="kind()" [value]="l.current" size="sm" /> {{ unit() }}@if (l.photoUrl) { · bấm vào ảnh để xem}</p>
           </div>
         </div>
 
@@ -47,8 +56,10 @@
           }
           <span class="help" id="dn-value-help">Xem đồng hồ trong phòng rồi ghi số bạn thấy. Chủ nhà xem lại ảnh gốc. Kỳ trước: {{ l.previous | num }} {{ unit() }}.</span>
         </div>
-      } @else {
+      } @else if (subject() === 'OTHER') {
         <p class="small muted other">Ví dụ: tiền phòng, phí dịch vụ hoặc hạn thanh toán không đúng với hợp đồng. Ghi rõ bạn thấy gì và số đúng theo bạn.</p>
+      } @else {
+        <p class="small muted other">Chọn điện hoặc nước để nhập chỉ số bạn thấy trên đồng hồ.</p>
       }
 
       <div class="field">
@@ -66,6 +77,9 @@
         </div>
       </div>
 
+      @if (error(); as err) {
+        <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ err }}</span></div>
+      }
       <button class="btn lg block" type="submit" [disabled]="busy()">
         @if (busy()) { <span class="spin" aria-hidden="true"></span>Đang gửi… } @else { Gửi khiếu nại }
       </button>
@@ -84,15 +98,27 @@
   </div>
 
   @if (line(); as l) {
+    @if (l.photoUrl) {
     <dialog #photoDialog class="photo-dialog" aria-labelledby="dn-photo-title">
       <div class="pd-head">
         <h2 id="dn-photo-title">{{ meterName() }} · kỳ {{ i.period | period }}</h2>
         <button type="button" class="iconbtn" aria-label="Đóng" (click)="closePhoto()"><app-icon name="i-x" /></button>
       </div>
-      <img [ngSrc]="l.photoUrl!" width="640" height="480" [alt]="'Ảnh gốc ' + meterName().toLowerCase() + ' ' + i.roomCode + ', chủ nhà ghi ' + l.current + ' ' + unit()">
+      <img [ngSrc]="l.photoUrl" width="640" height="480" [alt]="'Ảnh gốc ' + meterName().toLowerCase() + ' ' + i.roomCode + ', chủ nhà ghi ' + l.current + ' ' + unit()">
       <p class="small muted">Chủ nhà chụp và duyệt. Chỉ số: {{ l.previous | num }} → {{ l.current | num }} {{ unit() }}.</p>
     </dialog>
+    }
   }
+} @else if (detailStatus() === 'loading') {
+  <p class="muted loading" role="status">Đang tải hóa đơn…</p>
+} @else if (detailStatus() === 'error') {
+  <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ detailError() }}</span><button type="button" class="btn sec sm" (click)="retryDetail()">Thử lại</button></div>
+} @else if (noInvoice()) {
+  <div class="missing">
+    <h1>Không có hóa đơn nào để khiếu nại.</h1>
+    <p class="muted">Khi chủ nhà gửi hóa đơn, bạn gửi khiếu nại từ hóa đơn đó.</p>
+    <a class="btn sec" routerLink="/tenant/invoices">Xem hóa đơn</a>
+  </div>
 } @else {
   <div class="missing">
     <h1>Không tìm thấy hóa đơn</h1>

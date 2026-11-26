@@ -10,7 +10,7 @@ import { REASON_MIN, TenantContractStore } from './tenant-contract.store';
 /**
  * TN-10: the tenant reads the scanned contract and the terms the landlord typed in, then confirms them
  * or says what is wrong (at least 10 characters, sent to the landlord). Computer: scan left, terms right.
- * ?sample=confirmed shows the contract as already confirmed.
+ * ?sample=confirmed shows the contract as already confirmed (sample data only).
  */
 @Component({
   selector: 'app-tenant-contract-page',
@@ -21,7 +21,7 @@ import { REASON_MIN, TenantContractStore } from './tenant-contract.store';
 export class TenantContractPage implements OnInit {
   readonly sample = input<string>(); // ?sample= (not ?state=, which the OIDC client reads as a sign-in callback)
 
-  private readonly store = inject(TenantContractStore);
+  protected readonly store = inject(TenantContractStore);
   protected readonly viewport = inject(Viewport);
   protected readonly contract = this.store.contract;
   protected readonly decision = this.store.decision;
@@ -40,7 +40,7 @@ export class TenantContractPage implements OnInit {
   private readonly reasonBox = viewChild<ElementRef<HTMLTextAreaElement>>('reasonBox');
 
   ngOnInit(): void {
-    if (this.sample() === 'confirmed') this.store.showConfirmed();
+    if (this.store.sample && this.sample() === 'confirmed') this.store.showConfirmed();
   }
 
   protected startReject(): void {
@@ -58,8 +58,9 @@ export class TenantContractPage implements OnInit {
     event.preventDefault();
     this.f().markAsTouched();
     if (this.f().invalid()) return;
-    this.store.reject(this.model().reason);
-    this.rejecting.set(false);
+    if (!this.store.reject(this.model().reason)) return;
+    // With the API the form stays open until the server accepted the reason (the page swaps to the REJECTED view then).
+    if (this.store.sample) this.rejecting.set(false);
   }
 
   protected confirm(): void {
@@ -69,6 +70,10 @@ export class TenantContractPage implements OnInit {
   protected review(): void {
     this.cancelReject();
     this.store.reset();
+  }
+
+  protected retry(): void {
+    this.store.load();
   }
 
   protected openScan(): void {

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using RoomLedger.Api.Auth;
 using RoomLedger.Api.Endpoints;
+using RoomLedger.Api.LocalDev;
 using RoomLedger.Api.Middleware;
 using RoomLedger.Api.OpenApi;
 using RoomLedger.Api.Services;
@@ -49,6 +50,11 @@ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddAwsServices(builder.Configuration);
+
+// Chạy trên máy không có Cognito/AWS: đăng nhập X-Dev-User, S3/EventBridge trong bộ nhớ (xem LocalDevSetup)
+var localDev = builder.IsLocalDevEnabled();
+if (localDev)
+    builder.Services.AddLocalDev();
 builder.Services.AddScoped<PropertyAppService>();
 builder.Services.AddScoped<RoomAppService>();
 builder.Services.AddScoped<TenancyAppService>();
@@ -85,6 +91,11 @@ api.MapInvoiceEndpoints();
 api.MapCheckoutEndpoints();
 api.MapDisputeEndpoints();
 api.MapAdminEndpoints();
+if (localDev)
+{
+    api.MapLocalDevEndpoints();
+    app.Logger.LogWarning("LocalDev đang bật: đăng nhập bằng header X-Dev-User, chỉ dùng trên máy cá nhân");
+}
 
 api.MapGet("/health", () => Results.Ok(new { success = true, message = "ok" })).AllowAnonymous();
 

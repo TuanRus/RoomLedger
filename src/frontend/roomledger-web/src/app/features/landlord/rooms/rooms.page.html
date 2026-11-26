@@ -1,5 +1,7 @@
 @let counts = store.counts();
 
+<app-load-state [status]="store.status()" [error]="store.error()" (retry)="store.reload()" />
+
 <ng-template #search>
   <label class="input search">
     <app-icon name="i-search" />
@@ -24,7 +26,7 @@
 
 <ng-template #detail let-room>
   <div class="row between">
-    <h2>{{ room.code }} · Tầng {{ room.floor }}</h2>
+    <h2>{{ room.code }}@if (room.floor != null) { · Tầng {{ room.floor }} }</h2>
     <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: roomState(room) }" />
   </div>
   <dl class="kv facts">
@@ -34,17 +36,24 @@
     }
     <dt>Tiền phòng</dt><dd class="money">{{ room.monthlyRent | vnd }} / tháng</dd>
     <dt>Tiền cọc</dt><dd class="money">{{ room.deposit | vnd }}</dd>
-    <dt>Chỉ số điện hiện tại</dt><dd>{{ room.electricity.value | num }} kWh · {{ day(room.electricity.date) }}</dd>
-    <dt>Chỉ số nước hiện tại</dt><dd>{{ room.water.value | num }} m³ · {{ day(room.water.date) }}</dd>
-    <dt>Hợp đồng</dt><dd>@if (room.contract === 'DRAFT') { Bản scan 2 trang · nháp } @else { {{ contractLabel(room.contract) }} }</dd>
+    <dt>Chỉ số điện hiện tại</dt><dd>@if (room.electricity; as e) { {{ e.value | num }} kWh@if (e.date) { · {{ day(e.date) }} } } @else { — }</dd>
+    <dt>Chỉ số nước hiện tại</dt><dd>@if (room.water; as w) { {{ w.value | num }} m³@if (w.date) { · {{ day(w.date) }} } } @else { — }</dd>
+    <dt>Hợp đồng</dt><dd>@if (room.contract === 'DRAFT') { @if (store.sample) { Bản scan 2 trang · nháp } @else if (room.contractFiles != null) { Bản scan {{ room.contractFiles }} tệp · nháp } @else { Nháp } } @else { {{ contractLabel(room.contract) }} }</dd>
   </dl>
+  @if (store.detailOf(room.roomId); as d) {
+    @if (d.status === 'loading') {
+      <p class="small muted" role="status">Đang tải hợp đồng của phòng…</p>
+    } @else if (d.status === 'error') {
+      <p class="banner warn" role="alert"><app-icon name="i-alert" /><span>{{ d.error }}</span><button type="button" class="btn sec sm" (click)="store.loadDetail(room.roomId, true)">Thử lại</button></p>
+    }
+  }
   <hr class="sep">
 
   @if (sent(); as s) {
     @if (s.roomId === room.roomId) {
       <div class="banner ok" role="status">
         <app-icon name="i-check-c" />
-        <span><b>Đã gửi lời mời tới {{ s.invite.email }}.</b> Link có hạn {{ inviteHours }} giờ, đến {{ s.invite.expiresAt | stamp }}. Ngày bắt đầu thuê {{ day(s.invite.startDate) }}.</span>
+        <span><b>Đã gửi lời mời tới {{ s.invite.email }}.</b> Link có hạn {{ inviteHours }} giờ, đến {{ s.invite.expiresAt | stamp }}.@if (s.invite.startDate) { Ngày bắt đầu thuê {{ day(s.invite.startDate) }}. }</span>
       </div>
       <p class="small muted note">Người thuê xem bản scan hợp đồng và xác nhận trước kỳ thu đầu tiên.</p>
     }
@@ -65,23 +74,32 @@
           <span class="help" id="inv-em-help">Người thuê nhận link qua email, hạn {{ inviteHours }} giờ.</span>
         }
       </div>
-      <div class="field">
-        <label for="inv-d">Ngày bắt đầu thuê</label>
-        <app-date-field inputId="inv-d" [formField]="inviteForm.startDate" describedBy="inv-d-h" />
-        @if (inviteForm.startDate().value()) { <span class="help" id="inv-d-h">{{ inviteForm.startDate().value() | day: 'long' }}</span> }
-      </div>
-      <button type="submit" class="btn block"><app-icon name="i-mail" />Gửi lời mời</button>
+      @if (store.sample) {
+        <div class="field">
+          <label for="inv-d">Ngày bắt đầu thuê</label>
+          <app-date-field inputId="inv-d" [formField]="inviteForm.startDate" describedBy="inv-d-h" />
+          @if (inviteForm.startDate().value()) { <span class="help" id="inv-d-h">{{ inviteForm.startDate().value() | day: 'long' }}</span> }
+        </div>
+      }
+      @if (inviteError(); as ie) {
+        <p class="banner warn" role="alert"><app-icon name="i-alert" /><span>{{ ie }} <a routerLink="/landlord/contracts">Mở Hợp đồng</a></span></p>
+      }
+      <button type="submit" class="btn block" [disabled]="inviting()"><app-icon name="i-mail" />{{ inviting() ? 'Đang gửi…' : 'Gửi lời mời' }}</button>
       <p class="small muted">Người thuê xem bản scan hợp đồng và xác nhận trước kỳ thu đầu tiên.</p>
     </form>
   } @else if (room.displayStatus === 'AWAITING_CONFIRM') {
-    @if (sent()?.roomId !== room.roomId && room.invite; as inv) {
-      <div class="banner info">
-        <app-icon name="i-mail" />
-        <span>Đã gửi lời mời tới <b>{{ inv.email }}</b>. Link hết hạn lúc {{ inv.expiresAt | stamp }}.</span>
-      </div>
+    @if (sent()?.roomId !== room.roomId) {
+      @if (room.invite; as inv) {
+        <div class="banner info">
+          <app-icon name="i-mail" />
+          <span>Đã gửi lời mời tới <b>{{ inv.email }}</b>. Link hết hạn lúc {{ inv.expiresAt | stamp }}.</span>
+        </div>
+      } @else {
+        <div class="banner info"><app-icon name="i-mail" /><span>Đã gửi lời mời. Chờ người thuê nhận.</span></div>
+      }
     }
   } @else {
-    <h3 class="sec-title">Kỳ {{ store.period | period }}</h3>
+    <h3 class="sec-title">Kỳ {{ store.period() | period }}</h3>
     <p class="small muted reading-line">Chỉ số:
       @if (room.reading) { <app-status-chip [review]="room.reading" /> } @else { — }
     </p>
@@ -101,13 +119,15 @@
       <div class="tablewrap">
         <table class="table">
           <caption class="sr">Danh sách phòng</caption>
-          <thead><tr><th scope="col">Phòng</th><th scope="col">Người thuê</th><th scope="col" class="num">Tiền phòng</th><th scope="col">Hợp đồng</th><th scope="col">Kỳ {{ store.period | period }}</th><th scope="col"><span class="sr">Thao tác</span></th></tr></thead>
+          <thead><tr><th scope="col">Phòng</th><th scope="col">Người thuê</th><th scope="col" class="num">Tiền phòng</th><th scope="col">Hợp đồng</th><th scope="col">Kỳ {{ store.period() | period }}</th><th scope="col"><span class="sr">Thao tác</span></th></tr></thead>
           <tbody>
             @for (room of visibleRooms(); track room.roomId) {
               <tr [class.sel]="selectedId() === room.roomId" (click)="select(room.roomId)">
                 <td><button type="button" class="room" [attr.aria-pressed]="selectedId() === room.roomId" (click)="$event.stopPropagation(); select(room.roomId)"><b>{{ room.code }}</b></button></td>
                 <td>
-                  @if (room.displayStatus === 'AWAITING_CONFIRM') { {{ room.tenantName ?? room.invite?.email }} <span class="muted small">(chờ nhận lời mời)</span> }
+                  @if (room.displayStatus === 'AWAITING_CONFIRM') {
+                    @if (room.tenantName ?? room.invite?.email; as who) { {{ who }} <span class="muted small">(chờ nhận lời mời)</span> } @else { <span class="muted">Chờ nhận lời mời</span> }
+                  }
                   @else if (room.tenantName) { {{ room.tenantName }} }
                   @else { <span class="muted">Trống</span> }
                 </td>
@@ -154,7 +174,7 @@
       @for (room of visibleRooms(); track room.roomId) {
         <li>
           <button type="button" class="m-open" (click)="select(room.roomId)">
-            <span class="m-text"><b>{{ room.code }}</b><span class="small muted">{{ room.tenantName ?? room.invite?.email ?? 'Trống' }} · {{ room.monthlyRent | vnd }}</span></span>
+            <span class="m-text"><b>{{ room.code }}</b><span class="small muted">{{ who(room) }} · {{ room.monthlyRent | vnd }}</span></span>
             <span class="m-val">
               @if (isOccupied(room) && room.reading) { <app-status-chip [review]="room.reading" /> }
               @else { <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: roomState(room) }" /> }

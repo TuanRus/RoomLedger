@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 
+import { environment } from '../environments/environment';
 import { LANDLORD_SHELL, TENANT_SHELL } from './layout/shell-configs';
 
 const t = (name: string) => `${name} · RoomLedger`;
@@ -10,8 +11,11 @@ export const routes: Routes = [
   { path: 'login', title: t('Đăng nhập'), loadComponent: () => import('./features/auth/login/login.page').then((m) => m.LoginPage) },
   { path: 'forgot-password', title: t('Quên mật khẩu'), loadComponent: () => import('./features/auth/forgot-password/forgot-password.page').then((m) => m.ForgotPasswordPage) },
   { path: 'invite/:token', title: t('Lời mời thuê phòng'), loadComponent: () => import('./features/auth/invite/invite.page').then((m) => m.InvitePage) },
-  // Temporary: pick a role to preview while sign-in is not merged.
-  { path: 'preview', title: t('Xem thử'), loadComponent: () => import('./features/dev/role-picker.page').then((m) => m.RolePickerPage) },
+  // Temporary: pick a role to preview while sign-in is not merged. Not in the production API build, where it would
+  // offer sample people that do not exist.
+  ...(environment.localDev || environment.dataSource === 'sample'
+    ? [{ path: 'preview', title: t('Xem thử'), loadComponent: () => import('./features/dev/role-picker.page').then((m) => m.RolePickerPage) }]
+    : []),
 
   {
     path: 'landlord',

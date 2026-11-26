@@ -3,13 +3,14 @@ import { Component, DestroyRef, Injector, afterNextRender, computed, inject, lin
 import { Router, RouterLink } from '@angular/router';
 
 import { MeterKind, ReviewRow, ReviewState } from '../../../core/data/models';
-import { MeterReviewStore, byPriority, checkValue, deltaOf, needsAction, stateOf, usageOf } from '../../../core/data/meter-review.store';
+import { MeterReviewStore, UNDO_SECONDS, byPriority, checkValue, deltaOf, needsAction, stateOf, usageOf } from '../../../core/data/meter-review.store';
 import { Viewport } from '../../../core/layout/viewport';
 import { NumPipe, PeriodPipe, StampPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
 import { MeterDigits } from '../../../shared/ui/meter-digits';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { ZoomPhoto } from '../../../shared/ui/zoom-photo';
+import { LoadState } from '../shared/load-state';
 
 type Filter = 'all' | ReviewState;
 
@@ -23,12 +24,10 @@ const FILTERS: { id: Filter; label: string; empty: string }[] = [
   { id: 'approved', label: 'Đã duyệt', empty: 'Chưa duyệt chỉ số nào. Bắt đầu từ phòng đầu danh sách.' },
 ];
 
-const UNDO_SECONDS = 10;
-
 /** LL-04 (computer) and LM-01/LM-02 (phone): review the meter readings of one period. */
 @Component({
   selector: 'app-meter-review-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, MeterDigits, StatusChip, ZoomPhoto, NumPipe, PeriodPipe, StampPipe],
+  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, LoadState, MeterDigits, StatusChip, ZoomPhoto, NumPipe, PeriodPipe, StampPipe],
   host: { '(document:keydown)': 'onKey($event)' },
   templateUrl: './meter-review.page.html',
   styleUrl: './meter-review.page.scss',
@@ -130,8 +129,8 @@ export class MeterReviewPage {
     const value = this.editValue();
     if (!row?.reading || value == null || !this.canApprove()) return;
     const at = this.visibleRows().findIndex((r) => r.roomId === row.roomId);
-    if (value !== row.reading.value) this.store.setValue(row.reading.readingId, value);
-    this.showToast(this.store.approve([row.reading.readingId]));
+    // The typed number goes in with the approval, so "Hoàn tác" brings back the number the AI read.
+    this.showToast(this.store.approve([row.reading.readingId], value));
     this.undoRoomId = row.roomId;
     // Straight on to the next room below that needs a decision, wrapping to the top; on a phone, back to the list when none is left.
     const rows = this.visibleRows();

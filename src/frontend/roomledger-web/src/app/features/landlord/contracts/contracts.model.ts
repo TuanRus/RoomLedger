@@ -29,11 +29,13 @@ export interface ContractFile {
 }
 
 export interface ContractVersion {
+  /** Id of the version on the server (API only); needed to attach scan files. */
+  versionId?: string;
   number: number;
   type: VersionType;
   status: VersionStatus;
-  /** "YYYY-MM-DD". */
-  uploadedAt: string;
+  /** "YYYY-MM-DD". Not in the API (null there). */
+  uploadedAt: string | null;
   /** Short note, e.g. "sửa tiền cọc". */
   note: string | null;
   sentAt: string | null;
@@ -45,12 +47,17 @@ export interface ContractVersion {
 
 export interface Contract {
   tenancyId: string;
+  roomId: string;
   roomCode: string;
   tenantName: string;
   status: TenancyStatus;
   /** Oldest first. */
   versions: ContractVersion[];
 }
+
+/** A room with no tenancy yet has a placeholder contract with this id prefix; the first upload creates the tenancy. */
+export const NEW_PREFIX = 'new:';
+export const hasNoTenancy = (c: Contract): boolean => c.tenancyId.startsWith(NEW_PREFIX);
 
 export type Tone = 'ok' | 'warn' | 'err' | 'info' | 'neu';
 export interface ChipSpec { tone: Tone; icon: string; label: string }

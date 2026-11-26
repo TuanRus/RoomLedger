@@ -1,8 +1,10 @@
 @let groups = store.groups();
 
+<app-load-state [status]="store.status()" [error]="store.error()" (retry)="store.load()" />
+
 <ng-template #progress>
   <div class="prog" [class.sheet]="viewport.isPhone()">
-    <div class="row between"><b>{{ store.recordedCount() }}/{{ store.total() }} phòng đã ghi</b><span class="small muted">{{ viewport.isPhone() ? 'Ngày ' + roundDate.slice(0, 5) : 'Lượt chụp ' + roundDate }}</span></div>
+    <div class="row between"><b>{{ store.recordedCount() }}/{{ store.total() }} phòng đã ghi</b>@if (roundDate) { <span class="small muted">{{ viewport.isPhone() ? 'Ngày ' + roundDate.slice(0, 5) : 'Lượt chụp ' + roundDate }}</span> }</div>
     <div class="bar" role="progressbar" [attr.aria-valuenow]="store.recordedCount()" aria-valuemin="0" [attr.aria-valuemax]="store.total()" aria-label="Số phòng đã ghi"><i [style.width.%]="percent()"></i></div>
   </div>
 </ng-template>
@@ -36,19 +38,21 @@
   } @else {
     <div class="empty-m list">
       <span class="ic"><app-icon name="i-check" /></span>
-      <b>{{ filter() === 'todo' ? 'Đã ghi đủ ' + store.total() + ' phòng' : 'Không có phòng nào' }}</b>
-      <span class="small muted">{{ filter() === 'todo' ? 'Vào Duyệt chỉ số để kiểm tra số AI đọc trước khi tạo hóa đơn.' : 'Danh sách này đang trống.' }}</span>
+      <b>{{ !store.total() ? 'Chưa có phòng nào trong kỳ này' : filter() === 'todo' ? 'Đã ghi đủ ' + store.total() + ' phòng' : 'Không có phòng nào' }}</b>
+      <span class="small muted">{{ !store.total() ? 'Phòng có người thuê sẽ hiện ở đây.' : filter() === 'todo' ? 'Vào Duyệt chỉ số để kiểm tra số AI đọc trước khi tạo hóa đơn.' : 'Danh sách này đang trống.' }}</span>
     </div>
   }
 </ng-template>
 
 <ng-template #demo>
-  <div class="demo">
-    <span class="small muted">Dữ liệu mẫu · tải ảnh và AI đọc số đang giả lập</span>
-    <button type="button" class="btn sm sec" [attr.aria-pressed]="store.simulateOffline()" (click)="store.setSimulateOffline(!store.simulateOffline())">
-      <app-icon [name]="store.simulateOffline() ? 'i-wifi' : 'i-wifi-off'" />{{ store.simulateOffline() ? 'Bật lại mạng' : 'Giả lập mất mạng' }}
-    </button>
-  </div>
+  @if (store.sample) {
+    <div class="demo">
+      <span class="small muted">Dữ liệu mẫu · tải ảnh và AI đọc số đang giả lập</span>
+      <button type="button" class="btn sm sec" [attr.aria-pressed]="store.simulateOffline()" (click)="store.setSimulateOffline(!store.simulateOffline())">
+        <app-icon [name]="store.simulateOffline() ? 'i-wifi' : 'i-wifi-off'" />{{ store.simulateOffline() ? 'Bật lại mạng' : 'Giả lập mất mạng' }}
+      </button>
+    </div>
+  }
 </ng-template>
 
 @if (viewport.isPhone()) {
@@ -56,7 +60,7 @@
   <div class="phone" [inert]="!!store.active()">
     <div class="ptop">
       <h1>Ghi chỉ số</h1>
-      <span class="chip neu"><app-icon name="i-cal" />Kỳ {{ period | period }}</span>
+      <span class="chip neu"><app-icon name="i-cal" />Kỳ {{ store.period() | period }}</span>
     </div>
     @if (showQueue()) { <app-offline-queue /> }
     <ng-container [ngTemplateOutlet]="progress" />
@@ -73,7 +77,7 @@
   <div class="top">
     <div>
       <h1>Ghi chỉ số</h1>
-      <p class="sub">Kỳ {{ period | period }} · lượt chụp {{ roundDate }}</p>
+      <p class="sub">Kỳ {{ store.period() | period }}@if (roundDate) { · lượt chụp {{ roundDate }} }</p>
     </div>
     <div class="acts"><ng-container [ngTemplateOutlet]="demo" /></div>
   </div>

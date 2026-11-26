@@ -1,8 +1,9 @@
 import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
-import { Component, ElementRef, computed, inject, input, linkedSignal, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, input, linkedSignal, signal, untracked, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { MeterKind } from '../../../core/data/models';
+import { TenantHomeStore } from '../../../core/data/tenant-home.store';
 import { Viewport } from '../../../core/layout/viewport';
 import { NumPipe, PeriodPipe, StampPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
@@ -14,7 +15,7 @@ import { KIND_NAME, TenantReadingsStore, UNIT } from './tenant-readings';
 /**
  * TD-03 (computer): table of periods with a side viewer. TN-04 + TN-03 (phone): list per meter, tapping a
  * period opens the photo viewer full screen. View only: the landlord photographs and records every reading.
- * Query params: ?kind=ELECTRICITY|WATER, ?reading=<readingId> (opens it), ?sample=pending (kỳ 11 not approved yet).
+ * Query params: ?kind=ELECTRICITY|WATER, ?reading=<readingId> (opens it), ?sample=pending (sample data only: kỳ 11 not approved yet).
  */
 @Component({
   selector: 'app-tenant-meters-page',
@@ -27,14 +28,18 @@ export class TenantMetersPage {
   readonly reading = input<string>();
   readonly sample = input<string>(); // ?sample= (not ?state=, which the OIDC client reads as a sign-in callback)
 
-  private readonly store = inject(TenantReadingsStore);
+  protected readonly store = inject(TenantReadingsStore);
+  private readonly home = inject(TenantHomeStore);
   protected readonly viewport = inject(Viewport);
   protected readonly next = this.store.nextCapture;
+  protected readonly status = this.store.status;
+  protected readonly error = this.store.error;
+  protected readonly roomCode = this.home.roomCode;
 
   protected readonly current = linkedSignal<MeterKind>(() => (this.kind() === 'WATER' ? 'WATER' : 'ELECTRICITY'));
   protected readonly unit = computed(() => UNIT[this.current()]);
   protected readonly kindName = computed(() => KIND_NAME[this.current()]);
-  protected readonly rows = computed(() => this.store.list(this.current(), this.sample() === 'pending'));
+  protected readonly rows = computed(() => this.store.list(this.current(), this.home.sample && this.sample() === 'pending'));
 
   /** The open reading: the one in the URL, else the newest approved one of this meter. */
   protected readonly selectedId = linkedSignal(() => {
@@ -52,6 +57,17 @@ export class TenantMetersPage {
 
   private readonly zoomDialog = viewChild<ElementRef<HTMLDialogElement>>('zoomDialog');
   protected readonly zoomed = signal(false);
+
+  constructor() {
+    // The table lists every period: read the invoices that were not read at start-up.
+    effect(() => {
+      if (this.store.listReady()) untracked(() => this.store.ensureAll());
+    });
+  }
+
+  protected retry(): void {
+    this.store.load();
+  }
 
   protected setKind(kind: MeterKind): void {
     this.current.set(kind);

@@ -3,6 +3,7 @@ import { Component, afterNextRender, inject, signal } from '@angular/core';
 import { FormField, form, required, validate } from '@angular/forms/signals';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
+import { environment } from '../../../../environments/environment';
 import { Icon } from '../../../shared/ui/icon';
 import { isEmail } from '../../auth/shared/auth-rules';
 import { HowStage } from './how-stage';
@@ -18,6 +19,9 @@ import { HowStage } from './how-stage';
   styleUrl: './landing.page.scss',
 })
 export class LandingPage {
+  /** The /preview route only exists with sample data or in LocalDev (see app.routes.ts). */
+  protected readonly showPreview = environment.localDev || environment.dataSource === 'sample';
+
   private readonly document = inject(DOCUMENT);
 
   protected readonly model = signal({ email: '' });

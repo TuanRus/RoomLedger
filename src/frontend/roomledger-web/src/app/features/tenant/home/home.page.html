@@ -11,9 +11,10 @@
         <span class="grow">Hợp đồng {{ s.roomCode }}
           <span class="small muted">
             @switch (contract().status) {
-              @case ('CONFIRMED') { Đã xác nhận · 01/03/2026 – 28/02/2027 }
+              @case ('NONE') { Chưa có hợp đồng }
+              @case ('CONFIRMED') { Đã xác nhận@if (contractDetail(); as c) { · {{ c.startDate }} – {{ c.endDate }} } }
               @case ('REJECTED') { Đã gửi lý do, chờ chủ nhà sửa }
-              @default { Chờ bạn xác nhận · 01/03/2026 – 28/02/2027 }
+              @default { Chờ bạn xác nhận@if (contractDetail(); as c) { · {{ c.startDate }} – {{ c.endDate }} } }
             }
           </span>
         </span>
@@ -23,7 +24,7 @@
     <li>
       <a class="list-item" routerLink="/tenant/disputes">
         <app-icon name="i-talk" />
-        <span class="grow">Khiếu nại<span class="small muted">Không có khiếu nại đang mở</span></span>
+        <span class="grow">Khiếu nại<span class="small muted">{{ disputeNote() }}</span></span>
         <app-icon name="i-chev" />
       </a>
     </li>
@@ -35,7 +36,7 @@
   <div class="row between">
     <h2 class="h">Chỉ số kỳ {{ readingsPeriod() | period }}</h2>
     @if (readingsApproved()) {
-      <app-status-chip review="approved" [text]="'Đã duyệt ' + (approvedOn() | day: 'short')" />
+      <app-status-chip review="approved" [text]="approvedOn() ? 'Đã duyệt ' + (approvedOn() | day: 'short') : 'Đã duyệt'" />
     } @else {
       <span class="chip info"><app-icon name="i-clock" />Đang duyệt</span>
     }
@@ -45,14 +46,18 @@
       <li>
         @if (r.status === 'CONFIRMED') {
           <a class="reading" routerLink="/tenant/meters" [queryParams]="{ kind: r.kind, reading: r.readingId }">
-            <img [ngSrc]="r.photoUrl!" width="96" height="72" [alt]="'Ảnh ' + (r.kind === 'ELECTRICITY' ? 'công tơ điện' : 'đồng hồ nước') + ' ' + s.roomCode + ', ' + r.value + ' ' + unit[r.kind]">
-            <span class="grow"><b>{{ kindName[r.kind] }}</b><span class="small muted">Chụp {{ r.capturedAt | day: 'short' }} · dùng {{ r.usage | num }} {{ unit[r.kind] }}</span></span>
+            @if (r.photoUrl) {
+              <img [ngSrc]="r.photoUrl" width="96" height="72" [alt]="'Ảnh ' + (r.kind === 'ELECTRICITY' ? 'công tơ điện' : 'đồng hồ nước') + ' ' + s.roomCode + ', ' + r.value + ' ' + unit[r.kind]">
+            } @else {
+              <span class="dot" aria-hidden="true"><app-icon [name]="r.kind === 'ELECTRICITY' ? 'i-bolt' : 'i-drop'" /></span>
+            }
+            <span class="grow"><b>{{ kindName[r.kind] }}</b><span class="small muted">@if (r.capturedAt) { Chụp {{ r.capturedAt | day: 'short' }} · }dùng {{ r.usage | num }} {{ unit[r.kind] }}</span></span>
             <span class="v"><app-meter-digits [kind]="r.kind" [value]="r.value!" size="sm" /><span class="small muted">{{ unit[r.kind] }}</span></span>
           </a>
         } @else {
           <div class="reading">
             <span class="dot" aria-hidden="true"><app-icon [name]="r.kind === 'ELECTRICITY' ? 'i-bolt' : 'i-drop'" /></span>
-            <span class="grow"><b>{{ kindName[r.kind] }}</b><span class="small muted">Đã chụp {{ r.capturedAt | day: 'short' }} · chờ duyệt</span></span>
+            <span class="grow"><b>{{ kindName[r.kind] }}</b><span class="small muted">@if (r.capturedAt) { Đã chụp {{ r.capturedAt | day: 'short' }} · }chờ duyệt</span></span>
           </div>
         }
       </li>
@@ -65,12 +70,14 @@
 </ng-template>
 
 <ng-template #previousList>
+  @if (previous().length) {
   <h2 class="h prev-h">Hóa đơn trước</h2>
   <ul class="mini">
     @for (h of previous(); track h.invoiceId) {
       <li><a [routerLink]="['/tenant/invoices', h.invoiceId]"><span>Kỳ {{ h.period | period }} · @if (h.paidAt) { đã thanh toán {{ h.paidAt | day: 'short' }} } @else { chưa thanh toán }</span><b>{{ h.total | vnd }}</b></a></li>
     }
   </ul>
+  }
 </ng-template>
 
 <!-- Phone / pending: invoice summary card. -->
@@ -83,7 +90,9 @@
         <p class="small muted">Thanh toán {{ inv.paidAt | day: 'full' }}@if (m === 'pending') { · hóa đơn kỳ {{ readingsPeriod() | period }} có sau khi chủ nhà duyệt chỉ số }</p>
         <a class="btn sec block" [routerLink]="['/tenant/invoices', inv.invoiceId]">Xem hóa đơn</a>
       } @else {
-        <p class="small muted">Hạn {{ inv.dueDate | day: 'full' }}</p>
+        @if (inv.dueDate) {
+          <p class="small muted">Hạn {{ inv.dueDate | day: 'full' }}</p>
+        }
         <a class="btn block" [routerLink]="['/tenant/invoices', inv.invoiceId]">Xem và chuyển khoản</a>
       }
     </div>
@@ -108,6 +117,11 @@
   </ul>
 </ng-template>
 
+@if (status() === 'loading') {
+  <p class="muted" role="status">Đang tải…</p>
+} @else if (status() === 'error') {
+  <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ error() }}</span><button type="button" class="btn sec sm" (click)="retry()">Thử lại</button></div>
+} @else {
 @switch (m) {
   @case ('unassigned') {
     <!-- TN-17 -->
@@ -123,45 +137,57 @@
       </p>
       <div class="stack">
         <button type="button" class="btn lg block" [disabled]="checking()" (click)="recheck()"><app-icon name="i-refresh" />Kiểm tra lại</button>
-        <a class="btn ghost block" routerLink="/"><app-icon name="i-logout" />Đăng xuất</a>
+        @if (localDev) {
+          <button type="button" class="btn ghost block" (click)="logout()"><app-icon name="i-logout" />Đăng xuất</button>
+        } @else {
+          <a class="btn ghost block" routerLink="/"><app-icon name="i-logout" />Đăng xuất</a>
+        }
       </div>
     </div>
   }
 
   @case ('new') {
     <!-- TN-16 -->
-    @let o = s.opening!;
     <div class="head">
       <h1>Chào {{ s.firstName }}</h1>
-      @if (!viewport.isPhone()) { <p class="sub">Phòng {{ s.roomCode }} · vào ở {{ o.date }}</p> }
+      @if (!viewport.isPhone()) { <p class="sub">Phòng {{ s.roomCode }}@if (s.opening; as o) { · vào ở {{ o.date }} }</p> }
     </div>
     <div class="grid">
       <section class="sheet card-g" aria-labelledby="open-h">
-        <div class="row between"><h2 class="h" id="open-h">Chỉ số đầu {{ s.roomCode }}</h2><app-status-chip review="approved" text="Đã ghi" /></div>
-        <p class="small muted">Điện {{ o.finals[0].value | num }} kWh · nước {{ o.finals[1].value | num }} m³ · chủ nhà chụp {{ o.date }}, ngày bạn vào ở. Đây là mốc tính hóa đơn đầu tiên.</p>
-        <button type="button" class="see" [attr.aria-expanded]="showOpeningPhotos()" aria-controls="open-photos" (click)="showOpeningPhotos.set(!showOpeningPhotos())">
-          <app-icon name="i-image" />{{ showOpeningPhotos() ? 'Ẩn ảnh đồng hồ' : 'Xem 2 ảnh đồng hồ' }}
-        </button>
-        <div id="open-photos">
-          @if (showOpeningPhotos()) {
-            <ng-container [ngTemplateOutlet]="finals" [ngTemplateOutletContext]="{ $implicit: o.finals }" />
-          }
-        </div>
+        @if (s.opening; as o) {
+          <div class="row between"><h2 class="h" id="open-h">Chỉ số đầu {{ s.roomCode }}</h2><app-status-chip review="approved" text="Đã ghi" /></div>
+          <p class="small muted">Điện {{ o.finals[0].value | num }} kWh · nước {{ o.finals[1].value | num }} m³ · chủ nhà chụp {{ o.date }}, ngày bạn vào ở. Đây là mốc tính hóa đơn đầu tiên.</p>
+          <button type="button" class="see" [attr.aria-expanded]="showOpeningPhotos()" aria-controls="open-photos" (click)="showOpeningPhotos.set(!showOpeningPhotos())">
+            <app-icon name="i-image" />{{ showOpeningPhotos() ? 'Ẩn ảnh đồng hồ' : 'Xem 2 ảnh đồng hồ' }}
+          </button>
+          <div id="open-photos">
+            @if (showOpeningPhotos()) {
+              <ng-container [ngTemplateOutlet]="finals" [ngTemplateOutletContext]="{ $implicit: o.finals }" />
+            }
+          </div>
+        } @else {
+          <h2 class="h" id="open-h">Chỉ số đầu {{ s.roomCode }}</h2>
+          <p class="small muted">Chưa có dữ liệu chỉ số ban đầu.</p>
+        }
       </section>
       <section class="sheet empty-m">
         <span class="ic"><app-icon name="i-bill" /></span>
         <h2 class="h">Chưa có hóa đơn nào</h2>
-        <p class="small muted">Hóa đơn đầu tiên đến sau khi chủ nhà ghi chỉ số kỳ {{ next.period | period }} ({{ next.window }}) và duyệt.</p>
-        <button type="button" class="btn sec" [attr.aria-pressed]="notifyInvoice()" (click)="notifyInvoice.set(!notifyInvoice())">
-          @if (notifyInvoice()) { <app-icon name="i-check" />Sẽ báo qua email } @else { <app-icon name="i-bell" />Báo tôi khi có hóa đơn }
-        </button>
+        @if (next; as n) {
+          <p class="small muted">Hóa đơn đầu tiên đến sau khi chủ nhà ghi chỉ số kỳ {{ n.period | period }} ({{ n.window }}) và duyệt.</p>
+          <button type="button" class="btn sec" [attr.aria-pressed]="notifyInvoice()" (click)="notifyInvoice.set(!notifyInvoice())">
+            @if (notifyInvoice()) { <app-icon name="i-check" />Sẽ báo qua email } @else { <app-icon name="i-bell" />Báo tôi khi có hóa đơn }
+          </button>
+        } @else {
+          <p class="small muted">Hóa đơn đầu tiên đến sau khi chủ nhà ghi và duyệt chỉ số.</p>
+        }
       </section>
     </div>
   }
 
   @case ('moving') {
     <!-- TN-15 -->
-    @let mv = s.move!;
+    @if (s.move; as mv) {
     <div class="head">
       <h1>Chào {{ s.firstName }}</h1>
       @if (!viewport.isPhone()) { <p class="sub">Phòng {{ mv.from }} → {{ mv.to }} · {{ mv.date }}</p> }
@@ -183,6 +209,11 @@
         <ng-container [ngTemplateOutlet]="links" />
       </div>
     </div>
+    } @else {
+      <div class="head"><h1>Chào {{ s.firstName }}</h1><p class="sub">Phòng {{ s.roomCode }}</p></div>
+      <div class="banner info move" role="status"><app-icon name="i-door" /><span>Đang làm thủ tục trả phòng.</span></div>
+      <ng-container [ngTemplateOutlet]="links" />
+    }
   }
 
   @default {
@@ -216,4 +247,5 @@
       </div>
     }
   }
+}
 }

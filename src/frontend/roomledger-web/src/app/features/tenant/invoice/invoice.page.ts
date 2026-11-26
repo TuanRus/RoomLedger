@@ -1,5 +1,5 @@
 import { DOCUMENT, NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
-import { Component, ElementRef, computed, inject, input, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { MeterKind } from '../../../core/data/models';
@@ -34,16 +34,24 @@ export class TenantInvoicePage {
   protected readonly viewport = inject(Viewport);
 
   protected readonly invoice = computed(() => this.store.detail(this.invoiceId()));
+  /** Only the newest invoice is read at start-up: any other is read when it is opened. */
+  protected readonly detailStatus = computed(() => this.store.detailStatus(this.invoiceId()));
+  protected readonly detailError = computed(() => this.store.detailError(this.invoiceId()));
   protected readonly history = this.store.history;
   protected readonly payment = this.store.payment;
   protected readonly isPaid = computed(() => this.invoice()?.status === 'PAID');
   /** TN-22: what comes after a paid invoice (the next invoice, or when the meters are read). */
   protected readonly next = computed(() => this.store.nextAfter(this.invoiceId()));
-  /** "Báo tôi" on the next-period hint; sample only, the email preference is not in the API yet. */
+  /** "Báo tôi" on the next-period hint; sample data only, the email preference is not in the API. */
   protected readonly notify = signal(false);
+  protected readonly sample = this.store.sample;
+  protected readonly status = this.store.status;
+  protected readonly error = this.store.error;
 
   /** "2026-12-10" -> "10/12/2026". */
-  protected readonly dueDate = computed(() => this.invoice()?.dueDate.split('-').reverse().join('/') ?? '');
+  protected readonly dueDate = computed(() => this.invoice()?.dueDate?.split('-').reverse().join('/') ?? 'chưa có');
+  /** Shown instead of the bank details while the API has no payment settings (API-GAPS.md). */
+  protected readonly noPaymentText = 'Chủ nhà chưa thêm thông tin chuyển khoản. Hỏi chủ nhà số tài khoản để thanh toán.';
 
   protected readonly copied = signal<CopyTarget | null>(null);
   /** Set when the browser refuses the clipboard, so the tenant knows to select the text by hand. */
@@ -58,10 +66,26 @@ export class TenantInvoicePage {
     return { kind, line: kind === 'ELECTRICITY' ? inv.electricity : inv.water, name: kind === 'ELECTRICITY' ? 'Công tơ điện' : 'Đồng hồ nước', unit: kind === 'ELECTRICITY' ? 'kWh' : 'm³' };
   });
 
+  constructor() {
+    effect(() => {
+      const id = this.invoiceId();
+      if (this.store.listReady()) untracked(() => this.store.ensureDetail(id));
+    });
+  }
+
+  protected retry(): void {
+    this.store.load();
+  }
+
+  protected retryDetail(): void {
+    this.store.ensureDetail(this.invoiceId(), true);
+  }
+
   protected async copy(target: CopyTarget): Promise<void> {
     const p = this.payment();
+    if (!p && target !== 'amount') return;
     const text =
-      target === 'account' ? p.accountNumber.replace(/\s/g, '') : target === 'note' ? p.transferNote : String(this.invoice()?.total ?? '');
+      target === 'account' ? p!.accountNumber.replace(/\s/g, '') : target === 'note' ? p!.transferNote : String(this.invoice()?.total ?? '');
     try {
       await this.window?.navigator.clipboard.writeText(text);
       this.copyFailed.set(false);

@@ -1,12 +1,15 @@
 import { NgOptimizedImage, NgTemplateOutlet } from '@angular/common';
-import { Component, DestroyRef, computed, inject, input, linkedSignal, signal, untracked } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, input, linkedSignal, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
+
+import { RoomsStore } from '../rooms/data/rooms.store';
 
 import { MeterKind } from '../../../core/data/models';
 import { Viewport } from '../../../core/layout/viewport';
 import { NumPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
 import { MeterDigits } from '../../../shared/ui/meter-digits';
+import { LoadState } from '../shared/load-state';
 import { EndKind, FinalReading, StepId } from './data/end-tenancy.models';
 import { DEMO_FINAL } from './data/end-tenancy.sample';
 import { EndTenancyStore, blockers, currentStep, finalInvoice, stepsDone } from './data/end-tenancy.store';
@@ -24,7 +27,7 @@ function day(iso: string): string {
  */
 @Component({
   selector: 'app-end-tenancy-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, MeterDigits, NumPipe, VndPipe],
+  imports: [NgOptimizedImage, NgTemplateOutlet, RouterLink, Icon, LoadState, MeterDigits, NumPipe, VndPipe],
   templateUrl: './end-tenancy.page.html',
   styleUrl: './end-tenancy.page.scss',
 })
@@ -39,7 +42,13 @@ export class EndTenancyPage {
   protected readonly day = day;
 
 
+  private readonly rooms = inject(RoomsStore);
+
   protected readonly draft = computed(() => this.store.draft(this.roomId()));
+  /** API mode: the room and its tenant. The end-of-tenancy steps need endpoints the server does not have yet. */
+  protected readonly header = computed(() => this.store.header(this.roomId()));
+  protected readonly roomStatus = this.rooms.status;
+  protected readonly roomError = this.rooms.error;
   protected readonly invoice = computed(() => {
     const d = this.draft();
     return d ? finalInvoice(d) : null;
@@ -86,6 +95,10 @@ export class EndTenancyPage {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.toastTimer && clearTimeout(this.toastTimer));
+    effect(() => {
+      const id = this.roomId();
+      if (!this.store.sample) untracked(() => this.store.loadHeader(id));
+    });
   }
 
   protected kindLabel(kind: MeterKind): string {

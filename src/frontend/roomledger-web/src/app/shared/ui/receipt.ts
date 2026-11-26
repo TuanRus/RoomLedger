@@ -66,7 +66,9 @@ export class Receipt {
     ];
   });
   protected readonly dueShort = computed(() => {
-    const [, m, d] = this.invoice().dueDate.split('-');
+    const due = this.invoice().dueDate;
+    if (!due) return '—';
+    const [, m, d] = due.split('-');
     return `${d}/${m}`;
   });
 }

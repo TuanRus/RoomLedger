@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, DestroyRef, ElementRef, computed, inject, linkedSignal, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, linkedSignal, signal, untracked, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { MeterKind } from '../../../core/data/models';
@@ -10,8 +10,9 @@ import { MeterPhoto } from '../../../shared/ui/meter-photo';
 import { Receipt } from '../../../shared/ui/receipt';
 import { StatusChip } from '../../../shared/ui/status-chip';
 import { DayPipe } from '../../../shared/pipes/format.pipes';
+import { LoadState } from '../shared/load-state';
 import { LandlordInvoice } from './data/invoices.sample';
-import { InvoiceGroup, LandlordInvoicesStore } from './data/invoices.store';
+import { InvoiceGroup, LandlordInvoicesStore, PAID_UNDO_SECONDS } from './data/invoices.store';
 
 type Filter = 'all' | InvoiceGroup;
 
@@ -24,7 +25,6 @@ const FILTERS: { id: Filter; label: string; empty: string }[] = [
   { id: 'overdue', label: 'Quá hạn (kỳ trước)', empty: 'Không có hóa đơn kỳ trước nào còn nợ.' },
 ];
 
-const UNDO_SECONDS = 10;
 const INFO_SECONDS = 6;
 
 interface Toast {
@@ -41,7 +41,7 @@ interface Toast {
  */
 @Component({
   selector: 'app-landlord-invoices-page',
-  imports: [MeterPhoto, NgTemplateOutlet, RouterLink, Icon, Receipt, StatusChip, VndPipe, NumPipe, PeriodPipe, StampPipe, DayPipe],
+  imports: [MeterPhoto, NgTemplateOutlet, RouterLink, Icon, LoadState, Receipt, StatusChip, VndPipe, NumPipe, PeriodPipe, StampPipe, DayPipe],
   templateUrl: './invoices.page.html',
   styleUrl: './invoices.page.scss',
 })
@@ -77,7 +77,9 @@ export class LandlordInvoicesPage {
     source: this.store.invoices,
     computation: (list, previous) => {
       if (previous?.value && list.some((i) => i.invoiceId === previous.value)) return previous.value;
-      return this.viewport.isPhone() ? null : (list.find((i) => i.roomCode === 'P.204') ?? list[0])?.invoiceId ?? null;
+      if (this.viewport.isPhone()) return null;
+      // The sample opens on P.204 (the disputed invoice of the mockups); with the API the first invoice of the list.
+      return (this.store.sample ? list.find((i) => i.roomCode === 'P.204') : undefined)?.invoiceId ?? list[0]?.invoiceId ?? null;
     },
   });
   protected readonly selected = computed(() => this.store.invoices().find((i) => i.invoiceId === this.selectedId()) ?? null);
@@ -92,6 +94,11 @@ export class LandlordInvoicesPage {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.clearToastTimer());
+    // With the API a list row has no lines yet: read the one the landlord opens.
+    effect(() => {
+      const inv = this.selected();
+      if (inv?.detailPending) untracked(() => this.store.ensureDetail(inv.invoiceId));
+    });
   }
 
   protected count(f: Filter): number {
@@ -117,14 +124,35 @@ export class LandlordInvoicesPage {
   }
 
   protected sendAll(): void {
-    const count = this.store.send();
     this.closeSend();
     this.filter.set('all');
-    if (count > 0) this.showToast(`Đã gửi ${count} hóa đơn kỳ ${this.periodText()}.`);
+    if (this.store.sample) {
+      const count = this.store.send();
+      if (count > 0) this.showToast(`Đã gửi ${count} hóa đơn kỳ ${this.periodText()}.`);
+      return;
+    }
+    this.store.sendByApi().subscribe((count) => {
+      if (count > 0) this.showToast(`Đã gửi ${count} hóa đơn kỳ ${this.periodText()}.`);
+    });
   }
 
   protected sendOne(inv: LandlordInvoice): void {
-    if (this.store.send([inv.invoiceId])) this.showToast(`Đã gửi hóa đơn ${inv.roomCode} cho ${inv.tenantName}.`);
+    const to = inv.tenantName ?? inv.roomCode;
+    if (this.store.sample) {
+      if (this.store.send([inv.invoiceId])) this.showToast(`Đã gửi hóa đơn ${inv.roomCode} cho ${to}.`);
+      return;
+    }
+    this.store.sendByApi([inv.invoiceId]).subscribe((count) => {
+      if (count > 0) this.showToast(`Đã gửi hóa đơn ${inv.roomCode} cho ${to}.`);
+    });
+  }
+
+  /** API: creates the draft invoices of the period from the approved readings (POST invoices:generate). */
+  protected generate(): void {
+    this.store.generate().subscribe({
+      next: (res) => this.showToast(`Đã lập ${res.created?.length ?? 0} hóa đơn nháp kỳ ${this.periodText()}.`),
+      error: (err: unknown) => this.store.error.set(err instanceof Error ? err.message : 'Chưa lập được hóa đơn nháp.'),
+    });
   }
 
   protected markPaid(inv: LandlordInvoice): void {
@@ -138,7 +166,7 @@ export class LandlordInvoicesPage {
   }
 
   protected remind(inv: LandlordInvoice): void {
-    this.sendReminders([inv], `Đã nhắc ${inv.tenantName} (${inv.roomCode}).`);
+    this.sendReminders([inv], `Đã nhắc ${inv.tenantName ?? inv.roomCode} (${inv.roomCode}).`);
   }
 
   protected openRemind(): void {
@@ -155,7 +183,7 @@ export class LandlordInvoicesPage {
     this.sendReminders(list, `Đã nhắc ${list.length} phòng quá hạn.`);
   }
 
-  /** Reminders go out as email once the undo window has passed (with the API); undo puts the old times back. */
+  /** Reminders exist in sample data only (the API has no reminder endpoint); undo puts the old times back. */
   private sendReminders(list: LandlordInvoice[], text: string): void {
     const previous = Object.fromEntries(list.map((i) => [i.invoiceId, i.remindedAt]));
     if (!this.store.remind(list.map((i) => i.invoiceId))) return;
@@ -200,7 +228,7 @@ export class LandlordInvoicesPage {
 
   private showToast(text: string, undo: (() => void) | null = null): void {
     this.clearToastTimer();
-    this.toast.set({ text, undo, seconds: undo ? UNDO_SECONDS : INFO_SECONDS });
+    this.toast.set({ text, undo, seconds: undo ? PAID_UNDO_SECONDS : INFO_SECONDS });
     this.toastTimer = setInterval(() => {
       const t = this.toast();
       if (!t || t.seconds <= 1) this.closeToast();
