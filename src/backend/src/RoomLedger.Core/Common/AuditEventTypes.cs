@@ -9,6 +9,11 @@ namespace RoomLedger.Core.Common;
 public static class AuditEventTypes
 {
     public const string PropertyCreated = "PROPERTY_CREATED";
+    public const string PropertyUpdated = "PROPERTY_UPDATED";
+    public const string PaymentInfoUpdated = "PAYMENT_INFO_UPDATED";
+    public const string PaymentQrConfirmed = "PAYMENT_QR_CONFIRMED";
+    public const string PaymentInfoRemoved = "PAYMENT_INFO_REMOVED";
+    public const string PaymentQrRemoved = "PAYMENT_QR_REMOVED";
     public const string RoomCreated = "ROOM_CREATED";
     public const string RoomUpdated = "ROOM_UPDATED";
     public const string TenancyCreated = "TENANCY_CREATED";

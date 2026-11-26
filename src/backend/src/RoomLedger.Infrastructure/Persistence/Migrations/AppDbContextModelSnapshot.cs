@@ -830,11 +830,23 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AccountHolder")
+                        .HasColumnType("text")
+                        .HasColumnName("account_holder");
+
+                    b.Property<string>("AccountNumber")
+                        .HasColumnType("text")
+                        .HasColumnName("account_number");
+
                     b.Property<string>("Address")
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("address");
+
+                    b.Property<string>("BankName")
+                        .HasColumnType("text")
+                        .HasColumnName("bank_name");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -858,9 +870,26 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
+                    b.Property<string>("QrKey")
+                        .HasColumnType("text")
+                        .HasColumnName("qr_key");
+
+                    b.Property<string>("QrPendingKey")
+                        .HasColumnType("text")
+                        .HasColumnName("qr_pending_key");
+
+                    b.Property<string>("QrStatus")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("qr_status");
+
                     b.Property<long>("ServiceFee")
                         .HasColumnType("bigint")
                         .HasColumnName("service_fee");
+
+                    b.Property<string>("TransferNoteTemplate")
+                        .HasColumnType("text")
+                        .HasColumnName("transfer_note_template");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -869,6 +898,12 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("UpdatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("updated_by");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.Property<long>("WaterRate")
                         .HasColumnType("bigint")
