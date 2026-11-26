@@ -1,4 +1,12 @@
-@if (invoice(); as inv) {
+@if (status() === 'idle' || status() === 'loading') {
+  <p class="muted" role="status">Đang tải hóa đơn…</p>
+} @else if (status() === 'error') {
+  <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ error() }}</span><button type="button" class="btn sec sm" (click)="retry()">Thử lại</button></div>
+} @else if (!invoice() && detailStatus() === 'loading') {
+  <p class="muted" role="status">Đang tải hóa đơn…</p>
+} @else if (!invoice() && detailStatus() === 'error') {
+  <div class="banner err" role="alert"><app-icon name="i-alert" /><span>{{ detailError() }}</span><button type="button" class="btn sec sm" (click)="retryDetail()">Thử lại</button></div>
+} @else if (invoice(); as inv) {
   @let p = payment();
 
   <ng-template #copyFail>
@@ -27,10 +35,12 @@
         </a>
       } @else {
         <div class="next">
-          <span><b>Kỳ tiếp theo · {{ n.period | period }}</b><span class="small muted">Chủ nhà ghi chỉ số {{ n.window }}</span></span>
-          <button type="button" class="btn sm sec" [attr.aria-pressed]="notify()" (click)="notify.set(!notify())">
-            @if (notify()) { <app-icon name="i-check" size="sm" />Sẽ báo qua email } @else { Báo tôi }
-          </button>
+          <span><b>Kỳ tiếp theo · {{ n.period | period }}</b><span class="small muted">@if (n.window) { Chủ nhà ghi chỉ số {{ n.window }} } @else { Hóa đơn đến sau khi chủ nhà ghi và duyệt chỉ số }</span></span>
+          @if (sample) {
+            <button type="button" class="btn sm sec" [attr.aria-pressed]="notify()" (click)="notify.set(!notify())">
+              @if (notify()) { <app-icon name="i-check" size="sm" />Sẽ báo qua email } @else { Báo tôi }
+            </button>
+          }
         </div>
       }
     }
@@ -64,6 +74,9 @@
       } @else {
         <aside class="panel" aria-labelledby="pay-title">
           <h2 id="pay-title">Chuyển khoản</h2>
+          @if (!p) {
+          <p class="small muted">{{ noPaymentText }}</p>
+          } @else {
           @if (p.qrImageUrl) {
             <p class="small muted">Mở ứng dụng ngân hàng trên điện thoại và quét mã. Số tiền và nội dung đã điền sẵn.</p>
             <img class="qr" [ngSrc]="p.qrImageUrl" width="200" height="200" [alt]="'Mã QR chuyển khoản ' + (inv.total | vnd) + ' tới ' + p.accountHolder + ', nội dung ' + p.transferNote">
@@ -75,6 +88,7 @@
             <div class="stack"><dt>Nội dung</dt><dd><b>{{ p.transferNote }}</b><button type="button" class="btn sec sm" (click)="copy('note')" aria-label="Sao chép nội dung chuyển khoản"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'note' }" /></button></dd></div>
             <div><dt>Số tiền</dt><dd><b>{{ inv.total | vnd }}</b><button type="button" class="btn sec sm" (click)="copy('amount')" aria-label="Sao chép số tiền"><ng-container [ngTemplateOutlet]="copyLabel" [ngTemplateOutletContext]="{ $implicit: 'amount' }" /></button></dd></div>
           </dl>
+          }
           <ng-container [ngTemplateOutlet]="copyFail" />
           <p class="small muted">Chủ nhà đánh dấu “Đã thanh toán” khi nhận được tiền. Bạn sẽ thấy trạng thái ở đây.</p>
         </aside>
@@ -93,6 +107,9 @@
       <app-receipt [invoice]="inv" (photo)="openPhoto($event)" />
       <section class="m-pay" aria-labelledby="m-pay-title">
         <h2 id="m-pay-title">Chuyển khoản</h2>
+        @if (!p) {
+        <p class="small muted">{{ noPaymentText }}</p>
+        } @else {
         <dl class="bank">
           <div><dt>Ngân hàng</dt><dd>{{ p.bankName }}</dd></div>
           <div><dt>Số tài khoản</dt><dd><b>{{ p.accountNumber }}</b></dd></div>
@@ -105,6 +122,7 @@
         </button>
         <ng-container [ngTemplateOutlet]="copyFail" />
         <p class="small muted">Dán từng mục vào ứng dụng ngân hàng. Ghi đúng nội dung {{ p.transferNote }} để chủ nhà nhận ra khoản tiền của bạn.</p>
+        }
       </section>
     }
     <a class="btn sec block dispute" routerLink="/tenant/disputes/new" [queryParams]="{ invoice: inv.invoiceId }"><app-icon name="i-talk" />Khiếu nại hóa đơn này</a>

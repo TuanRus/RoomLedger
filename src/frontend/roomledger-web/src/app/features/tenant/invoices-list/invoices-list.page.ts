@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 import { InvoiceSummary } from '../../../core/data/models';
+import { TenantHomeStore } from '../../../core/data/tenant-home.store';
 import { TenantInvoiceStore } from '../../../core/data/tenant-invoice.store';
 import { Viewport } from '../../../core/layout/viewport';
 import { PeriodPipe, VndPipe } from '../../../shared/pipes/format.pipes';
@@ -25,7 +26,18 @@ export function matchesFilter(inv: InvoiceSummary, filter: InvoiceFilter): boole
 })
 export class TenantInvoicesListPage {
   private readonly store = inject(TenantInvoiceStore);
+  private readonly home = inject(TenantHomeStore);
   protected readonly viewport = inject(Viewport);
+
+  protected readonly status = this.store.status;
+  protected readonly error = this.store.error;
+  /** Room and property: from the tenant's room, else from the newest invoice. */
+  protected readonly roomCode = computed(() => this.home.roomCode() || this.store.latest()?.roomCode || '');
+  protected readonly propertyName = computed(() => this.home.propertyName() || this.store.latest()?.propertyName || '');
+
+  protected retry(): void {
+    this.store.load();
+  }
 
   protected readonly filter = signal<InvoiceFilter>('all');
   protected readonly filters = computed(() => [
