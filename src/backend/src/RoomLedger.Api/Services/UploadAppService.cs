@@ -25,7 +25,7 @@ public record FileRules(IReadOnlyDictionary<string, string> Extensions, long Max
  * @author Tuấn
  * @version 1.1
  */
-public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage storage)
+public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage storage, PaymentInfoAppService payments)
 {
     public static readonly TimeSpan UploadLifetime = TimeSpan.FromMinutes(5);
     public const int MaxPhotosPerArea = 20;
@@ -45,7 +45,7 @@ public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage stora
         Core.Services.TenancyService.MaxScanBytes);
 
     /**
-     * Tạo presigned URL theo targetType: INSPECTION (kèm areaId), TENANCY_VERSION, METER_READING.
+     * Tạo presigned URL theo targetType: INSPECTION (kèm areaId), TENANCY_VERSION, METER_READING, PROPERTY_QR (targetId là propertyId).
      *
      * @author Tuấn
      * @version 1.0
@@ -63,6 +63,7 @@ public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage stora
         {
             UploadTargetType.Inspection => await ForInspectionAsync(req, ct),
             UploadTargetType.TenancyVersion => await ForTenancyVersionAsync(req, ct),
+            UploadTargetType.PropertyQr => await ForPropertyQrAsync(req, ct),
             _ => await ForMeterReadingAsync(req, ct),
         };
     }
@@ -133,6 +134,8 @@ public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage stora
 
     /**
      * Khóa S3: {landlordId}/{tenancyId}/{targetId}/{fileId}.{ext}. Không có tên người, số phòng hay số điện thoại.
+     * Mã QR nhà trọ (PROPERTY_QR) dùng tenancyId = targetId = propertyId: {landlordId}/{propertyId}/{propertyId}/{fileId}.{ext}
+     * trong incoming; sau khi xác nhận được chép sang derived: qr/{landlordId}/{propertyId}/{fileId}.{ext}.
      *
      * @author Tuấn
      * @version 1.0
@@ -234,6 +237,16 @@ public class UploadAppService(AppDbContext db, ICurrentUser user, IStorage stora
         db.Audit(AuditEventTypes.UploadRequested, nameof(TenancyFile), file.Id);
         await db.SaveChangesAsync(ct);
         return Presign(file.Id, file.IncomingKey, req);
+    }
+
+    private async Task<UploadUrlResponse> ForPropertyQrAsync(CreateUploadRequest req, CancellationToken ct)
+    {
+        if (user.Role != UserRole.Landlord)
+        {
+            throw new ForbiddenException("Chỉ chủ nhà tải được mã QR nhận tiền");
+        }
+
+        return await payments.CreateQrUploadAsync(req, ct);
     }
 
     private async Task<UploadUrlResponse> ForMeterReadingAsync(CreateUploadRequest req, CancellationToken ct)

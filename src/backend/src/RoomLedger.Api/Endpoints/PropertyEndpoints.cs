@@ -29,6 +29,24 @@ public static class PropertyEndpoints
         group.MapPost("", async (CreatePropertyRequest req, PropertyAppService svc, CancellationToken ct) =>
             ApiResults.Created(await svc.CreateAsync(req, ct), "Tạo nhà trọ thành công"));
 
+        group.MapPatch("/{propertyId:guid}", async (Guid propertyId, UpdatePropertyRequest req, PropertyAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.UpdateAsync(propertyId, req, ct), "Đã cập nhật đơn giá"));
+
+        group.MapGet("/{propertyId:guid}/payment-info", async (Guid propertyId, PaymentInfoAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.GetAsync(propertyId, ct)));
+
+        group.MapPut("/{propertyId:guid}/payment-info", async (Guid propertyId, UpdatePaymentInfoRequest req, PaymentInfoAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.UpdateAsync(propertyId, req, ct), "Đã lưu thông tin chuyển khoản"));
+
+        group.MapDelete("/{propertyId:guid}/payment-info", async (Guid propertyId, PaymentInfoAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.RemoveAllAsync(propertyId, ct), "Đã xóa thông tin chuyển khoản"));
+
+        group.MapPost("/{propertyId:guid}/payment-info/qr:confirm", async (Guid propertyId, PaymentInfoAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.ConfirmQrAsync(propertyId, ct), "Đã lưu mã QR"));
+
+        group.MapDelete("/{propertyId:guid}/payment-info/qr", async (Guid propertyId, PaymentInfoAppService svc, CancellationToken ct) =>
+            ApiResults.Ok(await svc.RemoveQrAsync(propertyId, ct), "Đã xóa mã QR"));
+
         group.MapGet("/{propertyId:guid}/rooms", async (Guid propertyId, string? status, int? limit, string? cursor,
                 RoomAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.ListAsync(propertyId, EnumQuery.Parse<RoomDisplayStatus>(status, "status"), limit, cursor, ct), "Lấy danh sách phòng thành công"));

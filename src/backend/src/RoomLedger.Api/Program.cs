@@ -56,6 +56,7 @@ var localDev = builder.IsLocalDevEnabled();
 if (localDev)
     builder.Services.AddLocalDev();
 builder.Services.AddScoped<PropertyAppService>();
+builder.Services.AddScoped<PaymentInfoAppService>();
 builder.Services.AddScoped<RoomAppService>();
 builder.Services.AddScoped<TenancyAppService>();
 builder.Services.AddScoped<AccountAppService>();

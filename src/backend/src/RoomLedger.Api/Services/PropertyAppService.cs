@@ -41,6 +41,28 @@ public class PropertyAppService(AppDbContext db, ICurrentUser user)
     }
 
     /**
+     * Đổi đơn giá mặc định của nhà trọ (chỉ chủ nhà). Hóa đơn đã lập giữ nguyên số liệu cũ.
+     * Thứ tự ưu tiên khi lập hóa đơn: giá điện, nước đã khóa trong hợp đồng thắng giá nhà trọ (giá nhà trọ là giá gợi ý
+     * khi lập điều khoản mới và giá dự phòng của hóa đơn cuối khi kết thúc hợp đồng chưa có điều khoản); phí dịch vụ luôn lấy
+     * từ nhà trọ tại lúc lập hóa đơn.
+     *
+     * @author Tuấn
+     * @version 1.0
+     */
+    public async Task<PropertyResponse> UpdateAsync(Guid propertyId, UpdatePropertyRequest req, CancellationToken ct)
+    {
+        var property = await GetOwnedAsync(propertyId, ct);
+        RoomService.ValidatePropertyRates(req.ElectricityRate, req.WaterRate, req.ServiceFee);
+        property.ElectricityRate = req.ElectricityRate ?? property.ElectricityRate;
+        property.WaterRate = req.WaterRate ?? property.WaterRate;
+        property.ServiceFee = req.ServiceFee ?? property.ServiceFee;
+        db.Audit(AuditEventTypes.PropertyUpdated, nameof(Property), property.Id);
+        await db.SaveChangesAsync(ct);
+        var roomCount = await db.Rooms.CountAsync(r => r.PropertyId == property.Id, ct);
+        return ToResponse(property, roomCount);
+    }
+
+    /**
      * Danh sách nhà trọ của chủ nhà, mới nhất trước, phân trang keyset.
      *
      * @author Tuấn

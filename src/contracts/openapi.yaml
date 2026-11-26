@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: RoomLedger API
-  version: 0.5.1
+  version: 0.6.0
   description: |
     Hợp đồng API giữa Backend và Frontend (tab 4 "API cho FE").
     Phiên bản x.y.z: sửa chính tả, từ ngữ → z; thêm, bớt, đổi endpoint hoặc trường → y; làm lại lớn → x.
@@ -10,6 +10,7 @@ info:
     0.4.1: POST /uploads ghi rõ 403 FORBIDDEN khi chủ nhà gửi ảnh vào biên bản trả phòng (BR-25); không đổi endpoint hay trường.
     0.5.0: MD-07 kết thúc hợp đồng và chuyển phòng (POST, GET, DELETE /tenancies/{tenancyId}/end, POST /tenancies/{tenancyId}/end:finish), ALREADY_INVOICED, lý do bỏ qua ENDING_TENANCY khi lập hóa đơn hàng loạt.
     0.5.1: EndTenancyResponse.deposit (chỉ hiển thị); chỉ số điện nước duy nhất theo (hợp đồng, kỳ, đồng hồ) để người thuê sau dùng lại cùng kỳ; hủy kết thúc xóa chỉ số cuối chưa xác nhận; sự kiện TenancyMoved khi chuyển phòng.
+    0.6.0: thông tin chuyển khoản theo nhà trọ (GET, PUT /properties/{propertyId}/payment-info, mã QR qua POST /uploads PROPERTY_QR rồi POST payment-info/qr:confirm, DELETE payment-info/qr, DELETE payment-info), PATCH /properties/{propertyId} đổi đơn giá, InvoiceDetailResponse.payment, QR_NOT_UPLOADED.
     Bản này có đầy đủ MD-01, MD-02, MD-03, MD-05 và POST /uploads (Tuấn).
     Các endpoint MD-04, MD-06, MD-07 do Sang bổ sung.
     Mọi phản hồi thành công có dạng {success, message, data}; lỗi có dạng ApiError.
@@ -75,6 +76,66 @@ paths:
       responses:
         "201": { $ref: "#/components/responses/Property" }
         "400": { $ref: "#/components/responses/Error" }
+  /properties/{propertyId}:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    patch:
+      tags: [MD-02]
+      summary: Đổi đơn giá điện, nước, phí dịch vụ của nhà trọ (chỉ chủ nhà)
+      description: "Chỉ gửi trường cần đổi (ít nhất một trường, thiếu thì VALIDATION_ERROR với field body); luật giá trị như POST /properties. Giá mới áp cho hóa đơn lập sau đó, hóa đơn đã lập giữ nguyên. Thứ tự ưu tiên: giá điện, nước đã khóa trong hợp đồng (phiên bản LOCKED) thắng giá nhà trọ khi lập hóa đơn; giá nhà trọ là giá gợi ý khi lập điều khoản mới và giá dự phòng cho hóa đơn cuối khi hợp đồng chưa có điều khoản. Phí dịch vụ luôn lấy từ nhà trọ lúc lập hóa đơn."
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdatePropertyRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/Property" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /properties/{propertyId}/payment-info:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    get:
+      tags: [MD-05]
+      summary: Thông tin chuyển khoản của nhà trọ (chủ nhà)
+      responses:
+        "200": { $ref: "#/components/responses/PaymentInfo" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [MD-05]
+      summary: Lưu ngân hàng, số tài khoản, chủ tài khoản và mẫu nội dung chuyển khoản
+      description: "Số tài khoản được lưu chỉ gồm chữ số. Mẫu bỏ trống thì dùng mặc định \"{room} T{month}\"; chỉ cho phép {room} (mã phòng bỏ dấu chấm, khoảng trắng: P.204 → P204), {month} (2 chữ số), {year} (4 chữ số), {period} (YYYY-MM)."
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/UpdatePaymentInfoRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/PaymentInfo" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [MD-05]
+      summary: Xóa toàn bộ thông tin chuyển khoản (kèm mã QR)
+      description: "Xóa ngân hàng, số tài khoản, chủ tài khoản, mẫu nội dung và mã QR (file trên S3 xóa best-effort). Hóa đơn sau đó có payment = null."
+      responses:
+        "200": { $ref: "#/components/responses/PaymentInfo" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+  /properties/{propertyId}/payment-info/qr:confirm:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    post:
+      tags: [MD-05]
+      summary: Xác nhận đã tải mã QR lên S3
+      description: "Gọi sau khi PUT file lên link từ POST /uploads (targetType PROPERTY_QR). Hệ thống kiểm file có trên S3 và ≤ 2 MB, chép sang nơi lưu bền, thay QR cũ (nếu có) rồi qrStatus = RECEIVED. QR cũ vẫn dùng được cho tới lúc xác nhận thành công. Gọi lại khi không có yêu cầu tải mới và đã có QR thì trả thông tin hiện tại (200). Chủ nhà xin link tải mới giữa lúc đang xác nhận → 409 VERSION_CONFLICT (yêu cầu mới được giữ)."
+      responses:
+        "200": { $ref: "#/components/responses/PaymentInfo" }
+        "400": { description: "INVALID_FILE (file quá 2 MB, đã bị xóa)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "QR_NOT_UPLOADED (chưa thấy file trên S3, tải lại rồi xác nhận lại), INVALID_STATE (chưa xin link tải lên) hoặc VERSION_CONFLICT (vừa xin link tải mới)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /properties/{propertyId}/payment-info/qr:
+    parameters: [{ $ref: "#/components/parameters/PropertyId" }]
+    delete:
+      tags: [MD-05]
+      summary: Xóa mã QR nhận tiền
+      responses:
+        "200": { $ref: "#/components/responses/PaymentInfo" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
   /properties/{propertyId}/rooms:
     parameters: [{ $ref: "#/components/parameters/PropertyId" }]
     get:
@@ -601,6 +662,7 @@ components:
     GenerateInvoices: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/GenerateInvoicesResponse" } } }] } } } }
     Invoice: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvoiceResponse" } } }] } } } }
     InvoicePage: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { type: object, properties: { items: { type: array, items: { $ref: "#/components/schemas/InvoiceResponse" } }, nextCursor: { type: string, nullable: true } } } } }] } } } }
+    PaymentInfo: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/PaymentInfoResponse" } } }] } } } }
     InvoiceDetail: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InvoiceDetailResponse" } } }] } } } }
     Dispute: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/DisputeResponse" } } }] } } } }
     Inspection: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InspectionResponse" } } }] } } } }
@@ -623,7 +685,7 @@ components:
         errorCode:
           type: string
           enum: [VALIDATION_ERROR, INVALID_EMAIL, INVALID_FILE, INVALID_PERIOD, UNAUTHORIZED, FORBIDDEN, INVITE_EMAIL_MISMATCH, NOT_FOUND,
-                 RECORD_LOCKED, INVALID_STATE, VERSION_CONFLICT, ROOM_CODE_EXISTS, ROOM_OCCUPIED, PERIOD_CLOSED, ALREADY_INVOICED, FINAL_READING_MISSING, INVITE_INVALID, INTERNAL_ERROR]
+                 RECORD_LOCKED, INVALID_STATE, VERSION_CONFLICT, ROOM_CODE_EXISTS, ROOM_OCCUPIED, PERIOD_CLOSED, ALREADY_INVOICED, FINAL_READING_MISSING, QR_NOT_UPLOADED, INVITE_INVALID, INTERNAL_ERROR]
         traceId: { type: string }
         details:
           type: array
@@ -646,7 +708,7 @@ components:
     InvoiceStatus: { type: string, enum: [DRAFT, SENT, PAID, DISPUTED] }
     DisputeStatus: { type: string, enum: [OPEN, RESOLVED] }
     DisputeResolution: { type: string, enum: [CORRECTED, KEPT] }
-    UploadTargetType: { type: string, enum: [INSPECTION, TENANCY_VERSION, METER_READING] }
+    UploadTargetType: { type: string, enum: [INSPECTION, TENANCY_VERSION, METER_READING, PROPERTY_QR] }
 
     MeResponse:
       type: object
@@ -717,6 +779,38 @@ components:
         serviceFee: { $ref: "#/components/schemas/Money" }
         roomCount: { type: integer }
         createdAt: { type: string, format: date-time }
+    UpdatePropertyRequest:
+      type: object
+      description: Chỉ gửi trường cần đổi, ít nhất một trường
+      properties:
+        electricityRate: { type: integer, format: int64, minimum: 1, description: VND/kWh }
+        waterRate: { type: integer, format: int64, minimum: 1, description: VND/m³ }
+        serviceFee: { type: integer, format: int64, minimum: 0 }
+    UpdatePaymentInfoRequest:
+      type: object
+      required: [bankName, accountNumber, accountHolder]
+      properties:
+        bankName: { type: string, minLength: 1, maxLength: 100 }
+        accountNumber: { type: string, maxLength: 40, description: "Chỉ chữ số và khoảng trắng, 6 đến 20 chữ số; lưu lại chỉ còn chữ số" }
+        accountHolder: { type: string, minLength: 1, maxLength: 100 }
+        transferNoteTemplate: { type: string, maxLength: 100, nullable: true, description: "Chỉ dùng {room} {month} {year} {period}; bỏ trống = \"{room} T{month}\"" }
+    PaymentInfoResponse:
+      type: object
+      properties:
+        bankName: { type: string, nullable: true }
+        accountNumber: { type: string, nullable: true }
+        accountHolder: { type: string, nullable: true }
+        transferNoteTemplate: { type: string, example: "{room} T{month}" }
+        qrUrl: { type: string, nullable: true, description: "Presigned GET 1 giờ, chỉ có khi QR đã RECEIVED" }
+        qrStatus: { type: string, allOf: [{ $ref: "#/components/schemas/FileStatus" }], nullable: true, description: "RECEIVED khi đã có QR, PENDING_UPLOAD khi mới xin link tải lên chưa xác nhận, null khi không có" }
+    PaymentResponse:
+      type: object
+      properties:
+        bankName: { type: string }
+        accountNumber: { type: string }
+        accountHolder: { type: string }
+        transferNote: { type: string, example: "P204 T11", description: Mẫu nội dung đã điền cho hóa đơn này }
+        qrUrl: { type: string, nullable: true, description: Presigned GET 1 giờ }
     AreaRequest:
       type: object
       required: [name, minPhotos]
@@ -859,11 +953,11 @@ components:
       required: [targetType, targetId, fileName, contentType, size, sha256]
       properties:
         targetType: { $ref: "#/components/schemas/UploadTargetType" }
-        targetId: { type: string, format: uuid, description: "inspectionId, versionId hoặc readingId" }
+        targetId: { type: string, format: uuid, description: "inspectionId, versionId, readingId hoặc propertyId (PROPERTY_QR)" }
         areaId: { type: string, format: uuid, description: Bắt buộc khi INSPECTION }
         fileName: { type: string, maxLength: 255 }
-        contentType: { type: string, enum: [image/jpeg, image/png, image/heic, image/heif, application/pdf], description: PDF chỉ cho TENANCY_VERSION }
-        size: { type: integer, format: int64, description: "Ảnh ≤ 25 MB, scan ≤ 20 MB" }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/heic, image/heif, image/webp, application/pdf], description: "PDF chỉ cho TENANCY_VERSION; PROPERTY_QR chỉ nhận png, jpeg, webp" }
+        size: { type: integer, format: int64, description: "Ảnh ≤ 25 MB, scan ≤ 20 MB, mã QR ≤ 2 MB" }
         sha256: { $ref: "#/components/schemas/Sha256Base64" }
         captureSource: { type: string, enum: [CAMERA, GALLERY], description: "Chỉ cho INSPECTION: chụp trong app hoặc chọn từ thư viện; không gửi = GALLERY. Hai bên thấy nhãn này" }
     UploadUrlResponse:
@@ -979,6 +1073,7 @@ components:
         sentAt: { type: string, format: date-time, nullable: true }
         paidAt: { type: string, format: date-time, nullable: true }
         disputes: { type: array, items: { $ref: "#/components/schemas/DisputeResponse" } }
+        payment: { type: object, allOf: [{ $ref: "#/components/schemas/PaymentResponse" }], nullable: true, description: "Thông tin chuyển khoản của nhà trọ; null khi chủ nhà chưa nhập đủ ngân hàng, số tài khoản, chủ tài khoản" }
     CreateDisputeRequest:
       type: object
       required: [readingId, reason]

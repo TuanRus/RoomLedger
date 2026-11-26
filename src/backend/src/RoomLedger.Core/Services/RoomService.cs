@@ -40,6 +40,31 @@ public static class RoomService
     }
 
     /**
+     * Kiểm dữ liệu PATCH nhà trọ: trường nào gửi thì phải hợp lệ như lúc tạo (giá điện nước > 0, phí dịch vụ ≥ 0); phải gửi ít nhất một trường.
+     *
+     * @author Tuấn
+     * @version 1.0
+     */
+    public static void ValidatePropertyRates(long? electricityRate, long? waterRate, long? serviceFee)
+    {
+        var v = new Validator()
+            .Require(electricityRate is not null || waterRate is not null || serviceFee is not null,
+                "body", "Cần gửi ít nhất một trường cần đổi");
+        if (electricityRate is not null)
+        {
+            v.Positive(electricityRate, "electricityRate", "Giá điện");
+        }
+
+        if (waterRate is not null)
+        {
+            v.Positive(waterRate, "waterRate", "Giá nước");
+        }
+
+        v.Require(serviceFee is null or >= 0, "serviceFee", "Phí dịch vụ không được âm");
+        v.ThrowIfInvalid();
+    }
+
+    /**
      * Kiểm dữ liệu phòng (BR-06 RULE 2) và trả danh sách khu vực đã chuẩn hóa,
      * tự thêm khu vực "Đồng hồ điện nước" nếu chủ nhà chưa có.
      *
