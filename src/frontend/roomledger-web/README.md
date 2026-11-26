@@ -12,6 +12,17 @@ ng serve
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
+## Data source: sample data or the real API
+
+| Command | Data | Sign-in |
+|---|---|---|
+| `pnpm start` | Sample data in `src/app/core/data` (`dataSource: 'sample'`) | none, role picker at `/preview` |
+| `pnpm start:local-api` | Backend on this machine in LocalDev mode, through `proxy.local-api.json` (`/api` → `http://localhost:5000`) | role picker at `/preview` sends `X-Dev-User` |
+| `ng build` (production) | API at `environment.production.ts` | Cognito |
+
+Run the backend and the seed first (see `src/backend/README.md`, "LocalDev"). In API mode every landlord and
+tenant screen reads the API; fields the API does not have yet show as empty (`API-GAPS.md` lists them).
+
 ## Code scaffolding
 
 Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
