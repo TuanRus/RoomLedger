@@ -40,7 +40,7 @@ public class Function
     private static readonly DefaultLambdaJsonSerializer Serializer = new();
 
     /**
-     * Lô tin từ SQS; thân mỗi tin là nguyên sự kiện EventBridge PhotoReceived. Xử lý từng ảnh, ảnh lỗi (kể cả tin
+     * Lô tin từ SQS; thân mỗi tin là sự kiện "Object Created" của bucket outbox (PhotoReceived). Xử lý từng ảnh, ảnh lỗi (kể cả tin
      * không đọc được) được báo lại riêng để các ảnh khác trong lô không bị xử lý lại.
      *
      * @author Sang
@@ -54,7 +54,8 @@ public class Function
             try
             {
                 using var body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(message.Body));
-                await HandleAsync(Serializer.Deserialize<CloudWatchEvent<PhotoEventDetail>>(body), context);
+                var created = Serializer.Deserialize<CloudWatchEvent<S3ObjectCreatedDetail>>(body);
+                await HandleAsync(await OutboxEvent.ReadAsync<PhotoEventDetail>(_store, created, CancellationToken.None), context);
             }
             catch (Exception e)
             {

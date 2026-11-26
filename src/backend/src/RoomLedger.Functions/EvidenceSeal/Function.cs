@@ -12,7 +12,7 @@ using RoomLedger.Infrastructure.Persistence;
 namespace RoomLedger.Functions.EvidenceSeal;
 
 /**
- * Sự kiện InspectionLocked (EventBridge, trong VPC): niêm phong ảnh biên bản (BR-18 RULE 4).
+ * Sự kiện InspectionLocked (outbox S3 → EventBridge, trong VPC): niêm phong ảnh biên bản (BR-18 RULE 4).
  * Với mỗi ảnh READY: kiểm SHA-256 ảnh gốc trong incoming → chép sang bucket evidence (Object Lock, ghi một lần)
  * cùng khóa → kiểm lại SHA-256 bản trong evidence → ghi EvidenceKey, ObjectVersionId, READY → SEALED.
  * Ảnh gốc sai hash không được chép (bucket Object Lock không xóa được), ghi EVIDENCE_HASH_MISMATCH và ném lỗi
@@ -35,6 +35,10 @@ public class Function
         _db = db;
         _store = store;
     }
+
+    /** Điểm vào Lambda: nhận "Object Created" của bucket outbox. */
+    public async Task HandleOutboxAsync(CloudWatchEvent<S3ObjectCreatedDetail> input, ILambdaContext context) =>
+        await HandleAsync(await OutboxEvent.ReadAsync<InspectionLockedDetail>(_store, input, CancellationToken.None), context);
 
     public async Task HandleAsync(CloudWatchEvent<InspectionLockedDetail> input, ILambdaContext context)
     {
