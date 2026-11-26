@@ -5,6 +5,7 @@ import { FieldTree, FormField, form, schema, submit, validate } from '@angular/f
 import { Viewport } from '../../../core/layout/viewport';
 import { VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
+import { LoadState } from '../shared/load-state';
 import { formatMoney, moneyError, parseMoney } from '../settings/settings.model';
 import {
   Contract,
@@ -14,6 +15,7 @@ import {
   ddmmyyyy,
   endDateFor,
   fileSize,
+  hasNoTenancy,
   isDraft,
   lastSent,
   latest,
@@ -70,7 +72,7 @@ function fromTermsForm(f: TermsForm): ContractTerms {
 /** LL-07: contracts per room, scanned pages, terms the landlord typed from the scan, versions and tenant answers. */
 @Component({
   selector: 'app-contracts-page',
-  imports: [NgOptimizedImage, NgTemplateOutlet, FormField, Icon, VndPipe],
+  imports: [NgOptimizedImage, NgTemplateOutlet, FormField, Icon, LoadState, VndPipe],
   templateUrl: './contracts.page.html',
   styleUrl: './contracts.page.scss',
 })
@@ -85,8 +87,19 @@ export class ContractsPage {
   protected readonly fileSize = fileSize;
   protected readonly isDraft = isDraft;
 
-  /** Phone opens on the list; computer opens the contract that needs attention. */
-  protected readonly selectedId = signal<string | null>(this.viewport.isPhone() ? null : 't-305');
+  /**
+   * Phone opens on the list; computer opens the contract that needs attention (P.305 in the sample;
+   * with the API the first one the tenant reported as wrong, else the first in the list).
+   */
+  protected readonly selectedId = linkedSignal<Contract[], string | null>({
+    source: this.store.contracts,
+    computation: (list, previous) => {
+      if (previous?.value && list.some((c) => c.tenancyId === previous.value)) return previous.value;
+      if (this.viewport.isPhone()) return null;
+      if (this.store.sample) return 't-305';
+      return (list.find((c) => contractChip(c).tone === 'err') ?? list[0])?.tenancyId ?? null;
+    },
+  });
   protected readonly selected = computed(() => this.store.byId(this.selectedId()));
   protected readonly current = computed(() => { const c = this.selected(); return c ? latest(c) : undefined; });
   protected readonly sent = computed(() => { const c = this.selected(); return c ? lastSent(c) : undefined; });
@@ -119,8 +132,19 @@ export class ContractsPage {
   private readonly objectUrls: string[] = [];
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.objectUrls.forEach((u) => URL.revokeObjectURL(u)));
+    this.store.refreshIfStale();
+    // The file links from the API last 5 minutes: read the shown contract again before they expire.
+    const timer = setInterval(() => {
+      const id = this.selectedId();
+      if (id) this.store.refreshLinks(id);
+    }, 30_000);
+    inject(DestroyRef).onDestroy(() => {
+      clearInterval(timer);
+      this.objectUrls.forEach((u) => URL.revokeObjectURL(u));
+    });
   }
+
+  protected readonly noTenancy = hasNoTenancy;
 
   protected select(c: Contract): void {
     this.selectedId.set(c.tenancyId);
@@ -182,8 +206,21 @@ export class ContractsPage {
     this.sendError.set(d.files.length ? null : 'Tải bản scan lên trước khi gửi.');
     const ok = await submit(this.tf, async () => undefined);
     if (!ok || !d.files.length) return;
-    this.store.send(c.tenancyId, fromTermsForm(this.termsModel()));
-    this.notice.set(`Đã gửi phiên bản ${d.number} cho ${c.tenantName}. Người thuê nhận email, xem bản scan và xác nhận hoặc báo “Không đúng”.`);
+    const terms = fromTermsForm(this.termsModel());
+    if (this.store.sample) {
+      this.store.send(c.tenancyId, terms);
+      this.notice.set(`Đã gửi phiên bản ${d.number} cho ${c.tenantName}. Người thuê nhận email, xem bản scan và xác nhận hoặc báo “Không đúng”.`);
+      return;
+    }
+    this.store.sendByApi(c, terms).subscribe({
+      next: (status) =>
+        this.notice.set(
+          status === 'AWAITING_CONFIRM'
+            ? `Đã gửi phiên bản ${d.number} cho ${c.tenantName}. Người thuê nhận email, xem bản scan và xác nhận hoặc báo “Không đúng”.`
+            : 'Đã lưu điều khoản. Mời người thuê ở màn Phòng.',
+        ),
+      error: (err: unknown) => this.sendError.set(err instanceof Error ? err.message : 'Chưa gửi được, thử lại sau.'),
+    });
   }
 
   private addFiles(files: File[]): void {
@@ -192,13 +229,26 @@ export class ContractsPage {
     const errors = files.map(scanFileError).filter((e): e is string => e != null);
     this.uploadErrors.set(errors);
     if (errors.length) return;
+    if (!this.store.sample) {
+      this.notice.set(null);
+      this.sendError.set(null);
+      this.store.uploadScanByApi(c, files).subscribe({
+        next: (fresh) => {
+          // A room without a tenancy gets its real id once the first scan is up.
+          if (this.selectedId() === c.tenancyId) this.selectedId.set(fresh.tenancyId);
+          this.notice.set(`Đã tải ${files.length} tệp lên phiên bản ${latest(fresh)?.number ?? 1}.`);
+        },
+        error: (err: unknown) => this.uploadErrors.set([err instanceof Error ? err.message : 'Chưa tải được bản scan, thử lại sau.']),
+      });
+      return;
+    }
     const picked: ContractFile[] = files.map((file, i) => {
       const url = URL.createObjectURL(file);
       this.objectUrls.push(url);
       return { fileId: `local-${Date.now()}-${i}`, fileName: file.name, contentType: file.type || 'image/heic', size: file.size, url, local: true };
     });
-    this.store.uploadScan(c.tenancyId, picked);
     this.notice.set(null);
     this.sendError.set(null);
+    this.store.uploadScan(c.tenancyId, picked);
   }
 }

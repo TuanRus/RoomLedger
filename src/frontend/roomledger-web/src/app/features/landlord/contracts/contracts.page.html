@@ -1,3 +1,5 @@
+<app-load-state [status]="store.status()" [error]="store.error()" (retry)="store.load()" />
+
 <ng-template #chip let-spec>
   <span class="chip {{ spec.tone }}"><app-icon [name]="spec.icon" />{{ spec.label }}</span>
 </ng-template>
@@ -7,7 +9,7 @@
     @for (c of store.contracts(); track c.tenancyId) {
       <li>
         <button type="button" class="citem" [class.on]="c.tenancyId === selectedId()" [attr.aria-current]="c.tenancyId === selectedId() ? 'true' : null" (click)="select(c)">
-          <span class="ctext"><b>{{ c.roomCode }}</b><span class="small muted">{{ c.tenantName }}</span>
+          <span class="ctext"><b>{{ c.roomCode }}</b><span class="small muted">{{ c.tenantName || 'Chưa có người thuê' }}</span>
             <span><ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: contractChip(c) }" /></span></span>
           @if (viewport.isPhone()) { <app-icon name="i-chev" /> }
         </button>
@@ -39,7 +41,7 @@
         <div class="top">
           <div>
             <h1>Hợp đồng {{ c.roomCode }}</h1>
-            <p class="sub">{{ c.tenantName }}@if (v) { · {{ ddmmyyyy(v.terms.startDate) }} – {{ ddmmyyyy(v.terms.endDate) }} }</p>
+            <p class="sub">{{ c.tenantName || 'Chưa có người thuê' }}@if (v?.terms?.startDate) { · {{ ddmmyyyy(v!.terms.startDate) }} – {{ ddmmyyyy(v!.terms.endDate) }} }</p>
           </div>
           <div class="acts"><ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: contractChip(c) }" /></div>
         </div>
@@ -53,7 +55,7 @@
             <section class="card" aria-labelledby="h-scan">
               <div class="row between wrap">
                 <h2 id="h-scan">Bản scan · phiên bản {{ v?.number ?? 1 }}@if (draft()) { (nháp) }</h2>
-                @if (v?.files?.length) { <span class="small muted">{{ v!.files.length }} trang · {{ totalSize() }}</span> }
+                @if (v?.files?.length) { <span class="small muted">{{ v!.files.length }} {{ store.sample ? 'trang' : 'tệp' }} · {{ totalSize() }}</span> }
               </div>
               @if (v?.files?.length) {
                 <ul class="pages">
@@ -62,7 +64,7 @@
                       <a [href]="f.url" target="_blank" rel="noopener" [attr.aria-label]="'Mở trang ' + (i + 1) + ' bản scan hợp đồng ' + c.roomCode + ' trong thẻ mới'">
                         @if (!isImage(f)) {
                           <span class="pdf"><app-icon name="i-doc" /><span>{{ f.fileName }}</span><span class="muted">{{ fileSize(f.size) }}</span></span>
-                        } @else if (f.local) {
+                        } @else if (f.local || !store.sample) {
                           <img [src]="f.url" width="150" height="212" [alt]="'Trang ' + (i + 1) + ' bản scan hợp đồng thuê phòng'">
                         } @else {
                           <img [ngSrc]="f.url" width="150" height="212" [class.bottom]="i % 2 === 1" [alt]="'Trang ' + (i + 1) + ' bản scan hợp đồng thuê phòng'">
@@ -81,8 +83,8 @@
                   <b>@if (draft()) { Thay bản scan của phiên bản {{ draft()!.number }} } @else { Tải phiên bản {{ (v?.number ?? 0) + 1 }} lên }</b>
                   <span class="small muted">@if (viewport.isPhone()) { Chụp hoặc chọn file. } @else { Kéo file vào đây hoặc chọn file. } PDF hoặc ảnh JPG, PNG, HEIC, tối đa 20 MB. File gốc được giữ nguyên, không nén.</span>
                 </span>
-                <span class="btn sec sm">Chọn file</span>
-                <input type="file" class="sr" multiple accept="application/pdf,image/jpeg,image/png,image/heic,image/heif" (change)="onPick($event)">
+                <span class="btn sec sm">{{ store.uploading() ? 'Đang tải lên…' : 'Chọn file' }}</span>
+                <input type="file" class="sr" multiple accept="application/pdf,image/jpeg,image/png,image/heic,image/heif" [disabled]="store.uploading()" (change)="onPick($event)">
               </label>
               @if (uploadErrors().length) {
                 <div class="banner warn upl-err" role="alert"><app-icon name="i-alert" /><span>@for (e of uploadErrors(); track e) { {{ e }}<br> }</span></div>
@@ -141,6 +143,8 @@
                   <dt>Giá nước</dt><dd>{{ v.terms.waterRate | vnd }} / m³</dd>
                 </dl>
                 @if (v.status === 'AWAITING_CONFIRM') { <p class="small muted lock-note"><app-icon name="i-lock" size="sm" />Đã gửi người thuê. Muốn sửa, tải phiên bản mới lên.</p> }
+              } @else {
+                <p class="small muted">Chưa có bản scan. Tải bản scan lên trước, rồi nhập điều khoản.</p>
               }
             </section>
           </div>
@@ -149,13 +153,13 @@
             <h2 id="h-both">Xác nhận của hai bên</h2>
             <ul class="list parties">
               <li class="list-item">
-                <span class="av" aria-hidden="true">LL</span>
-                <div class="grow">{{ store.landlordName }} · chủ nhà<p class="small muted">Tải phiên bản {{ v?.number }} lên {{ ddmmyyyy(v?.uploadedAt) }}</p></div>
-                <span class="chip ok"><app-icon name="i-check" />Đã tải lên</span>
+                <span class="av" aria-hidden="true">{{ store.landlordInitials() }}</span>
+                <div class="grow">{{ store.landlordName() }} · chủ nhà<p class="small muted">@if (v) { Phiên bản {{ v.number }}@if (v.uploadedAt) { · tải lên {{ ddmmyyyy(v.uploadedAt) }} } } @else { Chưa tải bản scan }</p></div>
+                @if (v) { <span class="chip ok"><app-icon name="i-check" />Đã tải lên</span> } @else { <span class="chip neu"><app-icon name="i-doc" />Chưa có</span> }
               </li>
               <li class="list-item">
-                <span class="av tenant" aria-hidden="true">{{ initials(c.tenantName) }}</span>
-                <div class="grow">{{ c.tenantName }} · người thuê<p class="small muted">@if (sent(); as s) { Phiên bản {{ s.number }} · {{ ddmmyyyy(s.tenantRespondedAt ?? s.sentAt) }} } @else { Chưa gửi }</p></div>
+                <span class="av tenant" aria-hidden="true">{{ c.tenantName ? initials(c.tenantName) : '—' }}</span>
+                <div class="grow">{{ c.tenantName || 'Chưa có người thuê' }} · người thuê<p class="small muted">@if (sent(); as s) { Phiên bản {{ s.number }} · {{ ddmmyyyy(s.tenantRespondedAt ?? s.sentAt) }} } @else { Chưa gửi }</p></div>
                 <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: tenant() }" />
               </li>
             </ul>
@@ -169,7 +173,7 @@
               <ul class="vlist">
                 @for (h of history(); track h.number) {
                   <li>
-                    <span>Phiên bản {{ h.number }} · {{ h.note ?? ddmmyyyy(h.uploadedAt) }}</span>
+                    <span>Phiên bản {{ h.number }}@if (h.note ?? h.uploadedAt; as when) { · {{ h.note ?? ddmmyyyy(h.uploadedAt) }} }</span>
                     <ng-container [ngTemplateOutlet]="chip" [ngTemplateOutletContext]="{ $implicit: versionChip(h.status) }" />
                   </li>
                 }
@@ -178,7 +182,7 @@
 
             @if (draft(); as d) {
               @if (sendError()) { <p class="err-line" role="alert"><app-icon name="i-alert" />{{ sendError() }}</p> }
-              <button type="button" class="btn block" (click)="send()"><app-icon name="i-mail" />Gửi phiên bản {{ d.number }} cho người thuê</button>
+              <button type="button" class="btn block" [disabled]="store.sending()" (click)="send()"><app-icon name="i-mail" />{{ store.sending() ? 'Đang lưu…' : 'Gửi phiên bản ' + d.number + ' cho người thuê' }}</button>
             }
           </aside>
         </div>
