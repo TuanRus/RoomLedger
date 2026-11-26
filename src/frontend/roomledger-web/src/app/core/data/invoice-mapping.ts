@@ -1,5 +1,5 @@
 import type { components } from '../../generated/api-types';
-import { InvoiceDetail, InvoiceDispute, UtilityLine } from './models';
+import { InvoiceDetail, InvoiceDispute, PaymentInfo, UtilityLine } from './models';
 
 export type InvoiceDetailResponse = components['schemas']['InvoiceDetailResponse'];
 type DisputeResponse = components['schemas']['DisputeResponse'];
@@ -29,6 +29,12 @@ export function toDispute(d: DisputeResponse): InvoiceDispute {
   };
 }
 
+export function toPayment(p: InvoiceDetailResponse['payment']): PaymentInfo | null {
+  return p
+    ? { bankName: p.bankName ?? '', accountNumber: p.accountNumber ?? '', accountHolder: p.accountHolder ?? '', transferNote: p.transferNote ?? '', qrImageUrl: p.qrUrl ?? null }
+    : null;
+}
+
 /** InvoiceDetailResponse -> the screen model. dueDate is not in the API yet (API-GAPS.md). */
 export function toInvoiceDetail(d: InvoiceDetailResponse): InvoiceDetail {
   return {
@@ -46,5 +52,6 @@ export function toInvoiceDetail(d: InvoiceDetailResponse): InvoiceDetail {
     paidAt: d.paidAt ?? null,
     dueDate: null,
     disputes: (d.disputes ?? []).map(toDispute),
+    payment: toPayment(d.payment),
   };
 }

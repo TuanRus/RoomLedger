@@ -65,6 +65,8 @@ export interface InvoiceDetail {
   dueDate: string | null;
   /** Disputes raised on this invoice (DisputeResponse); absent in the sample data. */
   disputes?: InvoiceDispute[];
+  /** Bank transfer details of the property; null when the landlord has not entered them. Absent in the sample data. */
+  payment?: PaymentInfo | null;
 }
 
 /** DisputeResponse with the optional fields made explicit. */
@@ -88,7 +90,7 @@ export interface InvoiceSummary {
 }
 
 /**
- * The landlord's bank transfer details shown on a tenant invoice. Not in the API contract yet.
+ * The landlord's bank transfer details shown on an invoice (InvoiceDetailResponse.payment); transferNote is already filled for that invoice.
  * On a computer the tenant sees qrImageUrl; on a phone only a button that copies accountNumber.
  */
 export interface PaymentInfo {
