@@ -12,7 +12,7 @@
       @if (store.sample) {
         <p class="sub">Áp dụng cho hóa đơn từ kỳ {{ store.nextPeriod | period }}. Hóa đơn đã tạo không đổi.</p>
       } @else {
-        <p class="sub">Đơn giá điện nước và tiền phòng của nhà trọ.</p>
+        <p class="sub">Đơn giá điện nước, phí dịch vụ và tiền phòng của nhà trọ.</p>
       }
     </div>
     <div class="acts">
@@ -45,7 +45,7 @@
             <span class="unit">đ / kWh</span>
           </div>
           @if (eErr) { <span class="err" id="p-e-h"><app-icon name="i-alert" />{{ eErr }}</span> }
-          @else { <span class="help" id="p-e-h">Hiện tại {{ s.electricityRate | vnd }}/kWh@if (!store.sample) { · chưa đổi được đơn giá qua hệ thống. } </span> }
+          @else { <span class="help" id="p-e-h">Hiện tại {{ s.electricityRate | vnd }}/kWh@if (!store.sample) { · Giá điện, nước mới dùng cho hợp đồng mới; hợp đồng đang chạy giữ giá đã ký. }</span> }
         </div>
         <div class="field">
           <label for="p-w">Giá nước</label>
@@ -55,7 +55,17 @@
             <span class="unit">đ / m³</span>
           </div>
           @if (wErr) { <span class="err" id="p-w-h"><app-icon name="i-alert" />{{ wErr }}</span> }
-          @else { <span class="help" id="p-w-h">Hiện tại {{ s.waterRate | vnd }}/m³@if (!store.sample) { · chưa đổi được đơn giá qua hệ thống. } </span> }
+          @else { <span class="help" id="p-w-h">Hiện tại {{ s.waterRate | vnd }}/m³</span> }
+        </div>
+        <div class="field">
+          <label for="p-s">Phí dịch vụ</label>
+          @let sErr = errOf(f.serviceFee);
+          <div class="input" [class.is-error]="sErr">
+            <input id="p-s" inputmode="numeric" autocomplete="off" [formField]="f.serviceFee" [attr.aria-invalid]="!!sErr" aria-describedby="p-s-h">
+            <span class="unit">đ / tháng</span>
+          </div>
+          @if (sErr) { <span class="err" id="p-s-h"><app-icon name="i-alert" />{{ sErr }}</span> }
+          @else { <span class="help" id="p-s-h">Hiện tại {{ s.serviceFee | vnd }}/tháng@if (!store.sample) { · Phí dịch vụ mới áp dụng cho hóa đơn lập sau khi lưu. } </span> }
         </div>
       </section>
 
@@ -149,18 +159,20 @@
         }
       </section>
 
-      @if (!store.sample) {
-        <section class="bank" aria-labelledby="h-bank">
-          <span class="h2" id="h-bank">Thông tin chuyển khoản</span>
-          <p class="muted">Chưa có dữ liệu chuyển khoản trên hệ thống.</p>
-        </section>
-      } @else {
       <section class="bank" aria-labelledby="h-bank">
+        @if (store.sample) {
         <label class="switch-row">
           <span><span class="h2" id="h-bank">Thông tin chuyển khoản</span><span class="small muted block">Không bắt buộc. Hiện trên hóa đơn để người thuê biết cách trả tiền.</span></span>
           <input type="checkbox" role="switch" class="sr" aria-label="Hiện thông tin chuyển khoản trên hóa đơn" [formField]="f.bankEnabled">
           <span class="toggle" [class.on]="m.bankEnabled" aria-hidden="true"></span>
         </label>
+        } @else {
+        <span class="h2" id="h-bank">Thông tin chuyển khoản</span>
+        <span class="small muted block">Không bắt buộc. Điền đủ ngân hàng, số tài khoản và chủ tài khoản thì người thuê thấy trên hóa đơn.</span>
+        @if (store.paymentError(); as payErr) {
+          <div class="banner warn msg" role="alert"><app-icon name="i-alert" /><span>{{ payErr }}</span><button type="button" class="btn sec sm" (click)="store.reload()">Thử lại</button></div>
+        }
+        }
 
         @if (m.bankEnabled) {
           <div class="bank-grid">
@@ -168,7 +180,8 @@
               <label for="b-n">Ngân hàng</label>
               @let bnErr = errOf(f.bankName);
               <select id="b-n" class="input" [formField]="f.bankName" [attr.aria-invalid]="!!bnErr">
-                @for (b of banks; track b) { <option [value]="b">{{ b }}</option> }
+                @if (!store.sample) { <option value="">Chọn ngân hàng</option> }
+                @for (b of (store.sample ? banks : bankOptions()); track b) { <option [value]="b">{{ b }}</option> }
               </select>
               @if (bnErr) { <span class="err"><app-icon name="i-alert" />{{ bnErr }}</span> }
             </div>
@@ -189,31 +202,33 @@
               @let bcErr = errOf(f.transferNoteTemplate);
               <input id="b-c" class="input" autocomplete="off" [class.is-error]="bcErr" [formField]="f.transferNoteTemplate" [attr.aria-invalid]="!!bcErr" aria-describedby="b-c-h">
               @if (bcErr) { <span class="err" id="b-c-h"><app-icon name="i-alert" />{{ bcErr }}</span> }
-              @else { <span class="help" id="b-c-h">Ví dụ: {{ noteExample() }}. Dùng [phòng] và [tháng].</span> }
+              @else if (store.sample) { <span class="help" id="b-c-h">Ví dụ: {{ noteExample() }}. Dùng [phòng] và [tháng].</span> }
+              @else { <span class="help" id="b-c-h">Ví dụ: {{ noteExample() }}. Dùng {{ '{room}' }}, {{ '{month}' }}, {{ '{year}' }}, {{ '{period}' }}; để trống thì dùng “{{ '{room} T{month}' }}”.</span> }
             </div>
 
             <div class="qr">
               <span class="lbl">Mã QR ngân hàng</span>
               @if (qrUrl(); as url) {
-                @if (qrIsLocal()) {
-                  <img [src]="url" width="140" height="140" alt="Mã QR chuyển khoản vừa chọn">
+                @if (qrIsLocal() || !store.sample) {
+                  <img [src]="url" width="140" height="140" [alt]="store.sample ? 'Mã QR chuyển khoản vừa chọn' : 'Mã QR chuyển khoản đang dùng'">
                 } @else {
                   <img [ngSrc]="url" width="140" height="140" alt="Mã QR chuyển khoản mẫu">
                 }
                 <div class="qr-acts">
-                  <label class="btn sec sm file-btn"><app-icon name="i-upload" />Đổi ảnh<input type="file" class="sr" accept="image/png,image/jpeg,image/webp" (change)="onQrFile($event)"></label>
-                  <button type="button" class="btn ghost sm" (click)="removeQr()"><app-icon name="i-x" />Xóa</button>
+                  <label class="btn sec sm file-btn"><app-icon name="i-upload" />Đổi ảnh<input type="file" class="sr" accept="image/png,image/jpeg,image/webp" [disabled]="qrBusy() !== null" (change)="onQrFile($event)"></label>
+                  <button type="button" class="btn ghost sm" [disabled]="qrBusy() !== null" (click)="removeQr()"><app-icon name="i-x" />Xóa</button>
                 </div>
               } @else {
-                <label class="qr-empty file-btn"><app-icon name="i-upload" /><span>Tải ảnh QR lên</span><input type="file" class="sr" accept="image/png,image/jpeg,image/webp" (change)="onQrFile($event)"></label>
+                <label class="qr-empty file-btn"><app-icon name="i-upload" /><span>Tải ảnh QR lên</span><input type="file" class="sr" accept="image/png,image/jpeg,image/webp" [disabled]="qrBusy() !== null" (change)="onQrFile($event)"></label>
               }
+              @if (qrBusy(); as pct) { <span class="small muted" role="status">Đang tải lên {{ pct }}%…</span> }
+              @else if (qrBusy() === 0) { <span class="small muted" role="status">Đang tải lên…</span> }
               @if (qrError()) { <span class="err" role="alert"><app-icon name="i-alert" />{{ qrError() }}</span> }
             </div>
           </div>
           <p class="banner info note"><app-icon name="i-info" /><span>Người thuê thấy mã QR khi mở hóa đơn trên máy tính. Trên điện thoại không có QR (không tự quét được màn hình của mình), họ thấy nút <b>Sao chép số tài khoản</b> và nội dung chuyển khoản, ví dụ “{{ noteExample() }}”.</span></p>
         }
       </section>
-      }
     </div>
   </div>
 

@@ -223,6 +223,214 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/properties/{propertyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Đổi đơn giá điện, nước, phí dịch vụ của nhà trọ (chỉ chủ nhà)
+         * @description Chỉ gửi trường cần đổi (ít nhất một trường, thiếu thì VALIDATION_ERROR với field body); luật giá trị như POST /properties. Giá mới áp cho hóa đơn lập sau đó, hóa đơn đã lập giữ nguyên. Thứ tự ưu tiên: giá điện, nước đã khóa trong hợp đồng (phiên bản LOCKED) thắng giá nhà trọ khi lập hóa đơn; giá nhà trọ là giá gợi ý khi lập điều khoản mới và giá dự phòng cho hóa đơn cuối khi hợp đồng chưa có điều khoản. Phí dịch vụ luôn lấy từ nhà trọ lúc lập hóa đơn.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    propertyId: components["parameters"]["PropertyId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdatePropertyRequest"];
+                };
+            };
+            responses: {
+                200: components["responses"]["Property"];
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        trace?: never;
+    };
+    "/properties/{propertyId}/payment-info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        /** Thông tin chuyển khoản của nhà trọ (chủ nhà) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    propertyId: components["parameters"]["PropertyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["PaymentInfo"];
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        /**
+         * Lưu ngân hàng, số tài khoản, chủ tài khoản và mẫu nội dung chuyển khoản
+         * @description Số tài khoản được lưu chỉ gồm chữ số. Mẫu bỏ trống thì dùng mặc định "{room} T{month}"; chỉ cho phép {room} (mã phòng bỏ dấu chấm, khoảng trắng: P.204 → P204), {month} (2 chữ số), {year} (4 chữ số), {period} (YYYY-MM).
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    propertyId: components["parameters"]["PropertyId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdatePaymentInfoRequest"];
+                };
+            };
+            responses: {
+                200: components["responses"]["PaymentInfo"];
+                400: components["responses"]["Error"];
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        post?: never;
+        /**
+         * Xóa toàn bộ thông tin chuyển khoản (kèm mã QR)
+         * @description Xóa ngân hàng, số tài khoản, chủ tài khoản, mẫu nội dung và mã QR (file trên S3 xóa best-effort). Hóa đơn sau đó có payment = null.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    propertyId: components["parameters"]["PropertyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["PaymentInfo"];
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/properties/{propertyId}/payment-info/qr:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Xác nhận đã tải mã QR lên S3
+         * @description Gọi sau khi PUT file lên link từ POST /uploads (targetType PROPERTY_QR). Hệ thống kiểm file có trên S3 và ≤ 2 MB, chép sang nơi lưu bền, thay QR cũ (nếu có) rồi qrStatus = RECEIVED. QR cũ vẫn dùng được cho tới lúc xác nhận thành công. Gọi lại khi không có yêu cầu tải mới và đã có QR thì trả thông tin hiện tại (200). Chủ nhà xin link tải mới giữa lúc đang xác nhận → 409 VERSION_CONFLICT (yêu cầu mới được giữ).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    propertyId: components["parameters"]["PropertyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["PaymentInfo"];
+                /** @description INVALID_FILE (file quá 2 MB, đã bị xóa) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+                /** @description QR_NOT_UPLOADED (chưa thấy file trên S3, tải lại rồi xác nhận lại), INVALID_STATE (chưa xin link tải lên) hoặc VERSION_CONFLICT (vừa xin link tải mới) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/properties/{propertyId}/payment-info/qr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                propertyId: components["parameters"]["PropertyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Xóa mã QR nhận tiền */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    propertyId: components["parameters"]["PropertyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["PaymentInfo"];
+                403: components["responses"]["Error"];
+                404: components["responses"]["Error"];
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/properties/{propertyId}/rooms": {
         parameters: {
             query?: never;
@@ -2344,7 +2552,7 @@ export interface components {
             /** @example Biên bản đã khóa, không xóa được ảnh */
             message: string;
             /** @enum {string} */
-            errorCode: "VALIDATION_ERROR" | "INVALID_EMAIL" | "INVALID_FILE" | "INVALID_PERIOD" | "UNAUTHORIZED" | "FORBIDDEN" | "INVITE_EMAIL_MISMATCH" | "NOT_FOUND" | "RECORD_LOCKED" | "INVALID_STATE" | "VERSION_CONFLICT" | "ROOM_CODE_EXISTS" | "ROOM_OCCUPIED" | "PERIOD_CLOSED" | "ALREADY_INVOICED" | "FINAL_READING_MISSING" | "INVITE_INVALID" | "INTERNAL_ERROR";
+            errorCode: "VALIDATION_ERROR" | "INVALID_EMAIL" | "INVALID_FILE" | "INVALID_PERIOD" | "UNAUTHORIZED" | "FORBIDDEN" | "INVITE_EMAIL_MISMATCH" | "NOT_FOUND" | "RECORD_LOCKED" | "INVALID_STATE" | "VERSION_CONFLICT" | "ROOM_CODE_EXISTS" | "ROOM_OCCUPIED" | "PERIOD_CLOSED" | "ALREADY_INVOICED" | "FINAL_READING_MISSING" | "QR_NOT_UPLOADED" | "INVITE_INVALID" | "INTERNAL_ERROR";
             traceId: string;
             details?: {
                 field?: string;
@@ -2388,7 +2596,7 @@ export interface components {
         /** @enum {string} */
         DisputeResolution: "CORRECTED" | "KEPT";
         /** @enum {string} */
-        UploadTargetType: "INSPECTION" | "TENANCY_VERSION" | "METER_READING";
+        UploadTargetType: "INSPECTION" | "TENANCY_VERSION" | "METER_READING" | "PROPERTY_QR";
         MeResponse: {
             /** Format: uuid */
             userId?: string;
@@ -2471,6 +2679,52 @@ export interface components {
             roomCount?: number;
             /** Format: date-time */
             createdAt?: string;
+        };
+        /** @description Chỉ gửi trường cần đổi, ít nhất một trường */
+        UpdatePropertyRequest: {
+            /**
+             * Format: int64
+             * @description VND/kWh
+             */
+            electricityRate?: number;
+            /**
+             * Format: int64
+             * @description VND/m³
+             */
+            waterRate?: number;
+            /** Format: int64 */
+            serviceFee?: number;
+        };
+        UpdatePaymentInfoRequest: {
+            bankName: string;
+            /** @description Chỉ chữ số và khoảng trắng, 6 đến 20 chữ số; lưu lại chỉ còn chữ số */
+            accountNumber: string;
+            accountHolder: string;
+            /** @description Chỉ dùng {room} {month} {year} {period}; bỏ trống = "{room} T{month}" */
+            transferNoteTemplate?: string | null;
+        };
+        PaymentInfoResponse: {
+            bankName?: string | null;
+            accountNumber?: string | null;
+            accountHolder?: string | null;
+            /** @example {room} T{month} */
+            transferNoteTemplate?: string;
+            /** @description Presigned GET 1 giờ, chỉ có khi QR đã RECEIVED */
+            qrUrl?: string | null;
+            /** @description RECEIVED khi đã có QR, PENDING_UPLOAD khi mới xin link tải lên chưa xác nhận, null khi không có */
+            qrStatus?: (string & components["schemas"]["FileStatus"]) | null;
+        };
+        PaymentResponse: {
+            bankName?: string;
+            accountNumber?: string;
+            accountHolder?: string;
+            /**
+             * @description Mẫu nội dung đã điền cho hóa đơn này
+             * @example P204 T11
+             */
+            transferNote?: string;
+            /** @description Presigned GET 1 giờ */
+            qrUrl?: string | null;
         };
         AreaRequest: {
             /**
@@ -2628,7 +2882,7 @@ export interface components {
             targetType: components["schemas"]["UploadTargetType"];
             /**
              * Format: uuid
-             * @description inspectionId, versionId hoặc readingId
+             * @description inspectionId, versionId, readingId hoặc propertyId (PROPERTY_QR)
              */
             targetId: string;
             /**
@@ -2638,13 +2892,13 @@ export interface components {
             areaId?: string;
             fileName: string;
             /**
-             * @description PDF chỉ cho TENANCY_VERSION
+             * @description PDF chỉ cho TENANCY_VERSION; PROPERTY_QR chỉ nhận png, jpeg, webp
              * @enum {string}
              */
-            contentType: "image/jpeg" | "image/png" | "image/heic" | "image/heif" | "application/pdf";
+            contentType: "image/jpeg" | "image/png" | "image/heic" | "image/heif" | "image/webp" | "application/pdf";
             /**
              * Format: int64
-             * @description Ảnh ≤ 25 MB, scan ≤ 20 MB
+             * @description Ảnh ≤ 25 MB, scan ≤ 20 MB, mã QR ≤ 2 MB
              */
             size: number;
             sha256: components["schemas"]["Sha256Base64"];
@@ -2787,6 +3041,8 @@ export interface components {
             /** Format: date-time */
             paidAt?: string | null;
             disputes?: components["schemas"]["DisputeResponse"][];
+            /** @description Thông tin chuyển khoản của nhà trọ; null khi chủ nhà chưa nhập đủ ngân hàng, số tài khoản, chủ tài khoản */
+            payment?: components["schemas"]["PaymentResponse"] | null;
         };
         CreateDisputeRequest: {
             /** Format: uuid */
@@ -3354,6 +3610,17 @@ export interface components {
                         items?: components["schemas"]["InvoiceResponse"][];
                         nextCursor?: string | null;
                     };
+                };
+            };
+        };
+        /** @description OK */
+        PaymentInfo: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Envelope"] & {
+                    data?: components["schemas"]["PaymentInfoResponse"];
                 };
             };
         };
