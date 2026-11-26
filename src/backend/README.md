@@ -25,6 +25,37 @@ dotnet run --project src/RoomLedger.Api
 
 Chạy API local cần `Cognito__Authority` (vd. `https://cognito-idp.ap-southeast-2.amazonaws.com/<userPoolId>`) và `Cognito__ClientId` của User Pool dev để kiểm ID token. Trên Lambda, Cognito authorizer của API Gateway đã kiểm token.
 
+### LocalDev: chạy API trên máy không cần AWS (nối FE, test API)
+
+Khi chưa có đăng nhập Cognito ở FE (PR #31), bật LocalDev để API nhận người dùng qua header thay cho ID token.
+LocalDev chỉ bật khi đủ cả ba: `ASPNETCORE_ENVIRONMENT=Development`, `LocalDev__Enabled=true`, không chạy trên Lambda.
+Trên AWS không bao giờ bật (Lambda có `AWS_LAMBDA_FUNCTION_NAME`, môi trường không phải Development); test `LocalDevDisabledTests` kiểm header bị bỏ qua khi tắt.
+
+| Thành phần | Ở LocalDev |
+|---|---|
+| Đăng nhập | Header `X-Dev-User: sub\|email\|group\|emailVerified\|name` (name mã hóa URL), đổi thành đúng các claim Cognito |
+| S3 | Trong bộ nhớ: URL tải lên/xem là `/api/v1/local-dev/files/{bucket}/{key}` (PUT/GET không cần đăng nhập, như presigned URL); file tới thì ảnh đồng hồ, file hợp đồng, ảnh biên bản chuyển RECEIVED. Mất khi khởi động lại API |
+| EventBridge | Trong bộ nhớ, ghi log; `GET /api/v1/local-dev/invites/latest?email=` trả token lời mời thay cho email |
+| AI đọc đồng hồ | `POST /api/v1/local-dev/meter-readings/{id}/ai-result` ghi `aiValue`, `needsReview`, `reviewReason` như Lambda AI |
+
+```powershell
+cd src/backend
+docker compose up -d db
+$env:ConnectionStrings__RoomLedger = "Host=localhost;Database=roomledger;Username=postgres;Password=postgres"
+dotnet ef database update -p src/RoomLedger.Infrastructure -s src/RoomLedger.Infrastructure
+$env:ASPNETCORE_ENVIRONMENT = "Development"; $env:LocalDev__Enabled = "true"
+dotnet run --project src/RoomLedger.Api --urls http://localhost:5000
+```
+
+Terminal khác, tạo dữ liệu mẫu và kiểm luồng API chính (seed kiêm smoke test, dừng với mã lỗi nếu một lời gọi sai):
+
+```powershell
+node src/backend/scripts/local-seed.mjs
+curl.exe -H "X-Dev-User: 0193a000-0000-7000-8000-00000000a001|chunha.lan@example.com|landlord|true|C%C3%B4%20Lan" http://localhost:5000/api/v1/properties
+```
+
+Rồi chạy FE với API này: `pnpm start:local-api` trong `src/frontend/roomledger-web`, mở `http://localhost:4200/preview` và chọn vai.
+
 ### Swagger (test API local)
 
 Chạy với `ASPNETCORE_ENVIRONMENT=Development` rồi mở `http://localhost:<port>/swagger` (JSON: `/swagger/v1/swagger.json`). Nút **Authorize** nhận ID token Cognito. Môi trường khác (Lambda, Testing) mặc định tắt; bật/tắt rõ bằng `OpenApi__Enabled=true|false`. Hợp đồng chính thức với FE vẫn là `src/contracts/openapi.yaml`.
