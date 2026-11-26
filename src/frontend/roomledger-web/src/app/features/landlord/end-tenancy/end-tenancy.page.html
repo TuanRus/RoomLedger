@@ -9,30 +9,219 @@
 </ng-template>
 
 @if (!store.sample) {
-  @if (header(); as h) {
-    <nav class="crumb" aria-label="Vị trí">
-      <a routerLink="/landlord/rooms">Phòng</a><app-icon name="i-chev" size="sm" />{{ h.roomCode }}<app-icon name="i-chev" size="sm" /><span aria-current="page">Kết thúc thuê</span>
-    </nav>
-    <div class="top">
-      <div><h1>Kết thúc thuê {{ h.roomCode }}</h1><p class="sub">{{ h.tenantName || 'Chưa có tên người thuê' }} · thuê từ {{ h.tenancyStart ? day(h.tenancyStart) : '—' }}</p></div>
-    </div>
-    <div class="card step">
-      <dl class="kv">
-        <dt>Phòng</dt><dd>{{ h.roomCode }}</dd>
-        <dt>Người thuê</dt><dd>{{ h.tenantName || '—' }}</dd>
-        <dt>Tiền phòng</dt><dd>{{ h.monthlyRent | vnd }} / tháng</dd>
-      </dl>
-      <div class="banner warn" id="why-blocked" role="status">
-        <app-icon name="i-info" />
-        <span><b>Chưa kết thúc thuê được trên hệ thống:</b> máy chủ chưa có chức năng này.</span>
+  <app-load-state [status]="flow.status()" [error]="flow.error()" (retry)="flow.open(roomId())" />
+  @if (flow.status() === 'ready') {
+    @if (flow.tenancyId() && (flow.tenancyStatus() === 'ACTIVE' || flow.started())) {
+      @let end = flow.end();
+      @let inv = flow.invoice();
+      <nav class="crumb" aria-label="Vị trí">
+        <a routerLink="/landlord/rooms">Phòng</a><app-icon name="i-chev" size="sm" />{{ flow.roomCode() }}<app-icon name="i-chev" size="sm" /><span aria-current="page">Kết thúc thuê</span>
+      </nav>
+      <div class="top">
+        <div><h1>Kết thúc thuê {{ flow.roomCode() }}</h1><p class="sub">{{ flow.tenantName() || 'Chưa có tên người thuê' }} · thuê từ {{ flow.tenancyStart() ? day(flow.tenancyStart()!) : '—' }}</p></div>
+        @if (flow.started() && !flow.finished()) {
+          <div class="acts"><button type="button" class="btn sec" [disabled]="flow.busy()" (click)="confirmingCancel.set(true)">Hủy kết thúc thuê</button></div>
+        }
       </div>
-      <div class="final-acts">
-        <a class="btn sec" routerLink="/landlord/rooms">Quay lại</a>
-        <button type="button" class="btn" disabled aria-describedby="why-blocked">Kết thúc thuê {{ h.roomCode }}</button>
+      @if (confirmingCancel()) {
+        <div class="banner warn" role="alertdialog" aria-labelledby="cancel-title">
+          <app-icon name="i-alert" />
+          <span><b id="cancel-title">Hủy kết thúc thuê {{ flow.roomCode() }}?</b> Chỉ số cuối chưa duyệt sẽ bị xóa. Chỉ số cuối đã duyệt vẫn được giữ lại và không sửa được.</span>
+          <button type="button" class="btn sec sm" (click)="confirmingCancel.set(false)">Giữ nguyên</button>
+          <button type="button" class="btn sm" [disabled]="flow.busy()" (click)="cancelEnd()">Hủy kết thúc thuê</button>
+        </div>
+      }
+      @if (flow.actionError(); as message) {
+        <p class="banner warn" role="alert"><app-icon name="i-alert" /><span>{{ message }}</span></p>
+      }
+
+      @if (flow.finished() && end) {
+        <div class="card finished">
+          <div class="done-hero">
+            <span class="ic"><app-icon name="i-check" /></span>
+            <h2>Đã kết thúc thuê {{ end.roomCode }}</h2>
+            <p class="muted">{{ end.tenantName }} · {{ day(end.endDate ?? '') }}</p>
+          </div>
+          <ul class="rules">
+            <li class="ok"><app-icon name="i-check" />Hóa đơn cuối kỳ {{ end.finalPeriod }} đã tạo ở dạng nháp. Vào Hóa đơn để gửi người thuê.</li>
+            @if (end.unpaidPrevious) {
+              <li class="ok"><app-icon name="i-check" />Nợ kỳ trước {{ end.unpaidPrevious | vnd }} vẫn nằm ở các hóa đơn cũ, thu riêng.</li>
+            }
+            <li class="ok"><app-icon name="i-check" />{{ end.roomCode }} thành phòng trống.</li>
+            @if (end.targetRoom; as t) {
+              <li class="ok"><app-icon name="i-check" />Hợp đồng {{ t.code }} bắt đầu {{ day(end.endDate ?? '') }}, chờ {{ end.tenantName }} xác nhận.</li>
+            }
+          </ul>
+          <div class="final-acts">
+            <a class="btn sec" routerLink="/landlord/invoices">Xem hóa đơn</a>
+            <a class="btn" routerLink="/landlord/rooms">Về danh sách phòng</a>
+          </div>
+        </div>
+      } @else {
+        <div class="stack">
+          <section class="card step" id="step-1" aria-labelledby="h-step-1">
+            <div class="row between"><h2 id="h-step-1">1 · Hình thức và ngày</h2>
+              @if (flow.started()) { <span class="chip ok"><app-icon name="i-check" />Đã bắt đầu</span> }
+            </div>
+            <div class="kinds" role="radiogroup" aria-labelledby="h-step-1">
+              <label class="radio-card" [class.on]="flow.kind() === 'LEAVE'">
+                <input type="radio" name="end-kind" class="sr" [checked]="flow.kind() === 'LEAVE'" (change)="flow.kind.set('LEAVE')">
+                <span class="radio" aria-hidden="true"></span>
+                <span><b>Người thuê rời đi</b><span class="small muted desc">Kết thúc hợp đồng, phòng thành trống.</span></span>
+              </label>
+              <label class="radio-card" [class.on]="flow.kind() === 'MOVE'">
+                <input type="radio" name="end-kind" class="sr" [checked]="flow.kind() === 'MOVE'" (change)="flow.kind.set('MOVE')">
+                <span class="radio" aria-hidden="true"></span>
+                <span><b>Chuyển sang phòng khác</b><span class="small muted desc">Tạo hợp đồng mới ở phòng trống để người thuê xác nhận.</span></span>
+              </label>
+            </div>
+            <div class="field target">
+              <label for="end-date">Ngày kết thúc</label>
+              <app-date-field inputId="end-date" [(value)]="flow.endDate" describedBy="end-date-h" />
+              <span class="help" id="end-date-h">@if (flow.endDate()) { {{ flow.endDate() | day: 'long' }} · }Kỳ cuối là tháng {{ flow.finalPeriod() || '—' }}.</span>
+            </div>
+            @if (flow.kind() === 'MOVE') {
+              <div class="field target">
+                <label for="move-to">Phòng chuyển đến</label>
+                @if (flow.targets().length) {
+                  <select id="move-to" class="input" (change)="onFlowTarget($event)">
+                    <option value="" [selected]="!flow.targetRoomId()">Chọn phòng trống</option>
+                    @for (o of flow.targets(); track o.roomId) {
+                      <option [value]="o.roomId" [selected]="o.roomId === flow.targetRoomId()">{{ o.code }} · {{ o.monthlyRent | vnd }} / tháng</option>
+                    }
+                  </select>
+                } @else {
+                  <span class="err"><app-icon name="i-alert" size="sm" />Không còn phòng trống để chuyển đến.</span>
+                }
+              </div>
+            }
+            <div class="final-acts">
+              <button type="button" class="btn" [disabled]="!canStart() || flow.busy()" (click)="flow.start()">{{ flow.started() ? 'Cập nhật' : 'Bắt đầu kết thúc thuê' }}</button>
+            </div>
+          </section>
+
+          <section class="card step" id="step-2" aria-labelledby="h-step-2">
+            <div class="row between wrap"><h2 id="h-step-2">2 · Chỉ số cuối kỳ {{ flow.finalPeriod() || '—' }}</h2>
+              @if (flow.readingsApproved()) { <span class="chip ok"><app-icon name="i-check" />Đủ chỉ số</span> }
+              @else { <span class="chip warn"><app-icon name="i-clock" />Chưa đủ</span> }
+            </div>
+            @if (!flow.started()) {
+              <p class="muted">Bắt đầu kết thúc thuê ở bước 1 để ghi chỉ số cuối.</p>
+            } @else {
+              @for (k of kinds; track k) {
+                @let r = k === 'ELECTRICITY' ? end?.electricity : end?.water;
+                @let phase = flow.phases()[k];
+                @let job = flow.jobs()[k];
+                <div class="r-block" [attr.data-kind]="k">
+                  <b>{{ kindLabel(k) }}</b>
+                  <span class="small muted">Kỳ trước {{ r?.previous != null ? (r!.previous! | num) : '—' }} {{ unit(k) }}</span>
+                  @switch (phase) {
+                    @case ('approved') { <span class="chip ok"><app-icon name="i-check" />Đã duyệt {{ r?.value | num }} {{ unit(k) }}</span> }
+                    @case ('uploading') { <span class="chip neu"><app-icon name="i-clock" />Đang tải ảnh {{ job?.progress ?? 0 }}%</span> }
+                    @case ('reading') { <span class="chip warn"><app-icon name="i-clock" />{{ job?.aiTimedOut ? 'AI chưa đọc xong, hãy nhập số' : 'AI đang đọc ảnh…' }}</span> }
+                    @case ('pending') { <span class="chip warn"><app-icon name="i-clock" />Chờ duyệt</span> }
+                    @default { <span class="chip neu"><app-icon name="i-camera" />Chưa ghi</span> }
+                  }
+                  @if (r?.photoUrl) { <img class="thumb" [ngSrc]="r!.photoUrl!" width="56" height="42" [alt]="'Ảnh đồng hồ ' + kindLabel(k).toLowerCase() + ' cuối kỳ'"> }
+                </div>
+                @if (flow.missingPrevious(k)) {
+                  <p class="banner warn" role="status"><app-icon name="i-info" /><span>Chưa có chỉ số {{ kindLabel(k).toLowerCase() }} kỳ trước hoặc chỉ số nhận phòng của phòng này, nên chưa lập được hóa đơn cuối. Hãy nhập chỉ số nhận phòng ở biên bản nhận phòng, hoặc chọn "Thay đồng hồ" nếu đồng hồ đã được thay.</span></p>
+                }
+                @if (job?.error; as message) {
+                  <p class="banner warn" role="alert"><app-icon name="i-alert" /><span>{{ message }}</span><button type="button" class="btn sec sm" (click)="flow.discardJob(k)">Bỏ ảnh này</button></p>
+                }
+                @if (phase !== 'approved') {
+                  <div class="r-acts">
+                    @if (phase === 'missing' || phase === 'pending' || job?.error) {
+                      <label class="btn sec upload">
+                        <app-icon name="i-upload" />{{ phase === 'missing' ? 'Chụp hoặc tải ảnh ' : 'Đổi ảnh ' }}{{ kindLabel(k).toLowerCase() }}
+                        <input type="file" accept="image/*" class="sr" (change)="onFlowPhoto($event, k)">
+                      </label>
+                    }
+                    @if (phase === 'pending' || (phase === 'reading' && job?.aiTimedOut)) {
+                      <div class="field">
+                        <label [for]="'val-' + k">Chỉ số {{ kindLabel(k).toLowerCase() }} cuối ({{ unit(k) }})</label>
+                        <input #v [id]="'val-' + k" class="input" inputmode="numeric" autocomplete="off" [value]="r?.value ?? ''">
+                      </div>
+                      <label class="small"><input #rep type="checkbox" (change)="onReplaced(k, rep.checked)"> Thay đồng hồ (tính từ 0)</label>
+                      <button type="button" class="btn" [disabled]="flow.busy()" (click)="approveFlow(k, v.value, rep.checked)"><app-icon name="i-check" />Duyệt {{ kindLabel(k).toLowerCase() }}</button>
+                    }
+                  </div>
+                }
+              }
+            }
+          </section>
+
+          <section class="card step" id="step-3" aria-labelledby="h-step-3">
+            <div class="row between wrap"><h2 id="h-step-3">3 · Hóa đơn cuối kỳ {{ flow.finalPeriod() || '—' }}</h2>
+              @if (inv.invoiceTotal != null) { <span class="chip ok"><app-icon name="i-check" />Sẵn sàng</span> }
+              @else if (!flow.readingsApproved()) { <span class="chip neu"><app-icon name="i-clock" />Chờ đủ chỉ số</span> }
+              @else { <span class="chip warn"><app-icon name="i-edit" />Chưa nhập tiền phòng</span> }
+            </div>
+            <div class="field rent">
+              <label for="fin-r">Tiền phòng tháng cuối (chủ nhà nhập)</label>
+              <div class="input rent-input">
+                <input id="fin-r" inputmode="numeric" autocomplete="off" [value]="inv.rent != null ? (inv.rent | num) : ''" (input)="onFlowRent($event)" aria-describedby="fin-r-help">
+                <span class="unit">đ</span>
+              </div>
+              <span class="help" id="fin-r-help">Không tự chia theo ngày. Tiền phòng đủ tháng: {{ flow.monthlyRent() | vnd }}.</span>
+              @if (end?.kind === 'MOVE') {
+                <span class="help">Phòng mới tính tiền phòng từ kỳ này; nhập tiền phòng cũ cho phần đã ở.</span>
+              }
+            </div>
+            <table class="lines">
+              <caption class="sr">Các dòng hóa đơn cuối</caption>
+              <tbody>
+                <tr><td>Tiền phòng tháng cuối<small>chủ nhà nhập</small></td><td>@if (inv.rent != null) { {{ inv.rent | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+                <tr><td>Điện<small>@if (inv.electricity; as e) { {{ e.usage | num }} kWh × {{ e.rate | vnd }} } @else { chờ chỉ số cuối }</small></td><td>@if (inv.electricity; as e) { {{ e.amount | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+                <tr><td>Nước<small>@if (inv.water; as w) { {{ w.usage | num }} m³ × {{ w.rate | vnd }} } @else { chờ chỉ số cuối }</small></td><td>@if (inv.water; as w) { {{ w.amount | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+                <tr><td>Phí dịch vụ</td><td>{{ inv.serviceFee | vnd }}</td></tr>
+                <tr class="total"><td>Hóa đơn cuối<small>sẽ ở dạng nháp, gửi người thuê sau</small></td><td>@if (inv.invoiceTotal != null) { {{ inv.invoiceTotal | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+                <tr><td>Nợ kỳ trước<small>hóa đơn đã gửi chưa thu, không gộp vào hóa đơn cuối</small></td><td>{{ inv.unpaidPrevious | vnd }}</td></tr>
+                <tr class="total"><td>Tổng cần thu<small>hóa đơn cuối và nợ kỳ trước</small></td><td>@if (inv.toCollect != null) { {{ inv.toCollect | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+                <tr><td>Tiền cọc<small>chỉ hiển thị, hệ thống không tự trừ cọc</small></td><td>{{ inv.deposit | vnd }}</td></tr>
+                <tr class="total"><td>@if (inv.balance != null && inv.balance < 0) { Người thuê cần trả thêm } @else { Hoàn cho người thuê }<small>tiền cọc trừ tổng cần thu</small></td><td>@if (inv.balance != null) { {{ (inv.balance < 0 ? -inv.balance : inv.balance) | vnd }} } @else { <span class="muted">—</span> }</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="step-4" id="step-4" aria-label="4 · Xác nhận">
+            @if (end?.kind === 'MOVE') {
+              <div class="card step">
+                <h2>Chỉ số đầu ở {{ end?.targetRoom?.code }}</h2>
+                <div class="field rent">
+                  <label for="start-e">Chỉ số điện đầu (kWh)</label>
+                  <input id="start-e" class="input" inputmode="numeric" autocomplete="off" [value]="flow.startElectricity() ?? ''" (input)="onStart($event, 'e')">
+                </div>
+                <div class="field rent">
+                  <label for="start-w">Chỉ số nước đầu (m³)</label>
+                  <input id="start-w" class="input" inputmode="numeric" autocomplete="off" [value]="flow.startWater() ?? ''" (input)="onStart($event, 'w')">
+                </div>
+              </div>
+            }
+            @if (flow.blockers().length) {
+              <div class="banner warn" id="why-blocked"><app-icon name="i-info" /><span><b>Chưa thể kết thúc thuê:</b> {{ flow.blockers().join(', ') }}.</span></div>
+            } @else {
+              <div class="banner info" id="why-blocked"><app-icon name="i-info" /><span><b>Sẵn sàng.</b> Hóa đơn cuối {{ inv.invoiceTotal | vnd }} được tạo ở dạng nháp và {{ flow.roomCode() }} thành phòng trống.</span></div>
+            }
+            <div class="final-acts">
+              <a class="btn sec" routerLink="/landlord/rooms">Quay lại</a>
+              <button type="button" class="btn" [disabled]="flow.blockers().length > 0 || flow.busy()" aria-describedby="why-blocked" (click)="flow.finish()">
+                {{ end?.kind === 'MOVE' ? 'Kết thúc thuê và chuyển sang ' + (end?.targetRoom?.code ?? '') : 'Kết thúc thuê ' + flow.roomCode() }}
+              </button>
+            </div>
+          </section>
+        </div>
+      }
+    } @else if (flow.tenancyId() && flow.tenancyStatus() === 'MOVING_OUT') {
+      <div class="card missing">
+        <h1 class="m-title">Phòng đang trả theo biên bản</h1>
+        <p class="muted">Hợp đồng này đã mở biên bản trả phòng, nên không kết thúc thuê theo cách này được.</p>
+        <a class="btn sec" routerLink="/landlord/rooms"><app-icon name="i-back" />Về danh sách phòng</a>
       </div>
-    </div>
-  } @else if (roomStatus() === 'ready') {
-    <ng-container [ngTemplateOutlet]="missing" />
+    } @else {
+      <ng-container [ngTemplateOutlet]="missing" />
+    }
   }
 } @else if (draft(); as d) {
   @let inv = invoice()!;
