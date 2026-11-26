@@ -48,7 +48,7 @@ export type ReviewState = 'pending' | 'abnormal' | 'unreadable' | 'unrecorded' |
 
 export type UtilityLine = Required<Schemas['UtilityLine']>;
 
-/** InvoiceDetailResponse with required fields, plus dueDate which the contract does not carry yet. */
+/** InvoiceDetailResponse with required fields, plus dueDate which the contract does not carry yet (null from the API). */
 export interface InvoiceDetail {
   invoiceId: string;
   roomCode: string;
@@ -62,7 +62,21 @@ export interface InvoiceDetail {
   total: number;
   sentAt: string | null;
   paidAt: string | null;
-  dueDate: string;
+  dueDate: string | null;
+  /** Disputes raised on this invoice (DisputeResponse); absent in the sample data. */
+  disputes?: InvoiceDispute[];
+}
+
+/** DisputeResponse with the optional fields made explicit. */
+export interface InvoiceDispute {
+  disputeId: string;
+  readingId: string | null;
+  reason: string;
+  status: Schemas['DisputeStatus'];
+  resolution: Schemas['DisputeResolution'] | null;
+  response: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
 }
 
 export interface InvoiceSummary {

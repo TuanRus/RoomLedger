@@ -4,7 +4,8 @@ import { ActivatedRoute, NavigationEnd, Router, RouterLink, RouterLinkActive, Ro
 import { filter, map } from 'rxjs';
 
 import { Viewport } from '../core/layout/viewport';
-import { landlordBadges, tenantBadges } from './nav-badges';
+import { landlordBadges, landlordIdentity } from './landlord-shell';
+import { tenantBadges, tenantIdentity } from './tenant-shell';
 import { Icon } from '../shared/ui/icon';
 
 export interface NavItem {
@@ -22,8 +23,6 @@ export interface NavItem {
 export interface ShellConfig {
   role: 'landlord' | 'tenant';
   navLabel: string;
-  place: { title: string; sub: string };
-  person: { initials: string; name: string; role: string };
   nav: NavItem[];
 }
 
@@ -40,7 +39,7 @@ export interface ShellConfig {
       <div class="app">
         <aside class="side">
           <div class="brand"><span class="logo"><app-icon name="i-meter" /></span>RoomLedger</div>
-          <div class="prop"><div>{{ c.place.title }}<small>{{ c.place.sub }}</small></div></div>
+          <div class="prop"><div>{{ identity().place.title }}<small>{{ identity().place.sub }}</small></div></div>
           <nav class="nav" [attr.aria-label]="c.navLabel">
             @for (item of sideItems(); track item.path) {
               <a [routerLink]="item.path" routerLinkActive="on" ariaCurrentWhenActive="page">
@@ -49,7 +48,7 @@ export interface ShellConfig {
               </a>
             }
           </nav>
-          <div class="who"><span class="av" [class.tenant]="c.role === 'tenant'">{{ c.person.initials }}</span><div>{{ c.person.name }}<br><span class="muted">{{ c.person.role }}</span></div></div>
+          <div class="who"><span class="av" [class.tenant]="c.role === 'tenant'">{{ identity().person.initials }}</span><div>{{ identity().person.name }}<br><span class="muted">{{ identity().person.role }}</span></div></div>
         </aside>
         <main class="main"><router-outlet /></main>
       </div>
@@ -88,7 +87,7 @@ export interface ShellConfig {
               </a>
             }
           </nav>
-          <p class="small muted who-line">{{ c.person.name }} · {{ c.place.title }}</p>
+          <p class="small muted who-line">{{ identity().person.name }} · {{ identity().place.title }}</p>
         </dialog>
       }
     }
@@ -134,6 +133,8 @@ export class AppShell {
   protected readonly moreItems = computed(() => (this.phoneItems().length < 5 ? this.config().nav.filter((n) => n.phone == null) : []));
   /** Live counts of what is waiting on this person, per nav path (0 hides the badge). */
   protected readonly badges = this.config().role === 'landlord' ? landlordBadges() : tenantBadges();
+  /** Sidebar place and person: sample text with sample data, /me and the property or tenant home with the API. */
+  protected readonly identity = this.config().role === 'landlord' ? landlordIdentity() : tenantIdentity();
   /** The "Thêm" button gets a dot when anything inside its sheet is waiting. */
   protected readonly moreWaiting = computed(() => this.moreItems().some((n) => (this.badges()[n.path] ?? 0) > 0));
   protected readonly moreDialog = viewChild<ElementRef<HTMLDialogElement>>('more');
