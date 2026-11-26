@@ -25,6 +25,8 @@ confirmed reading cannot be reopened. Review reasons from the contract (`LOW_CON
 `UNUSUAL_USAGE`, `AI_FAILED`): a flagged reading with no value shows as "Không đọc được", one with a value as
 "Bất thường", and `PENDING_AI` with no value as "Chưa ghi".
 
+**Update (2026-11-26, payment):** bank transfer details per property (`GET/PUT /properties/{id}/payment-info`), the QR image (`POST /uploads` PROPERTY_QR, PUT, `payment-info/qr:confirm`, `DELETE payment-info/qr`) and editing the electricity, water and service prices (`PATCH /properties/{id}`) use the API; invoices carry `payment` (transfer note already filled), so the tenant invoice page reads it from the invoice being viewed.
+
 **Update (2026-11-26):** end of tenancy and room moves (LL-10) use the API in API mode: `POST/GET/DELETE /tenancies/{id}/end`, final readings through the meter endpoints, `POST /tenancies/{id}/end:finish` (`EndTenancyApiStore`). Unpaid earlier invoices are shown as "Nợ kỳ trước", apart from the final invoice.
 
 **Update (2026-11-25, later):** every landlord and tenant screen now reads the API in API mode, and shows an
@@ -45,8 +47,6 @@ forgot password and accepting an invite (disabled in API mode).
 ### Tenant invoice (`InvoiceDetailResponse`)
 
 - **Due date** (`hạn thanh toán`): not in the response; the receipt shows "Hạn 10/12".
-- **Payment details** of the landlord: bank name, account number, account holder, transfer note, and a QR image URL.
-  - On a computer the tenant sees the QR code; on a phone only a "Sao chép số tài khoản" button (decided 2026-11-24, see PRODUCT.md).
 
 ### Landlord invoices (LL-05, LL-05b/c/d)
 
@@ -73,7 +73,6 @@ forgot password and accepting an invite (disabled in API mode).
 ### Landlord settings and contracts (LL-06, LL-07)
 
 - Property settings: reading days, due day, reading reminder, and the period a price change applies from.
-- Bank transfer settings: bank, account number, holder, transfer-note template, QR image (fields and upload endpoint).
 - Contract versions: uploaded / rejected dates, change note, an endpoint to send a draft to the tenant, and a version type for re-uploading a corrected initial contract. `TenancyFileResponse` has no page count or thumbnail.
 
 ### Tenant home, meters, contract, account (TD-01, TD-03, TN-02 … TN-12)
