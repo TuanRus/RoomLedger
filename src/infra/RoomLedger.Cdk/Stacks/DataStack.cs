@@ -24,8 +24,9 @@ public sealed class DataStackProps : StackProps
 
 /**
  * RDS PostgreSQL 16 (private, IAM auth, bắt buộc SSL) và Lambda migrate.
- * Lambda migrate (Migrate/Function.cs của Tuấn) nhận SQL idempotent từ CI, đăng nhập bằng master secret,
- * chạy SQL rồi GrantSql cho roomledger_app. Các Lambda khác đăng nhập roomledger_app bằng IAM token.
+ * Lambda migrate (Migrate/Function.cs của Tuấn) nhận SQL idempotent, đăng nhập roomledger_migrator bằng IAM token,
+ * chạy SQL rồi GrantSql cho roomledger_app. Lần đầu người deploy gửi kèm mật khẩu master để tạo hai user này.
+ * Các Lambda khác đăng nhập roomledger_app bằng IAM token.
  * Phụ trách: Tuấn (Sang viết bản đầu, T6).
  *
  * @author Sang
@@ -37,6 +38,10 @@ public sealed class DataStack : Stack
     public const int DbPort = 5432;
     /** User ứng dụng (đăng nhập bằng IAM token), do Lambda migrate tạo và cấp quyền. */
     public const string AppUser = $"{Naming.Project}_app";
+
+    /** User chạy migration (IAM token), do bước bootstrap của Lambda migrate tạo. */
+    public const string MigratorUser = $"{Naming.Project}_migrator";
+    private const string MasterUser = "postgres";
 
     public DatabaseInstance Db { get; }
     public Function Migrate { get; }
@@ -61,7 +66,7 @@ public sealed class DataStack : Stack
             StorageEncrypted = true,
             IamAuthentication = true,
             PubliclyAccessible = false,
-            Credentials = Credentials.FromGeneratedSecret("postgres"),
+            Credentials = Credentials.FromGeneratedSecret(MasterUser),
             ParameterGroup = new ParameterGroup(this, "Pg", new ParameterGroupProps
             {
                 Engine = engine,
@@ -86,17 +91,21 @@ public sealed class DataStack : Stack
             VpcSubnets = isolated,
             SecurityGroups = new[] { props.LambdaSg },
             // Không đặt ReservedConcurrentExecutions: giới hạn tài khoản là 10.
-            // Đúng các biến Migrate/Function.cs (Tuấn) đọc; host và mật khẩu nằm trong secret.
+            // Đúng các biến Migrate/Function.cs (Tuấn) đọc; không có mật khẩu nào ở đây.
             Environment = new Dictionary<string, string>
             {
-                ["DB_SECRET_ARN"] = Db.Secret!.SecretArn,
+                ["DB_HOST"] = Db.DbInstanceEndpointAddress,
+                ["DB_PORT"] = DbPort.ToString(),
                 ["DB_NAME"] = DbName,
                 ["DB_APP_USER"] = AppUser,
+                ["DB_MIGRATOR_USER"] = MigratorUser,
+                ["DB_MASTER_USER"] = MasterUser,
             },
         });
-        Db.Secret.GrantRead(Migrate); // chỉ Lambda này đọc được master secret
+        Db.GrantConnect(Migrate, MigratorUser);
 
         new CfnOutput(this, "DbEndpoint", new CfnOutputProps { Value = Db.DbInstanceEndpointAddress });
+        new CfnOutput(this, "DbSecretArn", new CfnOutputProps { Value = Db.Secret!.SecretArn });   // người deploy đọc cho lần bootstrap
         new CfnOutput(this, "MigrateFunctionName", new CfnOutputProps { Value = Migrate.FunctionName });
     }
 }
