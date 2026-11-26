@@ -1,13 +1,15 @@
 openapi: 3.0.3
 info:
   title: RoomLedger API
-  version: 0.4.1
+  version: 0.5.1
   description: |
     Hợp đồng API giữa Backend và Frontend (tab 4 "API cho FE").
     Phiên bản x.y.z: sửa chính tả, từ ngữ → z; thêm, bớt, đổi endpoint hoặc trường → y; làm lại lớn → x.
     0.3.0: thêm MD-04 (xóa ảnh, xác nhận biên bản, chỉ số điện nước ban đầu) và MD-06 (trả phòng, danh sách ảnh, gửi so sánh, mục so sánh, tính tiền, khiếu nại).
     0.4.0: MD-06-FE-05 quyết toán (GET/POST /tenancies/{tenancyId}/settlement), finalPeriod trên biên bản trả phòng, gửi biên bản cần ảnh đồng hồ tháng cuối (FINAL_READING_MISSING).
     0.4.1: POST /uploads ghi rõ 403 FORBIDDEN khi chủ nhà gửi ảnh vào biên bản trả phòng (BR-25); không đổi endpoint hay trường.
+    0.5.0: MD-07 kết thúc hợp đồng và chuyển phòng (POST, GET, DELETE /tenancies/{tenancyId}/end, POST /tenancies/{tenancyId}/end:finish), ALREADY_INVOICED, lý do bỏ qua ENDING_TENANCY khi lập hóa đơn hàng loạt.
+    0.5.1: EndTenancyResponse.deposit (chỉ hiển thị); chỉ số điện nước duy nhất theo (hợp đồng, kỳ, đồng hồ) để người thuê sau dùng lại cùng kỳ; hủy kết thúc xóa chỉ số cuối chưa xác nhận; sự kiện TenancyMoved khi chuyển phòng.
     Bản này có đầy đủ MD-01, MD-02, MD-03, MD-05 và POST /uploads (Tuấn).
     Các endpoint MD-04, MD-06, MD-07 do Sang bổ sung.
     Mọi phản hồi thành công có dạng {success, message, data}; lỗi có dạng ApiError.
@@ -510,6 +512,50 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { description: "FINAL_READING_UNCONFIRMED, FINAL_INVOICE_MISSING, OPEN_DISPUTES, PENDING_FINDINGS (details liệt kê tất cả) hoặc INVALID_STATE", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
 
+  /tenancies/{tenancyId}/end:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    post:
+      tags: [MD-07]
+      summary: Chủ nhà bắt đầu kết thúc hợp đồng (rời đi hoặc chuyển phòng); hợp đồng ACTIVE → MOVING_OUT
+      description: "kind LEAVE hoặc MOVE. endDate không trước ngày bắt đầu hợp đồng; kỳ cuối finalPeriod = tháng của endDate. MOVE cần targetRoomId là phòng trống (chưa có hợp đồng chưa quyết toán) cùng nhà trọ, khác phòng hiện tại. Gọi lại khi đang MOVING_OUT và chưa chốt thì sửa ngày, hình thức, phòng đích (200). Hợp đồng đã mở biên bản trả phòng thì 409 INVALID_STATE. Chỉ số cuối nhập bằng POST /rooms/{roomId}/meter-readings (period = finalPeriod) và PATCH /meter-readings/{id}."
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/EndTenancyRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/EndTenancy" }
+        "200": { $ref: "#/components/responses/EndTenancy" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "INVALID_STATE (hợp đồng không ACTIVE, đã có biên bản trả phòng, hoặc đổi sang kỳ khác khi đã có chỉ số cuối được xác nhận), ROOM_OCCUPIED (phòng đích không còn trống) hoặc ALREADY_INVOICED (kỳ cuối hoặc kỳ sau đó đã có hóa đơn)", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+    get:
+      tags: [MD-07]
+      summary: Xem trạng thái kết thúc hợp đồng, chỉ số cuối, đơn giá và nợ kỳ trước
+      description: Hợp đồng chưa từng kết thúc → 404 NOT_FOUND. unpaidPrevious là tổng hóa đơn SENT hoặc DISPUTED của hợp đồng (không gồm hóa đơn cuối), hiển thị riêng.
+      responses:
+        "200": { $ref: "#/components/responses/EndTenancy" }
+        "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [MD-07]
+      summary: Hủy kết thúc hợp đồng (MOVING_OUT → ACTIVE), chỉ khi chưa chốt; chỉ số cuối chưa xác nhận bị xóa, chỉ số đã xác nhận giữ lại
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/CancelEndTenancyResponse" } } }] } } } }
+        "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: INVALID_STATE (không ở bước kết thúc hoặc đã chốt), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+  /tenancies/{tenancyId}/end:finish:
+    parameters: [{ $ref: "#/components/parameters/TenancyId" }]
+    post:
+      tags: [MD-07]
+      summary: Chốt kết thúc hợp đồng, lập hóa đơn cuối (DRAFT) và hợp đồng → SETTLED
+      description: "Cần cả hai chỉ số cuối CONFIRMED, thiếu → 409 FINAL_READING_MISSING (details = [{field: electricity|water, message}]). Hóa đơn cuối kỳ finalPeriod: tiền phòng = lastRent (không tính theo ngày), điện nước theo chỉ số cuối và chỉ số kỳ trước, phí dịch vụ của nhà trọ; hóa đơn cũ chưa thu không gộp vào, chủ nhà gửi bằng POST /invoices/{id}/send. Kỳ đã có hóa đơn → 409 ALREADY_INVOICED. Phòng → VACANT. MOVE: tạo hợp đồng mới ở phòng đích cho cùng người thuê, trạng thái AWAITING_TENANT, phiên bản 1 chờ người thuê xác nhận bằng POST /tenancies/{id}/versions/1/confirm; startElectricity, startWater (chỉ số ban đầu ở phòng mới) bắt buộc. Tất cả trong một transaction."
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/FinishEndTenancyRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/EndTenancy" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { description: FORBIDDEN (không phải chủ nhà), content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { description: "FINAL_READING_MISSING, ALREADY_INVOICED, ROOM_OCCUPIED hoặc INVALID_STATE", content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+
 components:
   securitySchemes:
     cognito:
@@ -559,6 +605,7 @@ components:
     Dispute: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/DisputeResponse" } } }] } } } }
     Inspection: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/InspectionResponse" } } }] } } } }
     Settlement: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/SettlementResponse" } } }] } } } }
+    EndTenancy: { description: OK, content: { application/json: { schema: { allOf: [{ $ref: "#/components/schemas/Envelope" }, { properties: { data: { $ref: "#/components/schemas/EndTenancyResponse" } } }] } } } }
 
   schemas:
     Envelope:
@@ -576,7 +623,7 @@ components:
         errorCode:
           type: string
           enum: [VALIDATION_ERROR, INVALID_EMAIL, INVALID_FILE, INVALID_PERIOD, UNAUTHORIZED, FORBIDDEN, INVITE_EMAIL_MISMATCH, NOT_FOUND,
-                 RECORD_LOCKED, INVALID_STATE, VERSION_CONFLICT, ROOM_CODE_EXISTS, ROOM_OCCUPIED, PERIOD_CLOSED, INVITE_INVALID, INTERNAL_ERROR]
+                 RECORD_LOCKED, INVALID_STATE, VERSION_CONFLICT, ROOM_CODE_EXISTS, ROOM_OCCUPIED, PERIOD_CLOSED, ALREADY_INVOICED, FINAL_READING_MISSING, INVITE_INVALID, INTERNAL_ERROR]
         traceId: { type: string }
         details:
           type: array
@@ -892,7 +939,7 @@ components:
             properties:
               roomId: { type: string, format: uuid }
               roomCode: { type: string }
-              reason: { type: string, enum: [MISSING_READINGS, MISSING_PREVIOUS_READING, NO_LOCKED_CONTRACT, ALREADY_INVOICED] }
+              reason: { type: string, enum: [MISSING_READINGS, MISSING_PREVIOUS_READING, NO_LOCKED_CONTRACT, ALREADY_INVOICED, ENDING_TENANCY] }
     InvoiceResponse:
       type: object
       properties:
@@ -1053,3 +1100,65 @@ components:
         settledAt: { type: string, format: date-time, nullable: true }
         settledBy: { type: string, format: uuid, nullable: true }
         pdfUrl: { type: string, format: uri, nullable: true, description: "Link tải biên bản thanh lý (5 phút); null tới khi tạo xong" }
+    EndKind: { type: string, enum: [LEAVE, MOVE] }
+    EndTenancyRequest:
+      type: object
+      required: [endDate, kind]
+      properties:
+        endDate: { type: string, format: date, example: "2026-11-25" }
+        kind: { $ref: "#/components/schemas/EndKind" }
+        targetRoomId: { type: string, format: uuid, description: Bắt buộc khi kind = MOVE }
+    FinishEndTenancyRequest:
+      type: object
+      required: [lastRent]
+      properties:
+        lastRent: { type: integer, format: int64, minimum: 0, description: "Tiền phòng kỳ cuối, chủ nhà tự nhập" }
+        startElectricity: { type: integer, format: int64, minimum: 0, description: "Chỉ số điện ban đầu ở phòng mới; bắt buộc khi MOVE" }
+        startWater: { type: integer, format: int64, minimum: 0, description: "Chỉ số nước ban đầu ở phòng mới; bắt buộc khi MOVE" }
+    EndTargetRoom:
+      type: object
+      properties:
+        roomId: { type: string, format: uuid }
+        code: { type: string }
+        monthlyRent: { type: integer, format: int64 }
+    FinalReading:
+      type: object
+      description: Chỉ số cuối của một đồng hồ; mọi trường null khi chưa chụp ảnh
+      properties:
+        readingId: { type: string, format: uuid, nullable: true }
+        previous: { type: integer, format: int64, nullable: true }
+        value: { type: integer, format: int64, nullable: true }
+        status: { type: string, allOf: [{ $ref: "#/components/schemas/MeterReadingStatus" }], nullable: true }
+        photoUrl: { type: string, format: uri, nullable: true }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+        meterReplaced: { type: boolean, description: "Đồng hồ đã thay: chỉ số kỳ trước tính là 0" }
+    EndRates:
+      type: object
+      properties:
+        electricity: { type: integer, format: int64 }
+        water: { type: integer, format: int64 }
+    EndTenancyResponse:
+      type: object
+      properties:
+        tenancyId: { type: string, format: uuid }
+        roomId: { type: string, format: uuid }
+        roomCode: { type: string }
+        tenantName: { type: string, nullable: true }
+        endDate: { type: string, format: date }
+        kind: { $ref: "#/components/schemas/EndKind" }
+        finalPeriod: { type: string, example: "2026-11" }
+        targetRoom: { allOf: [{ $ref: "#/components/schemas/EndTargetRoom" }], nullable: true }
+        electricity: { $ref: "#/components/schemas/FinalReading" }
+        water: { $ref: "#/components/schemas/FinalReading" }
+        rates: { $ref: "#/components/schemas/EndRates" }
+        unpaidPrevious: { type: integer, format: int64, description: "Tổng hóa đơn SENT hoặc DISPUTED của hợp đồng, không gồm hóa đơn cuối" }
+        deposit: { type: integer, format: int64, description: "Tiền cọc của phiên bản hợp đồng khóa mới nhất (0 nếu không có); chỉ để hiển thị, hệ thống không tự trừ cọc" }
+        lastRent: { type: integer, format: int64, nullable: true }
+        finalInvoiceId: { type: string, format: uuid, nullable: true }
+        endedAt: { type: string, format: date-time, nullable: true }
+        newTenancyId: { type: string, format: uuid, nullable: true, description: "Hợp đồng mới ở phòng đích (MOVE đã chốt)" }
+    CancelEndTenancyResponse:
+      type: object
+      properties:
+        tenancyId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/TenancyStatus" }

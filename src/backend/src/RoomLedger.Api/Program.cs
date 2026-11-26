@@ -65,6 +65,7 @@ builder.Services.AddScoped<FindingAppService>();
 builder.Services.AddScoped<SettlementAppService>();   // Sang: MD-06-FE-05
 builder.Services.AddScoped<MeterAppService>();
 builder.Services.AddScoped<InvoiceAppService>();
+builder.Services.AddScoped<EndTenancyAppService>();
 
 // Swagger chỉ để test: bật ở Development hoặc khi OpenApi__Enabled=true, production mặc định tắt
 var swaggerEnabled = builder.IsSwaggerEnabled();
@@ -84,6 +85,7 @@ api.MapAccountEndpoints();
 api.MapPropertyEndpoints();
 api.MapRoomEndpoints();
 api.MapTenancyEndpoints();
+api.MapEndTenancyEndpoints();
 api.MapInspectionEndpoints();
 api.MapUploadEndpoints();
 api.MapMeterEndpoints();
