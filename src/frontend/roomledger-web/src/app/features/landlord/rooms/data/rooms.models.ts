@@ -12,16 +12,16 @@ export type RoomDisplayStatus = Schemas['RoomDisplayStatus'];
  */
 export type ContractState = 'CONFIRMED' | 'REJECTED' | 'INVITED' | 'AWAITING_TENANT' | 'DRAFT' | 'NONE';
 
-/** The latest approved reading of one meter. date is YYYY-MM-DD. */
+/** The latest approved reading of one meter. date is YYYY-MM-DD, null when only the previous period's reading is known. */
 export interface MeterSnapshot {
   value: number;
-  date: string;
+  date: string | null;
 }
 
 export interface PendingInvite {
   email: string;
-  /** YYYY-MM-DD */
-  startDate: string;
+  /** YYYY-MM-DD. Sample data only: the API invite has no start date. */
+  startDate: string | null;
   /** ISO date-time with +07:00 offset. */
   expiresAt: string;
 }
@@ -34,9 +34,11 @@ export interface PendingInvite {
 export interface RoomRow {
   roomId: string;
   code: string;
-  floor: number;
+  /** Not in the API (null there). */
+  floor: number | null;
   monthlyRent: number;
-  deposit: number;
+  /** From the tenancy terms; null while unknown. */
+  deposit: number | null;
   status: RoomStatus;
   displayStatus: RoomDisplayStatus;
   tenantName: string | null;
@@ -45,9 +47,11 @@ export interface RoomRow {
   contract: ContractState;
   /** Meter state of the current period (electricity first, as on LL-04). null for an empty room. */
   reading: ReviewState | null;
-  electricity: MeterSnapshot;
-  water: MeterSnapshot;
+  electricity: MeterSnapshot | null;
+  water: MeterSnapshot | null;
   invite: PendingInvite | null;
+  /** Number of scanned files of the latest contract version (API detail), null while unknown. */
+  contractFiles?: number | null;
 }
 
 export type RoomFilter = 'all' | 'occupied' | 'vacant' | 'awaiting';
