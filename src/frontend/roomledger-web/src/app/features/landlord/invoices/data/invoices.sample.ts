@@ -3,12 +3,15 @@ import { InvoiceDetail, InvoiceStatus, MeterKind } from '../../../../core/data/m
 /**
  * One invoice as the landlord sees it (LL-05). InvoiceDetailResponse plus fields the contract
  * does not carry yet: tenantName, dueDate, remindedAt and the correction made after a dispute.
+ * With the API roomId and tenantName come from the room list (null when the room is not found).
  */
 export interface LandlordInvoice extends InvoiceDetail {
-  roomId: string;
-  tenantName: string;
+  roomId: string | null;
+  tenantName: string | null;
   remindedAt: string | null;
   correction: { kind: MeterKind; from: number; to: number; at: string } | null;
+  /** API: only the list row has been read; rent, lines and disputes are placeholders until GET /invoices/{id} arrives. */
+  detailPending?: boolean;
 }
 
 export const ELECTRICITY_RATE = 3_500;
