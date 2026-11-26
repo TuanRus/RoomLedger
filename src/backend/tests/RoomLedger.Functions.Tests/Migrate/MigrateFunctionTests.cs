@@ -9,8 +9,8 @@ namespace RoomLedger.Functions.Tests.Migrate;
 
 /**
  * Database PostgreSQL tạm để kiểm tra Lambda migrate (giống ApiFactory: ROOMLEDGER_TEST_DB, mặc định docker compose).
- * Dùng đúng script CI sinh ra (dotnet ef migrations script --idempotent) và Function.GrantSql của Tuấn.
- * Giả lập RDS bằng role rds_iam; user ứng dụng có mật khẩu chỉ trong test (trên RDS dùng IAM token).
+ * Dùng đúng script CI sinh ra (dotnet ef migrations script --idempotent) và Function.BootstrapSql, GrantSql của Tuấn.
+ * Giả lập RDS bằng role rds_iam; hai user có mật khẩu chỉ trong test (trên RDS dùng IAM token).
  *
  * @author Sang
  * @version 1.0
@@ -24,6 +24,7 @@ public sealed class MigrateDbFixture : IAsyncLifetime
 
     public string Database { get; } = NewDatabaseName();
     public string AppUser { get; } = "rl_app_" + Guid.NewGuid().ToString("N")[..8];
+    public string MigratorUser { get; } = "rl_mig_" + Guid.NewGuid().ToString("N")[..8];
     public string Script { get; private set; } = "";
 
     public MigrateDbFixture()
@@ -43,6 +44,20 @@ public sealed class MigrateDbFixture : IAsyncLifetime
         Password = AppPassword,
     }.ConnectionString;
 
+    private string MigratorCs(string database) => new NpgsqlConnectionStringBuilder(_baseCs)
+    {
+        Database = database,
+        Username = MigratorUser,
+        Password = AppPassword,
+    }.ConnectionString;
+
+    /** Lần chạy đầu (BootstrapPassword): master tạo user; mật khẩu migrator chỉ đặt trong test. */
+    private async Task BootstrapAsync(string database)
+    {
+        await ExecAsync(MasterCs(database), Function.BootstrapSql(AppUser, MigratorUser));
+        await ExecAsync(MasterCs(database), $"ALTER ROLE {MigratorUser} PASSWORD '{AppPassword}';");
+    }
+
     public async Task InitializeAsync()
     {
         await CreateDatabaseAsync(Database);
@@ -50,6 +65,7 @@ public sealed class MigrateDbFixture : IAsyncLifetime
             DO $$ BEGIN CREATE ROLE rds_iam NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
             """);
         Script = GenerateIdempotentScript();
+        await BootstrapAsync(Database);
         await RunLikeHandleAsync(Database, Script);                                     // lần deploy đầu
         await ExecAsync(MasterCs(Database), $"ALTER ROLE {AppUser} PASSWORD '{AppPassword}';"); // chỉ trong test
     }
@@ -62,6 +78,7 @@ public sealed class MigrateDbFixture : IAsyncLifetime
             await ExecAsync(MasterCs("postgres"), $"DROP DATABASE IF EXISTS {database} WITH (FORCE);");
         }
         await ExecAsync(MasterCs("postgres"), $"DROP ROLE IF EXISTS {AppUser};");
+        await ExecAsync(MasterCs("postgres"), $"DROP ROLE IF EXISTS {MigratorUser};");
     }
 
     public async Task CreateDatabaseAsync(string database)
@@ -70,15 +87,22 @@ public sealed class MigrateDbFixture : IAsyncLifetime
         _databases.Add(database);
     }
 
+    /** Database nháp đã bootstrap, chưa có bảng. */
+    public async Task CreateBootstrappedDatabaseAsync(string database)
+    {
+        await CreateDatabaseAsync(database);
+        await BootstrapAsync(database);
+    }
+
     /**
-     * Đúng các bước của Function.HandleAsync sau khi đọc secret: một transaction, chạy SQL, rồi GrantSql, rồi commit.
+     * Đúng các bước của Function.HandleAsync sau bootstrap, bằng user migrator (không phải superuser): một transaction, chạy SQL, rồi GrantSql, rồi commit.
      *
      * @author Sang
      * @version 1.0
      */
     public async Task RunLikeHandleAsync(string database, string sql)
     {
-        await using var conn = new NpgsqlConnection(MasterCs(database));
+        await using var conn = new NpgsqlConnection(MigratorCs(database));
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
         await using (var cmd = new NpgsqlCommand(sql, conn, tx) { CommandTimeout = 300 })
@@ -213,6 +237,13 @@ public class MigrateFunctionTests(MigrateDbFixture db) : IClassFixture<MigrateDb
     }
 
     [Fact]
+    public async Task Tables_are_owned_by_the_migrator_so_later_migrations_can_alter_them()
+    {
+        var sql = "SELECT tableowner FROM pg_tables WHERE schemaname = 'public' AND tablename = 'property';";
+        Assert.Equal(db.MigratorUser, await MigrateDbFixture.ScalarAsync(db.MasterCs(db.Database), sql));
+    }
+
+    [Fact]
     public async Task Running_the_same_script_again_changes_nothing()
     {
         const string history = """SELECT count(*) FROM "__EFMigrationsHistory";""";
@@ -230,7 +261,7 @@ public class MigrateFunctionTests(MigrateDbFixture db) : IClassFixture<MigrateDb
     {
         // HandleAsync hứa: "lỗi thì rollback". Script lỗi ở cuối thì không bảng nào được tạo.
         var scratch = MigrateDbFixture.NewDatabaseName();
-        await db.CreateDatabaseAsync(scratch);
+        await db.CreateBootstrappedDatabaseAsync(scratch);
 
         await Assert.ThrowsAsync<PostgresException>(() => db.RunLikeHandleAsync(scratch, db.Script + "\nSELECT 1/0;"));
 
@@ -244,7 +275,7 @@ public class MigrateFunctionTests(MigrateDbFixture db) : IClassFixture<MigrateDb
     {
         // Lý do CI phải dùng --no-transactions: COMMIT trong script kết thúc transaction của Lambda.
         var scratch = MigrateDbFixture.NewDatabaseName();
-        await db.CreateDatabaseAsync(scratch);
+        await db.CreateBootstrappedDatabaseAsync(scratch);
         var withTransactions = db.GenerateIdempotentScript(MigrationsSqlGenerationOptions.Idempotent);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => db.RunLikeHandleAsync(scratch, withTransactions));
