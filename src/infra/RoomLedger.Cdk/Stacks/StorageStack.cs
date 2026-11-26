@@ -16,6 +16,7 @@ public sealed class StorageStackProps : StackProps
     public required string IncomingBucketName { get; init; }
     public required string DerivedBucketName { get; init; }
     public required string EvidenceBucketName { get; init; }
+    public required string OutboxBucketName { get; init; }
     /**
      * Origin của web cho CORS PUT vào bucket incoming, ví dụ https://demo.example.com.
      * Bắt buộc ở stage khác dev (không được bỏ trống hay "*"); dev bỏ trống thì dùng "*".
@@ -24,7 +25,7 @@ public sealed class StorageStackProps : StackProps
 }
 
 /**
- * 3 bucket incoming / evidence (Object Lock) / derived, lifecycle, chặn truy cập công khai, bắt buộc TLS.
+ * 4 bucket incoming / outbox (sự kiện, xóa sau 7 ngày) / evidence (Object Lock) / derived, lifecycle, chặn truy cập công khai, bắt buộc TLS.
  * Bucket incoming bật EventBridge để WorkflowStack (photo-ingest) nhận sự kiện "Object Created".
  * Phát rà soát và hoàn thiện bucket policy (StorageStack cần Phát duyệt).
  *
@@ -36,6 +37,7 @@ public sealed class StorageStack : Stack
     public Bucket Incoming { get; }
     public Bucket Evidence { get; }
     public Bucket Derived { get; }
+    public Bucket Outbox { get; }
 
     public StorageStack(Construct scope, string id, StorageStackProps props) : base(scope, id, props)
     {
@@ -81,6 +83,14 @@ public sealed class StorageStack : Stack
 
         Derived = NewBucket("Derived", props.DerivedBucketName, isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN, new BucketProps());
 
+        // Outbox sự kiện: Lambda ghi qua Gateway endpoint, bucket đẩy "Object Created" lên EventBridge
+        Outbox = NewBucket("Outbox", props.OutboxBucketName, isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN, new BucketProps
+        {
+            EventBridgeEnabled = true,
+            LifecycleRules = [new LifecycleRule { Id = "expire-7-days", Expiration = Duration.Days(7) }],
+        });
+
+        new CfnOutput(this, "OutboxBucket", new CfnOutputProps { Value = Outbox.BucketName });
         new CfnOutput(this, "IncomingBucket", new CfnOutputProps { Value = Incoming.BucketName });
         new CfnOutput(this, "EvidenceBucket", new CfnOutputProps { Value = Evidence.BucketName });
         new CfnOutput(this, "DerivedBucket", new CfnOutputProps { Value = Derived.BucketName });

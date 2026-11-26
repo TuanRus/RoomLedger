@@ -142,7 +142,7 @@ public class EvidenceSealTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture
     [Fact]
     public void InspectionLockedJson_FromTheApi_DeserializesWithTheLambdaSerializer()
     {
-        // Dạng sự kiện API phát (EventBridgePublisher, camelCase) khi khóa biên bản
+        // Detail API phát (camelCase) khi khóa biên bản
         var id = Guid.NewGuid();
         var json = $$$"""
             {"version":"0","id":"e1","detail-type":"InspectionLocked","source":"roomledger.api","account":"123456789012",
@@ -151,6 +151,25 @@ public class EvidenceSealTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture
             """;
         var serializer = new Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer();
         var evt = serializer.Deserialize<CloudWatchEvent<InspectionLockedDetail>>(new MemoryStream(Encoding.UTF8.GetBytes(json)));
+        Assert.Equal(id, evt.Detail.InspectionId);
+    }
+
+    [Fact]
+    public async Task OutboxObject_IsReadAndTurnedIntoTheBusinessEvent()
+    {
+        var id = Guid.NewGuid();
+        const string key = "events/roomledger.api/InspectionLocked/2026-11-08/abc.json";
+        _store.Objects[(StorageBucket.Outbox, key)] =
+            (Encoding.UTF8.GetBytes($$"""{"inspectionId":"{{id}}","tenancyId":"{{Guid.NewGuid()}}","type":"MOVE_IN"}"""), "application/json");
+        var created = new CloudWatchEvent<S3ObjectCreatedDetail>
+        {
+            Detail = new S3ObjectCreatedDetail(new S3BucketRef("roomledger-dev-outbox"), new S3ObjectRef(key, 100)),
+        };
+
+        var evt = await OutboxEvent.ReadAsync<InspectionLockedDetail>(_store, created, CancellationToken.None);
+
+        Assert.Equal("roomledger.api", evt.Source);
+        Assert.Equal("InspectionLocked", evt.DetailType);
         Assert.Equal(id, evt.Detail.InspectionId);
     }
 }

@@ -150,12 +150,13 @@ public class DataStackTests
     [Fact]
     public void Migrate_function_gets_exactly_the_env_tuans_function_reads()
     {
-        // Migrate/Function.cs đọc DB_SECRET_ARN (host lấy từ secret), DB_NAME, DB_APP_USER.
         var env = (IDictionary<string, object>)((IDictionary<string, object>)MigrateFn(Synth())["Environment"])["Variables"];
-        Assert.Equal(new[] { "DB_APP_USER", "DB_NAME", "DB_SECRET_ARN" }, env.Keys.OrderBy(k => k, StringComparer.Ordinal));
-        Assert.Contains("Secret", Json(env["DB_SECRET_ARN"]));
+        Assert.Equal(new[] { "DB_APP_USER", "DB_HOST", "DB_MASTER_USER", "DB_MIGRATOR_USER", "DB_NAME", "DB_PORT" },
+            env.Keys.OrderBy(k => k, StringComparer.Ordinal));
         Assert.Equal("roomledger", env["DB_NAME"]);
         Assert.Equal("roomledger_app", env["DB_APP_USER"]);
+        Assert.Equal("roomledger_migrator", env["DB_MIGRATOR_USER"]);
+        Assert.DoesNotContain("resolve:secretsmanager", Json(env));
     }
 
     [Fact]
@@ -163,11 +164,11 @@ public class DataStackTests
         => Assert.False(MigrateFn(Synth()).ContainsKey("ReservedConcurrentExecutions"));
 
     [Fact]
-    public void Migrate_role_reads_the_master_secret_but_has_no_iam_db_login()
+    public void Migrate_role_logs_in_with_iam_and_cannot_read_the_master_secret()
     {
-        // Migrate đăng nhập bằng mật khẩu trong secret; quyền rds-db:connect thừa thì không cấp.
         var policies = Json(Synth().FindResources("AWS::IAM::Policy"));
-        Assert.Contains("secretsmanager:GetSecretValue", policies);
-        Assert.DoesNotContain("rds-db:connect", policies);
+        Assert.Contains("rds-db:connect", policies);
+        Assert.Contains("/roomledger_migrator", policies);
+        Assert.DoesNotContain("secretsmanager", policies);
     }
 }

@@ -17,10 +17,9 @@ public sealed class NetworkStackProps : StackProps
 
 /**
  * VPC 10.0.0.0/16 chỉ có 2 private subnet (không NAT, không Internet Gateway).
- * Lambda gọi dịch vụ AWS qua VPC endpoint: S3 (Gateway) + Interface endpoint. Chỉ lambda-sg được vào endpoint.
- * - dev/demo: SSM, EventBridge, Secrets Manager, X-Ray, Cognito, 1 AZ để tiết kiệm.
- * - prod (sơ đồ v8.5.2): EventBridge ở cả 2 AZ. Secrets Manager (migrate) và Cognito (post-confirmation) tạm giữ 1 AZ
- *   cho tới khi migrate dùng IAM auth và post-confirmation ra khỏi VPC; SSM (không dùng) và X-Ray bỏ.
+ * Lambda gọi dịch vụ AWS qua VPC endpoint (sơ đồ final): S3 (Gateway) và một Interface endpoint cho Cognito
+ * (post-confirmation). Chỉ lambda-sg được vào endpoint. dev/demo đặt ở 1 AZ để tiết kiệm, prod đặt ở cả 2 AZ.
+ * Sự kiện đi qua bucket outbox và mọi Lambda đăng nhập RDS bằng IAM, nên không có endpoint EventBridge hay Secrets Manager.
  * Phụ trách: Phát (Sang viết bản đầu, T5). Chưa có Flow Logs.
  *
  * @author Sang
@@ -54,40 +53,18 @@ public sealed class NetworkStack : Stack
 
         Vpc.AddGatewayEndpoint("S3", new GatewayVpcEndpointOptions { Service = GatewayVpcEndpointAwsService.S3 });
 
-        var oneAz = new SubnetSelection
+        var cognito = Vpc.AddInterfaceEndpoint("Cognito", new InterfaceVpcEndpointOptions
         {
-            SubnetType = SubnetType.PRIVATE_ISOLATED,
-            AvailabilityZones = new[] { Vpc.AvailabilityZones[0] },
-        };
-        var bothAz = new SubnetSelection { SubnetType = SubnetType.PRIVATE_ISOLATED };
-
-        var endpoints = props.Stage == "prod"
-            ? new (string Id, IInterfaceVpcEndpointService Service, SubnetSelection Subnets)[]
+            Service = new InterfaceVpcEndpointAwsService("cognito-idp"),
+            Subnets = new SubnetSelection
             {
-                ("Events", InterfaceVpcEndpointAwsService.EVENTBRIDGE, bothAz),
-                ("Secrets", InterfaceVpcEndpointAwsService.SECRETS_MANAGER, oneAz),
-                ("Cognito", new InterfaceVpcEndpointAwsService("cognito-idp"), oneAz),
-            }
-            : new (string Id, IInterfaceVpcEndpointService Service, SubnetSelection Subnets)[]
-            {
-                ("Ssm", InterfaceVpcEndpointAwsService.SSM, oneAz),
-                ("Events", InterfaceVpcEndpointAwsService.EVENTBRIDGE, oneAz),
-                ("Secrets", InterfaceVpcEndpointAwsService.SECRETS_MANAGER, oneAz),
-                ("Xray", InterfaceVpcEndpointAwsService.XRAY, oneAz),
-                ("Cognito", new InterfaceVpcEndpointAwsService("cognito-idp"), oneAz),
-            };
-
-        foreach (var (epId, service, subnets) in endpoints)
-        {
-            var endpoint = Vpc.AddInterfaceEndpoint(epId, new InterfaceVpcEndpointOptions
-            {
-                Service = service,
-                Subnets = subnets,
-                PrivateDnsEnabled = true,
-                Open = false, // chỉ lambda-sg, không mở cho cả dải CIDR của VPC
-            });
-            endpoint.Connections.AllowDefaultPortFrom(LambdaSg, "HTTPS from RoomLedger Lambdas");
-        }
+                SubnetType = SubnetType.PRIVATE_ISOLATED,
+                AvailabilityZones = props.Stage == "prod" ? Vpc.AvailabilityZones : new[] { Vpc.AvailabilityZones[0] },
+            },
+            PrivateDnsEnabled = true,
+            Open = false, // chỉ lambda-sg, không mở cho cả dải CIDR của VPC
+        });
+        cognito.Connections.AllowDefaultPortFrom(LambdaSg, "HTTPS from RoomLedger Lambdas");
 
         new CfnOutput(this, "VpcId", new CfnOutputProps { Value = Vpc.VpcId });
         new CfnOutput(this, "LambdaSgId", new CfnOutputProps { Value = LambdaSg.SecurityGroupId });

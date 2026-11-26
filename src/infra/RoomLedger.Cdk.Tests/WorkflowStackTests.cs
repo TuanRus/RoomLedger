@@ -50,6 +50,7 @@ public class WorkflowStackTests
             IncomingBucketName = "roomledger-dev-incoming",
             DerivedBucketName = "roomledger-dev-derived",
             EvidenceBucketName = "roomledger-dev-evidence",
+            OutboxBucketName = "roomledger-dev-outbox",
         });
         return Template.FromStack(workflow);
     }
@@ -73,8 +74,8 @@ public class WorkflowStackTests
     [Theory]
     [InlineData(Ingest, "RoomLedger.Functions::RoomLedger.Functions.PhotoIngest.Function::HandleAsync")]
     [InlineData(Derive, "RoomLedger.Functions::RoomLedger.Functions.PhotoDerive.Function::HandleQueueAsync")]
-    [InlineData(SealFn, "RoomLedger.Functions::RoomLedger.Functions.EvidenceSeal.Function::HandleAsync")]
-    [InlineData(RenderFn, "RoomLedger.Functions::RoomLedger.Functions.RenderPdf.Function::HandleAsync")]
+    [InlineData(SealFn, "RoomLedger.Functions::RoomLedger.Functions.EvidenceSeal.Function::HandleOutboxAsync")]
+    [InlineData(RenderFn, "RoomLedger.Functions::RoomLedger.Functions.RenderPdf.Function::HandleOutboxAsync")]
     public void Functions_RunDotnet8_WithTheRightHandler_InsideTheVpc(string name, string handler)
     {
         var fn = Fn(name).Props;
@@ -129,23 +130,17 @@ public class WorkflowStackTests
             })]),
         });
 
+    private static IDictionary<string, object> OutboxRule(string source, string detailType) =>
+        Synth().FindResources("AWS::Events::Rule").Values.Select(PropsOf).Single(r =>
+        {
+            var pattern = Json(r["EventPattern"]);
+            return pattern.Contains($"\"prefix\":\"events/{source}/{detailType}/\"") && pattern.Contains("roomledger-dev-outbox");
+        });
+
     [Fact]
     public void PhotoReceived_GoesToThePhotoQueue()
-        => Synth().HasResourceProperties("AWS::Events::Rule", new Dictionary<string, object>
-        {
-            ["EventPattern"] = Match.ObjectLike(new Dictionary<string, object>
-            {
-                ["source"] = new[] { "roomledger.functions" },
-                ["detail-type"] = new[] { "PhotoReceived" },
-            }),
-            ["Targets"] = Match.ArrayWith([Match.ObjectLike(new Dictionary<string, object>
-            {
-                ["Arn"] = Match.ObjectLike(new Dictionary<string, object>
-                {
-                    ["Fn::GetAtt"] = Match.ArrayWith([QueueId("roomledger-dev-photo-queue"), "Arn"]),
-                }),
-            })]),
-        });
+        => Assert.Contains(QueueId("roomledger-dev-photo-queue"),
+            Json(OutboxRule("roomledger.functions", "PhotoReceived")["Targets"]));
 
     private static string QueueId(string name) =>
         Synth().FindResources("AWS::SQS::Queue").Single(r => (string)PropsOf(r.Value)["QueueName"] == name).Key;
@@ -192,14 +187,16 @@ public class WorkflowStackTests
         });
 
     [Fact]
-    public void Ingest_OnlyReadsIncoming_AndPublishesEvents()
+    public void Ingest_OnlyReadsIncoming_AndWritesOnlyItsOutboxPrefix()
     {
         var policy = PolicyOf(Fn(Ingest).LogicalId);
         Assert.Contains("s3:GetObject", policy);
         Assert.Contains("roomledger-dev-incoming/*", policy);
-        Assert.DoesNotContain("s3:PutObject", policy);
+        Assert.Contains("s3:PutObject", policy);
+        Assert.Contains("roomledger-dev-outbox/events/roomledger.functions/*", policy);
+        Assert.DoesNotContain("roomledger.api", policy);
         Assert.DoesNotContain("roomledger-dev-derived", policy);
-        Assert.Contains("events:PutEvents", policy);
+        Assert.DoesNotContain("events:PutEvents", policy);
     }
 
     [Fact]
@@ -209,35 +206,20 @@ public class WorkflowStackTests
         Assert.Contains("s3:GetObject", policy);
         Assert.Contains("s3:PutObject", policy);
         Assert.Contains("roomledger-dev-derived/*", policy);
+        Assert.Contains("roomledger-dev-outbox/events/roomledger.functions/PhotoReceived/*", policy);
         Assert.DoesNotContain("events:PutEvents", policy);
         Assert.DoesNotContain("s3:DeleteObject", policy);
     }
 
     [Fact]
     public void InspectionLockedFromTheApi_TriggersEvidenceSeal()
-        => Synth().HasResourceProperties("AWS::Events::Rule", new Dictionary<string, object>
-        {
-            ["EventPattern"] = Match.ObjectLike(new Dictionary<string, object>
-            {
-                ["source"] = new[] { "roomledger.api" },
-                ["detail-type"] = new[] { "InspectionLocked" },
-            }),
-            ["Targets"] = Match.ArrayWith([Match.ObjectLike(new Dictionary<string, object>
-            {
-                ["Arn"] = Match.ObjectLike(new Dictionary<string, object>
-                {
-                    ["Fn::GetAtt"] = Match.ArrayWith([Fn(SealFn).LogicalId]),
-                }),
-            })]),
-        });
+        => Assert.Contains(Fn(SealFn).LogicalId, Json(OutboxRule("roomledger.api", "InspectionLocked")["Targets"]));
 
     /** MD-06-FE-05: quyết toán xong → biên bản thanh lý PDF và niêm phong ảnh trả phòng (evidence-seal nhận inspectionId). */
     [Fact]
     public void TenancySettledFromTheApi_TriggersRenderPdf_AndSealsTheMoveOutPhotos()
     {
-        var rule = Synth().FindResources("AWS::Events::Rule").Values.Select(PropsOf)
-            .Single(r => Json(r["EventPattern"]).Contains("\"TenancySettled\""));
-        Assert.Contains("roomledger.api", Json(rule["EventPattern"]));
+        var rule = OutboxRule("roomledger.api", "TenancySettled");
         var targets = Json(rule["Targets"]);
         Assert.Contains(Fn(RenderFn).LogicalId, targets);
         Assert.Contains(Fn(SealFn).LogicalId, targets);

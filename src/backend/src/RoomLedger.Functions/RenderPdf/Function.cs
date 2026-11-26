@@ -36,6 +36,10 @@ public class Function
         _store = store;
     }
 
+    /** Điểm vào Lambda: nhận "Object Created" của bucket outbox. */
+    public async Task HandleOutboxAsync(CloudWatchEvent<S3ObjectCreatedDetail> input, ILambdaContext context) =>
+        await HandleAsync(await OutboxEvent.ReadAsync<TenancySettledDetail>(_store, input, CancellationToken.None), context);
+
     public async Task HandleAsync(CloudWatchEvent<TenancySettledDetail> input, ILambdaContext context)
     {
         var ct = CancellationToken.None;

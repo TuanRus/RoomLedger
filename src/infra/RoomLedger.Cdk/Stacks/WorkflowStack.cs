@@ -11,7 +11,6 @@ using Amazon.CDK.AWS.Logs;
 using Amazon.CDK.AWS.RDS;
 using Amazon.CDK.AWS.SQS;
 using Constructs;
-using EventBus = Amazon.CDK.AWS.Events.EventBus;
 
 namespace RoomLedger.Cdk.Stacks;
 
@@ -32,13 +31,15 @@ public sealed class WorkflowStackProps : StackProps
     public required string IncomingBucketName { get; init; }
     public required string DerivedBucketName { get; init; }
     public required string EvidenceBucketName { get; init; }
+    public required string OutboxBucketName { get; init; }
     /** Topic nhận báo động (ObservabilityStack); null → báo động không gửi đi đâu. */
     public Amazon.CDK.AWS.SNS.ITopic? AlarmTopic { get; init; }
 }
 
 /**
  * EventBridge + Lambda xử lý ảnh (T12). Sau này thêm read-document (AI đọc đồng hồ điện nước), notify.
- * Luồng upload: S3 "Object Created" (incoming) → photo-ingest → PhotoReceived → SQS photo-queue → photo-derive
+ * Sự kiện nghiệp vụ đi qua bucket outbox: ghi events/{source}/{detailType}/... → S3 "Object Created" → rule theo tiền tố.
+ * Luồng upload: S3 "Object Created" (incoming) → photo-ingest → PhotoReceived (outbox) → SQS photo-queue → photo-derive
  * (sơ đồ v8.5.2: hàng đợi đỡ đợt ảnh dồn dập, giới hạn số photo-derive chạy cùng lúc; lỗi 3 lần → DLQ).
  * Khóa biên bản: API InspectionLocked → evidence-seal (chép sang bucket evidence Object Lock, BR-18 RULE 4).
  * Trả phòng: không còn AI so ảnh (kiến trúc v8.5.2); API chuyển biên bản sang REVIEWING, chủ nhà xem ảnh và tự ghi
@@ -84,7 +85,7 @@ public sealed class WorkflowStack : Stack
             ["INCOMING_BUCKET"] = props.IncomingBucketName,
             ["DERIVED_BUCKET"] = props.DerivedBucketName,
             ["EVIDENCE_BUCKET"] = props.EvidenceBucketName,
-            ["EVENT_BUS_NAME"] = "default",
+            ["OUTBOX_BUCKET"] = props.OutboxBucketName,
             ["PHOTO_MAX_AGE_DAYS"] = "3",
         };
 
@@ -116,7 +117,7 @@ public sealed class WorkflowStack : Stack
         PhotoIngest = VpcFunction("PhotoIngest", "photo-ingest", 512, Duration.Seconds(60));
         PhotoDerive = VpcFunction("PhotoDerive", "photo-derive", 2048, Duration.Minutes(2), "HandleQueueAsync"); // HEIC 12 MP ≈ 50 MB điểm ảnh
         // Biên bản tối đa ~20 ảnh/khu vực × vài khu vực; mỗi ảnh ≤ 25 MB đọc 2 lần để băm
-        EvidenceSeal = VpcFunction("EvidenceSeal", "evidence-seal", 512, Duration.Minutes(5));
+        EvidenceSeal = VpcFunction("EvidenceSeal", "evidence-seal", 512, Duration.Minutes(5), "HandleOutboxAsync");
 
         // Sự kiện không giao được sau khi thử lại (Lambda lỗi, state machine không khởi động được) vào đây
         DeadLetterQueue = new Queue(this, "WorkflowDlq", new QueueProps
@@ -176,8 +177,17 @@ public sealed class WorkflowStack : Stack
             Resources = new[] { evidenceObjects },
         }));
 
-        var defaultBus = EventBus.FromEventBusName(this, "DefaultBus", "default");
-        defaultBus.GrantPutEventsTo(PhotoIngest);
+        // Outbox: photo-ingest chỉ ghi sự kiện của source functions; mỗi hàm nhận chỉ đọc đúng loại sự kiện của mình
+        string Outbox(string suffix) => $"arn:{Aws.PARTITION}:s3:::{props.OutboxBucketName}/events/{suffix}";
+        void Allow(Function function, string action, params string[] resources) =>
+            function.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+            {
+                Actions = new[] { action },
+                Resources = resources,
+            }));
+        Allow(PhotoIngest, "s3:PutObject", Outbox($"{FunctionsSource}/*"));
+        Allow(PhotoDerive, "s3:GetObject", Outbox($"{FunctionsSource}/{PhotoReceived}/*"));
+        Allow(EvidenceSeal, "s3:GetObject", Outbox($"{ApiSource}/{InspectionLocked}/*"), Outbox($"{ApiSource}/{TenancySettled}/*"));
         props.Db.GrantConnect(PhotoIngest, DataStack.AppUser);
         props.Db.GrantConnect(PhotoDerive, DataStack.AppUser);
         props.Db.GrantConnect(EvidenceSeal, DataStack.AppUser);
@@ -201,6 +211,20 @@ public sealed class WorkflowStack : Stack
             dlqAlarm.AddAlarmAction(new SnsAction(props.AlarmTopic));
         }
 
+        EventPattern FromOutbox(string source, string detailType) => new()
+        {
+            Source = new[] { "aws.s3" },
+            DetailType = new[] { "Object Created" },
+            Detail = new Dictionary<string, object>
+            {
+                ["bucket"] = new Dictionary<string, object> { ["name"] = new[] { props.OutboxBucketName } },
+                ["object"] = new Dictionary<string, object>
+                {
+                    ["key"] = new object[] { new Dictionary<string, object> { ["prefix"] = $"events/{source}/{detailType}/" } },
+                },
+            },
+        };
+
         new Rule(this, "PhotoUploaded", new RuleProps
         {
             Description = "New photo in the incoming bucket -> photo-ingest",
@@ -219,43 +243,32 @@ public sealed class WorkflowStack : Stack
         new Rule(this, "PhotoReceivedRule", new RuleProps
         {
             Description = "photo-ingest done -> photo-queue (SQS) -> photo-derive",
-            EventPattern = new EventPattern
-            {
-                Source = new[] { FunctionsSource },
-                DetailType = new[] { PhotoReceived },
-            },
+            EventPattern = FromOutbox(FunctionsSource, PhotoReceived),
             Targets = new IRuleTarget[] { new SqsQueue(PhotoQueue, new SqsQueueProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }) },
         });
 
         new Rule(this, "InspectionLockedRule", new RuleProps
         {
             Description = "Inspection locked (API) -> evidence-seal",
-            EventPattern = new EventPattern
-            {
-                Source = new[] { ApiSource },
-                DetailType = new[] { InspectionLocked },
-            },
+            EventPattern = FromOutbox(ApiSource, InspectionLocked),
             Targets = new IRuleTarget[] { new LambdaFunction(EvidenceSeal, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }) },
         });
 
         // ---- MD-06-FE-05: quyết toán (Sang) ----
         // render-pdf: QuestPDF + font Lato đi kèm gói; đọc RDS, chỉ được ghi derived/reports/ (không đọc ảnh, không evidence)
-        RenderPdf = VpcFunction("RenderPdf", "render-pdf", 512, Duration.Minutes(1));
+        RenderPdf = VpcFunction("RenderPdf", "render-pdf", 512, Duration.Minutes(1), "HandleOutboxAsync");
         RenderPdf.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
         {
             Actions = new[] { "s3:PutObject" },
             Resources = new[] { $"arn:{Aws.PARTITION}:s3:::{props.DerivedBucketName}/reports/*" },
         }));
         props.Db.GrantConnect(RenderPdf, DataStack.AppUser);
+        Allow(RenderPdf, "s3:GetObject", Outbox($"{ApiSource}/{TenancySettled}/*"));
 
         new Rule(this, "TenancySettledRule", new RuleProps
         {
             Description = "Tenancy settled (API) -> render-pdf (termination record) + evidence-seal (move-out photos)",
-            EventPattern = new EventPattern
-            {
-                Source = new[] { ApiSource },
-                DetailType = new[] { TenancySettled },
-            },
+            EventPattern = FromOutbox(ApiSource, TenancySettled),
             Targets = new IRuleTarget[]
             {
                 new LambdaFunction(RenderPdf, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }),

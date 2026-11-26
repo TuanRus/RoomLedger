@@ -140,14 +140,19 @@ public class PhotoLambdaTests(PhotoDbFixture db) : IClassFixture<PhotoDbFixture>
 
     // ---------- SQS photo-queue → photo-derive (sơ đồ v8.5.2) ----------
 
-    /** Body của tin SQS khi EventBridge đẩy sự kiện PhotoReceived vào hàng đợi: nguyên sự kiện dạng JSON. */
+    /** Body của tin SQS: sự kiện "Object Created" của bucket outbox mà EventBridge đẩy vào hàng đợi. */
     private static SQSEvent.SQSMessage QueueMessage(string id, string body) => new() { MessageId = id, Body = body };
 
-    private static string ReceivedJson(Guid photoId) => $$$"""
-        {"version":"0","id":"{{{Guid.NewGuid()}}}","detail-type":"PhotoReceived","source":"roomledger.functions",
-         "account":"123456789012","time":"2026-11-08T03:00:00Z","region":"ap-southeast-2","resources":[],
-         "detail":{"photoId":"{{{photoId}}}"}}
-        """;
+    private string ReceivedJson(Guid photoId)
+    {
+        var key = $"events/roomledger.functions/PhotoReceived/2026-11-08/{Guid.NewGuid():N}.json";
+        _store.Objects[(StorageBucket.Outbox, key)] = (System.Text.Encoding.UTF8.GetBytes($$"""{"photoId":"{{photoId}}"}"""), "application/json");
+        return $$$"""
+            {"version":"0","id":"{{{Guid.NewGuid()}}}","detail-type":"Object Created","source":"aws.s3",
+             "account":"123456789012","time":"2026-11-08T03:00:00Z","region":"ap-southeast-2","resources":[],
+             "detail":{"bucket":{"name":"roomledger-dev-outbox"},"object":{"key":"{{{key}}}","size":50} } }
+            """;
+    }
 
     [Fact]
     public async Task DeriveFromQueue_ProcessesEachMessage_AndReportsOnlyTheBadOne()

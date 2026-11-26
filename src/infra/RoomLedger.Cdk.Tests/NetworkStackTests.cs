@@ -63,48 +63,25 @@ public class NetworkStackTests
         });
 
     [Theory]
-    [InlineData("ssm")]
-    [InlineData("events")]
-    [InlineData("secretsmanager")]
-    [InlineData("xray")]
-    [InlineData("cognito-idp")]
-    public void Has_interface_endpoint_in_one_az_with_private_dns(string service)
+    [InlineData("dev", 1)]   // 1 AZ để tiết kiệm (D10)
+    [InlineData("prod", 2)]  // sơ đồ final: mỗi AZ một endpoint Cognito
+    public void Has_only_the_cognito_interface_endpoint_with_private_dns(string stage, int subnets)
     {
-        var name = $"com.amazonaws.{Region}.{service}";
-        var matches = PropsOf(Synth(), "AWS::EC2::VPCEndpoint")
-            .Where(p => p.TryGetValue("ServiceName", out var s) && s as string == name)
+        var interfaces = PropsOf(Synth(stage), "AWS::EC2::VPCEndpoint")
+            .Where(p => p["VpcEndpointType"] as string == "Interface")
             .ToList();
 
-        var ep = Assert.Single(matches);
-        Assert.Equal("Interface", ep["VpcEndpointType"]);
+        var ep = Assert.Single(interfaces);
+        Assert.Equal($"com.amazonaws.{Region}.cognito-idp", ep["ServiceName"]);
         Assert.True((bool)ep["PrivateDnsEnabled"]);
-        Assert.Single((object[])ep["SubnetIds"]); // 1 AZ in dev to save cost (D10)
-    }
-
-    [Theory]
-    [InlineData("events", 2)]          // sơ đồ v8.5.2: mỗi AZ một endpoint EventBridge
-    [InlineData("secretsmanager", 1)]  // tạm giữ cho migrate
-    [InlineData("cognito-idp", 1)]     // tạm giữ cho post-confirmation
-    public void Prod_interface_endpoints_follow_the_diagram(string service, int subnets)
-    {
-        var ep = Assert.Single(PropsOf(ProdTemplate.Value, "AWS::EC2::VPCEndpoint")
-            .Where(p => p.TryGetValue("ServiceName", out var s) && s as string == $"com.amazonaws.{Region}.{service}"));
         Assert.Equal(subnets, ((object[])ep["SubnetIds"]).Length);
     }
 
-    [Fact]
-    public void Prod_has_no_ssm_or_xray_endpoint()
-    {
-        var names = PropsOf(ProdTemplate.Value, "AWS::EC2::VPCEndpoint")
-            .Select(p => p.TryGetValue("ServiceName", out var s) ? s as string : null).ToList();
-        Assert.DoesNotContain($"com.amazonaws.{Region}.ssm", names);
-        Assert.DoesNotContain($"com.amazonaws.{Region}.xray", names);
-        Assert.Equal(4, names.Count);   // S3 gateway + 3 interface
-    }
-
-    [Fact]
-    public void Has_exactly_six_endpoints()
-        => Synth().ResourceCountIs("AWS::EC2::VPCEndpoint", 6);
+    [Theory]
+    [InlineData("dev")]
+    [InlineData("prod")]
+    public void Has_exactly_two_endpoints(string stage)
+        => Synth(stage).ResourceCountIs("AWS::EC2::VPCEndpoint", 2);
 
     [Fact]
     public void Has_lambda_security_group_named_by_stage()

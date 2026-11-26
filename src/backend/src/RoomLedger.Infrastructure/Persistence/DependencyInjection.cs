@@ -1,4 +1,3 @@
-using Amazon.EventBridge;
 using Amazon.S3;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -11,7 +10,7 @@ using RoomLedger.Infrastructure.S3;
 namespace RoomLedger.Infrastructure.Persistence;
 
 /**
- * Đăng ký DbContext, S3, EventBridge cho API và các Lambda.
+ * Đăng ký DbContext, S3, outbox sự kiện cho API và các Lambda.
  *
  * @author Tuấn
  * @version 1.1
@@ -51,7 +50,7 @@ public static class DependencyInjection
     }
 
     /**
-     * Đăng ký S3 và EventBridge.
+     * Đăng ký S3 và outbox sự kiện.
      *
      * @author Tuấn
      * @version 1.0
@@ -59,12 +58,11 @@ public static class DependencyInjection
     public static IServiceCollection AddAwsServices(this IServiceCollection services, IConfiguration config)
     {
         services.Configure<StorageOptions>(config.GetSection("Storage"));
-        services.Configure<EventBusOptions>(config.GetSection("EventBus"));
+        services.Configure<OutboxOptions>(config.GetSection("Outbox"));
         services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client());
-        services.AddSingleton<IAmazonEventBridge>(_ => new AmazonEventBridgeClient());
         services.AddSingleton<IStorage, S3Storage>();
         services.AddSingleton<IObjectStore, S3ObjectStore>();   // Sang: xóa ảnh trước khi khóa (MD-04-FE-03)
-        services.AddScoped<IEventPublisher, EventBridgePublisher>();
+        services.AddScoped<IEventPublisher, S3OutboxPublisher>();
         return services;
     }
 

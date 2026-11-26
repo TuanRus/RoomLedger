@@ -11,4 +11,6 @@ public class StorageOptions
     public string IncomingBucket { get; set; } = "";
     public string EvidenceBucket { get; set; } = "";
     public string DerivedBucket { get; set; } = "";
+    /** Bucket outbox sự kiện; chỉ các Lambda nhận sự kiện cần đọc. */
+    public string OutboxBucket { get; set; } = "";
 }
