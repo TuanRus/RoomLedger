@@ -698,9 +698,12 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.HasIndex("TenancyId")
                         .HasDatabaseName("ix_meter_reading_tenancy_id");
 
-                    b.HasIndex("RoomId", "Period", "Kind")
+                    b.HasIndex("RoomId", "Period")
+                        .HasDatabaseName("ix_meter_reading_room_id_period");
+
+                    b.HasIndex("TenancyId", "Period", "Kind")
                         .IsUnique()
-                        .HasDatabaseName("ux_meter_reading_room_id_period_kind");
+                        .HasDatabaseName("ux_meter_reading_tenancy_id_period_kind");
 
                     b.ToTable("meter_reading", (string)null);
                 });
@@ -1088,9 +1091,34 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<string>("EndKind")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("end_kind");
+
+                    b.Property<DateTimeOffset?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
                     b.Property<Guid>("LandlordId")
                         .HasColumnType("uuid")
                         .HasColumnName("landlord_id");
+
+                    b.Property<long?>("LastRent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_rent");
+
+                    b.Property<Guid?>("MoveTargetRoomId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("move_target_room_id");
+
+                    b.Property<Guid?>("NextTenancyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("next_tenancy_id");
 
                     b.Property<long?>("OpeningElectricity")
                         .HasColumnType("bigint")
@@ -1128,6 +1156,12 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
                     b.HasIndex("LandlordId")
                         .HasDatabaseName("ix_tenancy_landlord_id");
 
+                    b.HasIndex("MoveTargetRoomId")
+                        .HasDatabaseName("ix_tenancy_move_target_room_id");
+
+                    b.HasIndex("NextTenancyId")
+                        .HasDatabaseName("ix_tenancy_next_tenancy_id");
+
                     b.HasIndex("RoomId")
                         .IsUnique()
                         .HasDatabaseName("ux_tenancy_room_id_open")
@@ -1138,6 +1172,10 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
 
                     b.ToTable("tenancy", null, t =>
                         {
+                            t.HasCheckConstraint("ck_tenancy_end_kind_target", "(end_kind IS NOT DISTINCT FROM 'MOVE') = (move_target_room_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_tenancy_last_rent", "last_rent IS NULL OR last_rent >= 0");
+
                             t.HasCheckConstraint("ck_tenancy_opening_electricity", "opening_electricity IS NULL OR opening_electricity >= 0");
 
                             t.HasCheckConstraint("ck_tenancy_opening_water", "opening_water IS NULL OR opening_water >= 0");
@@ -1510,6 +1548,18 @@ namespace RoomLedger.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("RoomLedger.Core.Domain.Tenancy", b =>
                 {
+                    b.HasOne("RoomLedger.Core.Domain.Room", null)
+                        .WithMany()
+                        .HasForeignKey("MoveTargetRoomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_tenancy_room_move_target_room_id");
+
+                    b.HasOne("RoomLedger.Core.Domain.Tenancy", null)
+                        .WithMany()
+                        .HasForeignKey("NextTenancyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_tenancy_tenancy_next_tenancy_id");
+
                     b.HasOne("RoomLedger.Core.Domain.Room", "Room")
                         .WithMany("Tenancies")
                         .HasForeignKey("RoomId")
