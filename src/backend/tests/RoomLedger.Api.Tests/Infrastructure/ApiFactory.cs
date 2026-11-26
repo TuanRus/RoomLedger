@@ -28,6 +28,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly string _adminConnectionString;
     private readonly string _database = "roomledger_test_" + Guid.NewGuid().ToString("N")[..12];
 
+    /** Chuỗi kết nối tới database tạm (cho factory con cấu hình host khác, như LocalDevFactory). */
+    protected string ConnectionString => _connectionString;
+
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseUpper) },
