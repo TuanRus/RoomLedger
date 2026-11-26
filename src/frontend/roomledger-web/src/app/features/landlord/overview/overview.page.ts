@@ -5,6 +5,7 @@ import { MeterReviewStore, deltaOf, stateOf } from '../../../core/data/meter-rev
 import { Viewport } from '../../../core/layout/viewport';
 import { PeriodPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
+import { LoadState } from '../shared/load-state';
 import { LandlordDisputesStore } from '../disputes/data/disputes.store';
 import { LandlordInvoicesStore } from '../invoices/data/invoices.store';
 import { MeterCaptureStore } from '../meter-capture/data/meter-capture.store';
@@ -36,7 +37,7 @@ function roomList(codes: string[]): string {
  */
 @Component({
   selector: 'app-landlord-overview-page',
-  imports: [RouterLink, Icon, PeriodPipe, VndPipe],
+  imports: [RouterLink, Icon, LoadState, PeriodPipe, VndPipe],
   templateUrl: './overview.page.html',
   styleUrl: './overview.page.scss',
 })
@@ -81,7 +82,7 @@ export class LandlordOverviewPage {
         id: 'capture',
         icon: 'i-camera',
         title: this.viewport.isPhone() ? 'Ghi chỉ số' : 'Ghi chỉ số trên điện thoại',
-        detail: `${total - recorded} phòng chưa ghi: ${roomList(this.capture.groups().todo.map((r) => r.roomCode))} · hạn ${deadline}`,
+        detail: `${total - recorded} phòng chưa ghi: ${roomList(this.capture.groups().todo.map((r) => r.roomCode))}${deadline ? ` · hạn ${deadline}` : ''}`,
         value: `${recorded}/${total}`,
         link: '/landlord/meter-capture',
         tone: 'neu',
@@ -124,7 +125,7 @@ export class LandlordOverviewPage {
         icon: 'i-flag',
         title: 'Nhắc tiền quá hạn',
         detail: o.overdue
-          .map((i) => `${i.roomCode} kỳ ${+i.period.slice(5)}, quá ${i.daysLate} ngày`)
+          .map((i) => `${i.roomCode} kỳ ${+i.period.slice(5)}${i.daysLate != null ? `, quá ${i.daysLate} ngày` : ' chưa thanh toán'}`)
           .join(' · '),
         money: this.store.overdueTotal(),
         link: '/landlord/invoices',

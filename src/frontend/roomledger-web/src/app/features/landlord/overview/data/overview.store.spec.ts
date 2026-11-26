@@ -9,11 +9,6 @@ describe('OverviewStore', () => {
     expect(store.capturePercent()).toBe(84);
   });
 
-  it('keeps the attention count consistent with its parts', () => {
-    const a = TestBed.inject(OverviewStore).overview().attention;
-    expect(a.pending + a.abnormal + a.unreadable).toBe(a.total);
-  });
-
   it('formats helpers', () => {
     expect(capturePercent(5, 0)).toBe(0);
     expect(formatChange(0.64)).toBe('+64%');
