@@ -3,17 +3,13 @@ import { HttpInterceptorFn } from '@angular/common/http';
 import { OidcSecurityService } from 'angular-auth-oidc-client';
 import { switchMap } from 'rxjs';
 
-import { API_BASE_URL } from '../api/api.config';
+import { API_BASE_URL, isApiRequest } from '../api/api.config';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const oidc = inject(OidcSecurityService);
-  const apiBaseUrl = inject(API_BASE_URL);
-
-  const apiOrigin = new URL(apiBaseUrl).origin;
-  const requestOrigin = new URL(req.url, apiBaseUrl).origin;
 
   // Only attach the ID token to RoomLedger API requests.
-  if (requestOrigin !== apiOrigin) {
+  if (!isApiRequest(req.url, inject(API_BASE_URL))) {
     return next(req);
   }
 

@@ -4,6 +4,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "start:local-api": "ng serve --configuration local-api",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",

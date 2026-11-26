@@ -1,7 +1,12 @@
-export const environment = {
+import { Environment } from './environment.model';
+
+export const environment: Environment = {
   production: true,
 
-  apiBaseUrl: 'https://YOUR_API_DOMAIN',
+  apiBaseUrl: 'https://YOUR_API_DOMAIN/api/v1',
+
+  dataSource: 'api',
+  localDev: false,
 
   cognito: {
     authority: 'https://YOUR_COGNITO_ISSUER',

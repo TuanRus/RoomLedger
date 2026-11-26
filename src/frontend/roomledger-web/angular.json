@@ -57,6 +57,17 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "local-api": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.local-api.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -69,6 +80,10 @@
             },
             "development": {
               "buildTarget": "roomledger-web:build:development"
+            },
+            "local-api": {
+              "buildTarget": "roomledger-web:build:local-api",
+              "proxyConfig": "proxy.local-api.json"
             }
           },
           "defaultConfiguration": "development"
