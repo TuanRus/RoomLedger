@@ -5,8 +5,9 @@ import { MeterKind } from '../../../core/data/models';
 import { Viewport } from '../../../core/layout/viewport';
 import { PeriodPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
+import { LoadState } from '../shared/load-state';
 import { CaptureRoom } from './data/capture.models';
-import { CAPTURE_PERIOD, ROUND_DATE } from './data/capture-round.sample';
+import { ROUND_DATE } from './data/capture-round.sample';
 import { KINDS, MeterCaptureStore, RoomGroup } from './data/meter-capture.store';
 import { CaptureCamera } from './ui/capture-camera';
 import { CaptureDesk } from './ui/capture-desk';
@@ -26,7 +27,7 @@ const PILLS: { id: RoomGroup; label: string }[] = [
  */
 @Component({
   selector: 'app-meter-capture-page',
-  imports: [NgTemplateOutlet, Icon, PeriodPipe, CaptureCamera, CaptureResult, CaptureDesk, OfflineQueue],
+  imports: [NgTemplateOutlet, Icon, LoadState, PeriodPipe, CaptureCamera, CaptureResult, CaptureDesk, OfflineQueue],
   templateUrl: './meter-capture.page.html',
   styleUrl: './meter-capture.page.scss',
   host: { '(keydown.escape)': 'store.close()' },
@@ -37,8 +38,8 @@ export class MeterCapturePage implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly pills = PILLS;
-  protected readonly period = CAPTURE_PERIOD;
-  protected readonly roundDate = ROUND_DATE;
+  /** The date of the sample round; the API has no round date. */
+  protected readonly roundDate = this.store.sample ? ROUND_DATE : null;
   protected readonly filter = signal<RoomGroup>('todo');
 
   /** `?room=r-204&meter=WATER` opens that room's capture step, e.g. from "Cần chụp lại" in meter review. */
@@ -46,8 +47,8 @@ export class MeterCapturePage implements OnInit {
   readonly meter = input<MeterKind>();
 
   protected readonly visible = computed(() => this.store.groups()[this.filter()]);
-  protected readonly percent = computed(() => Math.round((this.store.recordedCount() / this.store.total()) * 100));
-  protected readonly showQueue = computed(() => !this.store.online() || this.store.heldCount() > 0);
+  protected readonly percent = computed(() => this.store.total() ? Math.round((this.store.recordedCount() / this.store.total()) * 100) : 0);
+  protected readonly showQueue = computed(() => !this.store.online() || this.store.heldCount() > 0 || this.store.failedCount() > 0);
   /** Phone: the light result screen (LM-08/LM-09) replaces the dark camera once AI has answered. */
   protected readonly showResult = computed(() => {
     const p = this.store.activeJob()?.phase;
@@ -103,6 +104,6 @@ export class MeterCapturePage implements OnInit {
     } else {
       text = 'đã duyệt';
     }
-    return `${room.tenantName} · ${text}`;
+    return room.tenantName ? `${room.tenantName} · ${text}` : text;
   }
 }

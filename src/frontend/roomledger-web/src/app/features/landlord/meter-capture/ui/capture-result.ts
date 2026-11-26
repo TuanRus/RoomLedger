@@ -3,7 +3,6 @@ import { Component, ElementRef, Injector, afterNextRender, computed, inject, inp
 import { Icon } from '../../../../shared/ui/icon';
 import { MeterDigits } from '../../../../shared/ui/meter-digits';
 import { NumPipe, VndPipe } from '../../../../shared/pipes/format.pipes';
-import { CAPTURE_PERIOD } from '../data/capture-round.sample';
 import { MeterCaptureStore, costOf } from '../data/meter-capture.store';
 import { KIND_LABEL, KIND_METER, KIND_UNIT, previousPeriod, shortStamp } from './capture-util';
 
@@ -28,7 +27,7 @@ export class CaptureResult {
   protected readonly kindUnit = KIND_UNIT;
   protected readonly kindMeter = KIND_METER;
   protected readonly shortStamp = shortStamp;
-  protected readonly prevPeriod = previousPeriod(CAPTURE_PERIOD);
+  protected readonly prevPeriod = computed(() => previousPeriod(this.store.period()));
 
   /** LM-09 "Tự nhập số từ đồng hồ" switches the unreadable screen to a manual entry form. */
   protected readonly manual = linkedSignal(() => {
@@ -44,12 +43,12 @@ export class CaptureResult {
 
   protected readonly cost = computed(() => {
     const slot = this.store.activeSlot();
-    return slot ? costOf(slot.kind, slot.previousValue, this.value()) : null;
+    return slot ? costOf(slot.kind, slot.previousValue, this.value(), this.store.rateOf(slot.kind)) : null;
   });
   protected readonly tooLow = computed(() => {
     const v = this.value();
     const slot = this.store.activeSlot();
-    return v != null && !!slot && v < slot.previousValue;
+    return v != null && slot?.previousValue != null && v < slot.previousValue;
   });
 
   protected confidence(c: number | null): string {

@@ -15,7 +15,7 @@
   <div class="body">
     <div class="photo" [class.short]="unreadable">
       <!-- Plain img: the photo can be a blob: URL, which NgOptimizedImage rejects. -->
-      <img [src]="job.photoUrl" [alt]="unreadable ? 'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + ' bị mờ hoặc lóa, không đọc được số' : 'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + ', AI đọc ' + job.aiValue + ' ' + unit">
+      <img [src]="job.photoUrl" [alt]="unreadable ? 'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + ' bị mờ hoặc lóa, không đọc được số' : 'Ảnh ' + kindMeter[kind] + ' ' + room.roomCode + (job.aiValue != null ? ', AI đọc ' + job.aiValue + ' ' + unit : '')">
       <span class="tag">{{ unreadable ? 'Ảnh vừa chụp' : 'Bạn chụp · ' + shortStamp(job.capturedAt) }}</span>
     </div>
 
@@ -27,7 +27,9 @@
       <ul class="tips">
         <li><app-icon name="i-blur" /><span><b>Ảnh bị mờ.</b> Giữ máy yên, chạm vào màn hình để lấy nét vào dãy số.</span></li>
         <li><app-icon name="i-sun" /><span><b>Bị lóa hoặc quá tối.</b> Đèn chiếu thẳng vào mặt số thì tắt flash, nghiêng máy; hành lang tối thì bật flash.</span></li>
-        <li><app-icon name="i-meter" /><span><b>Đúng {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }}?</b> Số {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }} {{ room.roomCode }} là {{ slot.meterNo }}.</span></li>
+        @if (slot.meterNo) {
+          <li><app-icon name="i-meter" /><span><b>Đúng {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }}?</b> Số {{ kind === 'ELECTRICITY' ? 'công tơ' : 'đồng hồ' }} {{ room.roomCode }} là {{ slot.meterNo }}.</span></li>
+        }
       </ul>
       <div class="acts col">
         <button type="button" class="btn lg block" (click)="store.discard()"><app-icon name="i-camera" />{{ layout() === 'phone' ? 'Chụp lại' : 'Tải ảnh khác' }}</button>
@@ -36,7 +38,7 @@
     } @else {
       <div class="field">
         <div class="row between">
-          <label [for]="'cap-v-' + room.roomId">{{ unreadable ? 'Số trên đồng hồ (tự nhập)' : 'AI đọc được' }}</label>
+          <label [for]="'cap-v-' + room.roomId">{{ unreadable || job.aiValue == null ? 'Số trên đồng hồ (tự nhập)' : 'AI đọc được' }}</label>
           @if (!unreadable && job.confidence != null) {
             @if (job.confidence >= 0.9) {
               <span class="chip info"><app-icon name="i-ai" />Khá chắc chắn · {{ confidence(job.confidence) }}</span>
@@ -45,7 +47,7 @@
             }
           }
         </div>
-        @if (editing() || unreadable) {
+        @if (editing() || unreadable || job.aiValue == null) {
           <div class="input lcd-input">
             <input [id]="'cap-v-' + room.roomId" class="val" inputmode="numeric" autocomplete="off" [value]="value() ?? ''" (input)="onInput($event)" [attr.aria-describedby]="'cap-h-' + room.roomId" [attr.aria-invalid]="tooLow()">
             <span class="unit">{{ unit }}</span>
@@ -59,13 +61,13 @@
         @if (tooLow()) {
           <span class="err" [id]="'cap-h-' + room.roomId"><app-icon name="i-alert" />Nhỏ hơn kỳ trước ({{ slot.previousValue | num }} {{ unit }}). Kiểm tra lại số trên đồng hồ.</span>
         } @else {
-          <span class="help" [id]="'cap-h-' + room.roomId">{{ unreadable ? 'Nhìn mặt đồng hồ ' + slot.meterNo + ' và nhập đủ dãy số.' : 'Số trên ảnh khác? Chạm vào ô để sửa.' }}</span>
+          <span class="help" [id]="'cap-h-' + room.roomId">{{ job.aiTimedOut ? 'AI chưa đọc xong, bạn có thể tự nhập số.' : unreadable ? 'Nhìn mặt đồng hồ' + (slot.meterNo ? ' ' + slot.meterNo : '') + ' và nhập đủ dãy số.' : job.aiValue == null ? 'Nhìn mặt đồng hồ và nhập đủ dãy số.' : 'Số trên ảnh khác? Chạm vào ô để sửa.' }}</span>
         }
       </div>
 
       <div class="sheet">
         <dl class="kv">
-          <dt>Kỳ trước ({{ prevPeriod }})</dt><dd>{{ slot.previousValue | num }} {{ unit }}</dd>
+          <dt>Kỳ trước ({{ prevPeriod() }})</dt><dd>{{ slot.previousValue | num }} {{ unit }}</dd>
           <dt>Tiêu thụ kỳ này</dt><dd><b>{{ cost() ? (cost()!.usage | num) + ' ' + unit : '—' }}</b></dd>
           <dt>Thành tiền</dt><dd class="money">{{ cost() ? (cost()!.amount | vnd) : '—' }}</dd>
         </dl>
@@ -73,10 +75,13 @@
 
       <div class="acts">
         <button type="button" class="btn sec lg" (click)="store.discard()">Chụp lại</button>
-        <button type="button" class="btn lg grow" [disabled]="value() == null || tooLow()" (click)="approve()">
+        <button type="button" class="btn lg grow" [disabled]="value() == null || tooLow() || store.approving()" (click)="approve()">
           {{ unreadable ? 'Lưu' : 'Duyệt' }} · {{ next ? 'sang ' + next : 'xong lượt' }}
         </button>
       </div>
+      @if (job.error) {
+        <p class="err" role="alert"><app-icon name="i-alert" size="sm" />{{ job.error }}</p>
+      }
       <p class="small muted note">Người thuê chỉ thấy số này cùng ảnh gốc sau khi bạn duyệt.</p>
     }
   </div>

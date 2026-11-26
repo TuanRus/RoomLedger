@@ -29,7 +29,7 @@ export class CaptureCamera {
     const counted = room != null && this.store.groupOf(room) !== 'todo';
     return Math.min(this.store.recordedCount() + (counted ? 0 : 1), this.store.total());
   });
-  protected readonly percent = computed(() => Math.round((this.store.recordedCount() / this.store.total()) * 100));
+  protected readonly percent = computed(() => this.store.total() ? Math.round((this.store.recordedCount() / this.store.total()) * 100) : 0);
   protected readonly pct = computed(() => Math.round(this.store.activeJob()?.progress ?? 0));
   protected readonly uploaded = computed(() => {
     const j = this.store.activeJob();

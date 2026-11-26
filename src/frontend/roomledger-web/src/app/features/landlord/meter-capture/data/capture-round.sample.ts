@@ -30,6 +30,7 @@ function slot(
     base,
     previousValue,
     meterNo,
+    readingId: null,
     value,
     sample: { aiValue: null, confidence: null, ...sample },
   };
