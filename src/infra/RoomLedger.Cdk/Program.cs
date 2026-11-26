@@ -46,12 +46,13 @@ if (!File.Exists(apiAsset) && !Directory.Exists(apiAsset))
 
 // Tên bucket roomledger-{stage}-{tên}-{account}, dùng chung cho StorageStack và WorkflowStack.
 // Tên S3 là duy nhất toàn cầu nên thêm hậu tố account (Aws.ACCOUNT_ID tự thay khi deploy, không cần biết trước).
-// Ghi đè bằng -c incomingBucket=... -c derivedBucket=... -c evidenceBucket=...
+// Ghi đè bằng -c incomingBucket=... -c derivedBucket=... -c evidenceBucket=... -c outboxBucket=...
 string BucketName(string purpose) =>
     (string?)app.Node.TryGetContext($"{purpose}Bucket") ?? $"{Naming.Resource(stage, purpose)}-{Aws.ACCOUNT_ID}";
 var incomingBucket = BucketName("incoming");
 var derivedBucket = BucketName("derived");
 var evidenceBucket = BucketName("evidence");
+var outboxBucket = BucketName("outbox");
 
 var network = new NetworkStack(app, Id("network"), new NetworkStackProps { Env = env, Stage = stage });
 new SecurityStack(app, Id("security"), new SecurityStackProps { Env = env, Stage = stage });
@@ -70,6 +71,7 @@ var storage = new StorageStack(app, Id("storage"), new StorageStackProps
     IncomingBucketName = incomingBucket,
     DerivedBucketName = derivedBucket,
     EvidenceBucketName = evidenceBucket,
+    OutboxBucketName = outboxBucket,
     WebOrigin = (string?)app.Node.TryGetContext("webOrigin"),   // bắt buộc khi stage khác dev, xem StorageStack
 });
 var auth = new AuthStack(app, Id("auth"), new AuthStackProps
@@ -106,6 +108,7 @@ new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
     IncomingBucketName = incomingBucket,
     DerivedBucketName = derivedBucket,
     EvidenceBucketName = evidenceBucket,
+    OutboxBucketName = outboxBucket,
 });
 // WAF cho CloudFront phải ở us-east-1 (context edgeRegion), nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi.
 // Cần cả nhóm quyết định.

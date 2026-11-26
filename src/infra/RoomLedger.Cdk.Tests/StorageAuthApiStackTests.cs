@@ -7,7 +7,7 @@ using Xunit;
 namespace RoomLedger.Cdk.Tests;
 
 /**
- * StorageStack (3 bucket, Object Lock), AuthStack (2 User Pool, PostConfirmation) và ApiStack (REST API,
+ * StorageStack (4 bucket, Object Lock), AuthStack (2 User Pool, PostConfirmation) và ApiStack (REST API,
  * Cognito authorizer, Lambda api trong VPC) nối với Network + Data của develop.
  *
  * @author Tuấn
@@ -38,6 +38,7 @@ public class StorageAuthApiStackTests
             IncomingBucketName = "roomledger-dev-incoming",
             DerivedBucketName = "roomledger-dev-derived",
             EvidenceBucketName = "roomledger-dev-evidence",
+            OutboxBucketName = "roomledger-dev-outbox",
         });
         var auth = new AuthStack(app, "TestAuth", new AuthStackProps
         {
@@ -69,6 +70,7 @@ public class StorageAuthApiStackTests
             IncomingBucketName = "roomledger-demo-incoming",
             DerivedBucketName = "roomledger-demo-derived",
             EvidenceBucketName = "roomledger-demo-evidence",
+            OutboxBucketName = "roomledger-demo-outbox",
             WebOrigin = webOrigin,
         });
 
@@ -128,30 +130,31 @@ public class StorageAuthApiStackTests
     }
 
     [Fact]
-    public void Storage_HasThreeBuckets_WithTheNamesWorkflowStackUses()
+    public void Storage_HasFourBuckets_WithTheNamesWorkflowStackUses()
     {
         var storage = Templates.Value.Storage;
-        storage.ResourceCountIs("AWS::S3::Bucket", 3);
-        foreach (var name in new[] { "roomledger-dev-incoming", "roomledger-dev-derived", "roomledger-dev-evidence" })
+        storage.ResourceCountIs("AWS::S3::Bucket", 4);
+        foreach (var name in new[] { "roomledger-dev-incoming", "roomledger-dev-derived", "roomledger-dev-evidence", "roomledger-dev-outbox" })
         {
             storage.HasResourceProperties("AWS::S3::Bucket", new Dictionary<string, object> { ["BucketName"] = name });
         }
     }
 
     // CDK bật EventBridge qua custom resource Custom::S3BucketNotifications, không ghi vào AWS::S3::Bucket
-    [Fact]
-    public void Storage_IncomingSendsEventsToEventBridge()
+    [Theory]
+    [InlineData("roomledger-dev-incoming")]
+    [InlineData("roomledger-dev-outbox")]
+    public void Storage_SendsEventsToEventBridge(string bucket)
     {
         var storage = Templates.Value.Storage;
-        var incomingId = storage.FindResources("AWS::S3::Bucket", new Dictionary<string, object>
+        var bucketId = storage.FindResources("AWS::S3::Bucket", new Dictionary<string, object>
         {
-            ["Properties"] = Match.ObjectLike(new Dictionary<string, object> { ["BucketName"] = "roomledger-dev-incoming" }),
+            ["Properties"] = Match.ObjectLike(new Dictionary<string, object> { ["BucketName"] = bucket }),
         }).Keys.Single();
-        var notifications = storage.FindResources("Custom::S3BucketNotifications");
-        var single = Assert.Single(notifications.Values);
-        var json = Json(single);
-        Assert.Contains("EventBridgeConfiguration", json);
-        Assert.Contains(incomingId, json);
+        var notifications = storage.FindResources("Custom::S3BucketNotifications").Values.Select(Json).ToList();
+        Assert.Equal(2, notifications.Count);
+        var single = Assert.Single(notifications, n => n.Contains(bucketId));
+        Assert.Contains("EventBridgeConfiguration", single);
     }
 
     [Fact]
@@ -268,5 +271,15 @@ public class StorageAuthApiStackTests
         Assert.DoesNotContain("s3:DeleteObject", qr);
         // Không còn statement nào cho phép ghi vào derived ngoài qr/*
         Assert.DoesNotContain(puts.Where(s => !Json(s).Contains("PutPropertyQr")), s => Json(s).Contains("Derived"));
+    }
+
+    /** Sự kiện: API chỉ ghi được outbox dưới tiền tố của mình, không còn quyền events:PutEvents. */
+    [Fact]
+    public void Api_PublishesOnlyThroughItsOutboxPrefix()
+    {
+        var policies = Json(Templates.Value.Api.FindResources("AWS::IAM::Policy"));
+        Assert.Contains("PublishToOutbox", policies);
+        Assert.Contains("/events/roomledger.api/*", policies);
+        Assert.DoesNotContain("events:PutEvents", policies);
     }
 }

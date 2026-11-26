@@ -1,12 +1,10 @@
 using Amazon.CDK;
 using Amazon.CDK.AWS.APIGateway;
 using Amazon.CDK.AWS.EC2;
-using Amazon.CDK.AWS.Events;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.RDS;
 using Constructs;
-using EventBus = Amazon.CDK.AWS.Events.EventBus;
 
 namespace RoomLedger.Cdk.Stacks;
 
@@ -46,7 +44,6 @@ public sealed class ApiStack : Stack
         string Name(string n) => Naming.Resource(props.Stage, n);
         var storage = props.Storage;
         var auth = props.Auth;
-        var bus = EventBus.FromEventBusName(this, "Bus", "default");
 
         ApiFunction = new Function(this, "Api", new FunctionProps
         {
@@ -68,8 +65,8 @@ public sealed class ApiStack : Stack
                 ["Storage__IncomingBucket"] = storage.Incoming.BucketName,
                 ["Storage__EvidenceBucket"] = storage.Evidence.BucketName,
                 ["Storage__DerivedBucket"] = storage.Derived.BucketName,
-                ["EventBus__BusName"] = bus.EventBusName,
-                ["EventBus__Source"] = WorkflowStack.ApiSource,
+                ["Outbox__Bucket"] = storage.Outbox.BucketName,
+                ["Outbox__Source"] = WorkflowStack.ApiSource,
             },
             // Không đặt ReservedConcurrentExecutions: giới hạn tài khoản là 10
         });
@@ -88,7 +85,14 @@ public sealed class ApiStack : Stack
             Actions = ["s3:PutObject"],
             Resources = [storage.Derived.ArnForObjects("qr/*")],
         }));
-        bus.GrantPutEventsTo(ApiFunction);
+        // Sự kiện nghiệp vụ: chỉ ghi được dưới tiền tố source của API trong outbox
+        ApiFunction.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Sid = "PublishToOutbox",
+            Effect = Effect.ALLOW,
+            Actions = ["s3:PutObject"],
+            Resources = [storage.Outbox.ArnForObjects($"events/{WorkflowStack.ApiSource}/*")],
+        }));
 
         // D1 (BR-17): xóa ảnh trước khi khóa. Chỉ incoming, ảnh chuyển đổi trong derived (*.jpg gồm .thumb.jpg) và mã QR (derived/qr/*).
         // Không có quyền xóa trên evidence; PDF thanh lý (derived/reports/*.pdf) không khớp *.jpg nên không xóa được.
