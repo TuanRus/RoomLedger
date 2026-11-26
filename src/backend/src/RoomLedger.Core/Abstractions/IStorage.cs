@@ -11,6 +11,7 @@ public enum StorageBucket
     Incoming,
     Evidence,
     Derived,
+    Outbox,
 }
 
 /**

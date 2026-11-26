@@ -1,4 +1,3 @@
-using Amazon.EventBridge;
 using Amazon.S3;
 using Microsoft.Extensions.Options;
 using RoomLedger.Core.Abstractions;
@@ -22,7 +21,7 @@ public sealed record PhotoEventDetail(Guid PhotoId)
 /**
  * Client AWS thật cho Lambda, tạo một lần mỗi môi trường chạy (dùng lại giữa các lần gọi).
  * Cấu hình qua biến môi trường do CDK (WorkflowStack) đặt: INCOMING_BUCKET, DERIVED_BUCKET, EVIDENCE_BUCKET,
- * EVENT_BUS_NAME, PHOTO_MAX_AGE_DAYS.
+ * OUTBOX_BUCKET, PHOTO_MAX_AGE_DAYS.
  *
  * @author Sang
  * @version 1.0
@@ -34,12 +33,13 @@ public static class FunctionAws
         IncomingBucket = Env("INCOMING_BUCKET"),
         DerivedBucket = Env("DERIVED_BUCKET"),
         EvidenceBucket = Env("EVIDENCE_BUCKET"),
+        OutboxBucket = Env("OUTBOX_BUCKET"),
     })));
 
-    private static readonly Lazy<IEventPublisher> Publisher = new(() => new EventBridgePublisher(new AmazonEventBridgeClient(),
-        Options.Create(new EventBusOptions
+    private static readonly Lazy<IEventPublisher> Publisher = new(() => new S3OutboxPublisher(new AmazonS3Client(),
+        Options.Create(new OutboxOptions
         {
-            BusName = Environment.GetEnvironmentVariable("EVENT_BUS_NAME") ?? "default",
+            Bucket = Env("OUTBOX_BUCKET"),
             Source = "roomledger.functions",
         })));
 

@@ -81,6 +81,7 @@ public class S3ObjectStore(IAmazonS3 s3, IOptions<StorageOptions> options) : IOb
     {
         StorageBucket.Incoming => _options.IncomingBucket,
         StorageBucket.Evidence => _options.EvidenceBucket,
+        StorageBucket.Outbox => _options.OutboxBucket,
         _ => _options.DerivedBucket,
     };
 }
