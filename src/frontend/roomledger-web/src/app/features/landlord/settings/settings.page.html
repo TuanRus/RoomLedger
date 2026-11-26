@@ -1,3 +1,5 @@
+<app-load-state [status]="store.status()" [error]="store.error()" (retry)="store.reload()" />
+
 @let s = store.settings();
 @let m = model();
 @let changes = priceChanges();
@@ -7,7 +9,11 @@
   <div class="top">
     <div>
       <h1>Đơn giá và kỳ thu</h1>
-      <p class="sub">Áp dụng cho hóa đơn từ kỳ {{ store.nextPeriod | period }}. Hóa đơn đã tạo không đổi.</p>
+      @if (store.sample) {
+        <p class="sub">Áp dụng cho hóa đơn từ kỳ {{ store.nextPeriod | period }}. Hóa đơn đã tạo không đổi.</p>
+      } @else {
+        <p class="sub">Đơn giá điện nước và tiền phòng của nhà trọ.</p>
+      }
     </div>
     <div class="acts">
       <button type="button" class="btn sec" [disabled]="!dirty()" (click)="cancel()">Hủy</button>
@@ -18,8 +24,10 @@
   </div>
 
   <div aria-live="polite">
-    @if (status() === 'saved' && !dirty()) {
-      <div class="banner ok msg"><app-icon name="i-check-c" /><span>Đã lưu lúc {{ savedAt() }}. Giá mới áp dụng từ kỳ {{ store.nextPeriod | period }}.</span></div>
+    @if (store.saveError(); as saveErr) {
+      <div class="banner warn msg" role="alert"><app-icon name="i-alert" /><span>{{ saveErr }}</span></div>
+    } @else if (status() === 'saved' && !dirty()) {
+      <div class="banner ok msg"><app-icon name="i-check-c" /><span>Đã lưu lúc {{ savedAt() }}.@if (store.sample) { Giá mới áp dụng từ kỳ {{ store.nextPeriod | period }}. }</span></div>
     } @else if (status() === 'invalid' && f().invalid()) {
       <div class="banner warn msg"><app-icon name="i-alert" /><span>Chưa lưu được. Sửa các ô báo đỏ rồi bấm Lưu thay đổi.</span></div>
     }
@@ -37,7 +45,7 @@
             <span class="unit">đ / kWh</span>
           </div>
           @if (eErr) { <span class="err" id="p-e-h"><app-icon name="i-alert" />{{ eErr }}</span> }
-          @else { <span class="help" id="p-e-h">Hiện tại {{ s.electricityRate | vnd }}/kWh</span> }
+          @else { <span class="help" id="p-e-h">Hiện tại {{ s.electricityRate | vnd }}/kWh@if (!store.sample) { · chưa đổi được đơn giá qua hệ thống. } </span> }
         </div>
         <div class="field">
           <label for="p-w">Giá nước</label>
@@ -47,10 +55,16 @@
             <span class="unit">đ / m³</span>
           </div>
           @if (wErr) { <span class="err" id="p-w-h"><app-icon name="i-alert" />{{ wErr }}</span> }
-          @else { <span class="help" id="p-w-h">Hiện tại {{ s.waterRate | vnd }}/m³</span> }
+          @else { <span class="help" id="p-w-h">Hiện tại {{ s.waterRate | vnd }}/m³@if (!store.sample) { · chưa đổi được đơn giá qua hệ thống. } </span> }
         </div>
       </section>
 
+      @if (!store.sample) {
+        <section class="card stack" aria-labelledby="h-cycle">
+          <h2 id="h-cycle">Kỳ thu</h2>
+          <p class="muted">Chưa có dữ liệu.</p>
+        </section>
+      } @else {
       <section class="card stack" aria-labelledby="h-cycle">
         <h2 id="h-cycle">Kỳ thu</h2>
         <div class="field">
@@ -73,9 +87,10 @@
           <span class="toggle" [class.on]="m.remindReading" aria-hidden="true"></span>
         </label>
       </section>
+      }
 
       @if (changes.length) {
-        <div class="banner info"><app-icon name="i-info" /><span>Đổi {{ changes.join(' và ') }} sẽ áp dụng cho <b>{{ store.occupiedRooms }} phòng</b> từ kỳ {{ store.nextPeriod | period }}. Người thuê được báo trong hóa đơn tiếp theo.</span></div>
+        <div class="banner info"><app-icon name="i-info" /><span>Đổi {{ changes.join(' và ') }} sẽ áp dụng cho <b>{{ store.occupiedRooms() }} phòng</b> từ kỳ {{ store.nextPeriod | period }}. Người thuê được báo trong hóa đơn tiếp theo.</span></div>
       }
     </div>
 
@@ -83,7 +98,7 @@
       <section aria-labelledby="h-rent">
         <div class="row between">
           <h2 id="h-rent">Tiền phòng theo phòng</h2>
-          <span class="small muted">{{ rooms().length }} / {{ store.occupiedRooms }} phòng (mẫu)</span>
+          <span class="small muted">@if (store.sample) { {{ rooms().length }} / {{ store.occupiedRooms() }} phòng (mẫu) } @else { {{ rooms().length }} phòng }</span>
         </div>
         @if (viewport.isPhone()) {
           <ul class="rent-list">
@@ -92,9 +107,9 @@
               @let rErr = errOf(rf);
               <li>
                 <div class="row between">
-                  <label [for]="'rent-' + room.roomId"><b>{{ room.roomCode }}</b> <span class="muted small">· {{ room.areaM2 }} m²</span></label>
+                  <label [for]="'rent-' + room.roomId"><b>{{ room.roomCode }}</b> <span class="muted small">@if (room.areaM2 != null) { · {{ room.areaM2 }} m² }</span></label>
                   @if (changed.has(room.roomId)) { <span class="chip warn"><app-icon name="i-edit" />Chưa lưu</span> }
-                  @else { <span class="small muted">Từ {{ room.since | period }}</span> }
+                  @else if (room.since) { <span class="small muted">Từ {{ room.since | period }}</span> }
                 </div>
                 <div class="input" [class.is-error]="rErr">
                   <input [id]="'rent-' + room.roomId" inputmode="numeric" autocomplete="off" [formField]="rf" [attr.aria-invalid]="!!rErr" [attr.aria-describedby]="rErr ? 'rent-e-' + room.roomId : null">
@@ -114,7 +129,7 @@
                   @let rErr = errOf(rf);
                   <tr>
                     <th scope="row"><b>{{ room.roomCode }}</b></th>
-                    <td>{{ room.areaM2 }} m²</td>
+                    <td>{{ room.areaM2 != null ? room.areaM2 + ' m²' : '—' }}</td>
                     <td class="num">
                       <div class="input cell" [class.is-error]="rErr">
                         <input inputmode="numeric" autocomplete="off" [attr.aria-label]="'Tiền phòng ' + room.roomCode" [formField]="rf" [attr.aria-invalid]="!!rErr" [attr.aria-describedby]="rErr ? 'rent-e-' + room.roomId : null">
@@ -124,7 +139,7 @@
                     </td>
                     <td>
                       @if (changed.has(room.roomId)) { <span class="chip warn"><app-icon name="i-edit" />Chưa lưu</span> }
-                      @else { <span class="muted">{{ room.since | period }}</span> }
+                      @else { <span class="muted">{{ room.since ? (room.since | period) : '—' }}</span> }
                     </td>
                   </tr>
                 }
@@ -134,6 +149,12 @@
         }
       </section>
 
+      @if (!store.sample) {
+        <section class="bank" aria-labelledby="h-bank">
+          <span class="h2" id="h-bank">Thông tin chuyển khoản</span>
+          <p class="muted">Chưa có dữ liệu chuyển khoản trên hệ thống.</p>
+        </section>
+      } @else {
       <section class="bank" aria-labelledby="h-bank">
         <label class="switch-row">
           <span><span class="h2" id="h-bank">Thông tin chuyển khoản</span><span class="small muted block">Không bắt buộc. Hiện trên hóa đơn để người thuê biết cách trả tiền.</span></span>
@@ -192,6 +213,7 @@
           <p class="banner info note"><app-icon name="i-info" /><span>Người thuê thấy mã QR khi mở hóa đơn trên máy tính. Trên điện thoại không có QR (không tự quét được màn hình của mình), họ thấy nút <b>Sao chép số tài khoản</b> và nội dung chuyển khoản, ví dụ “{{ noteExample() }}”.</span></p>
         }
       </section>
+      }
     </div>
   </div>
 

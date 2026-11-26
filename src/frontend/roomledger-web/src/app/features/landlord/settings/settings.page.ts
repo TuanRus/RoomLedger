@@ -1,11 +1,14 @@
 import { NgOptimizedImage } from '@angular/common';
-import { Component, DestroyRef, ElementRef, computed, inject, signal } from '@angular/core';
-import { FieldTree, FormField, form, schema, submit, validate } from '@angular/forms/signals';
+import { Component, DestroyRef, ElementRef, computed, inject, linkedSignal, signal } from '@angular/core';
+import { FieldTree, FormField, apply, form, readonly, schema, submit, validate } from '@angular/forms/signals';
+import { firstValueFrom } from 'rxjs';
 
 import { Viewport } from '../../../core/layout/viewport';
 import { PeriodPipe, VndPipe } from '../../../shared/pipes/format.pipes';
 import { Icon } from '../../../shared/ui/icon';
+import { LoadState } from '../shared/load-state';
 import {
+  PricingSettings,
   READING_WINDOW_DAYS,
   SettingsForm,
   accountNumberError,
@@ -53,7 +56,7 @@ function withSampleEdits(f: SettingsForm): SettingsForm {
 /** LL-06: electricity/water prices, billing cycle, per-room rent and optional bank-transfer details. */
 @Component({
   selector: 'app-settings-page',
-  imports: [NgOptimizedImage, FormField, Icon, PeriodPipe, VndPipe],
+  imports: [NgOptimizedImage, FormField, Icon, LoadState, PeriodPipe, VndPipe],
   templateUrl: './settings.page.html',
   styleUrl: './settings.page.scss',
 })
@@ -67,8 +70,17 @@ export class SettingsPage {
   protected readonly dueDays = Array.from({ length: 28 }, (_, i) => i + 1);
   protected readonly windowEnd = READING_WINDOW_DAYS - 1;
 
-  protected readonly model = signal<SettingsForm>(withSampleEdits(toForm(this.store.settings())));
-  protected readonly f = form(this.model, settingsSchema);
+  /** The form follows the saved settings (the API's arrive after the page opens); the sample opens with its demo edits once. */
+  protected readonly model = linkedSignal<PricingSettings, SettingsForm>({
+    source: this.store.settings,
+    computation: (saved, previous) => (this.store.sample && !previous ? withSampleEdits(toForm(saved)) : toForm(saved)),
+  });
+  protected readonly f = form(this.model, (p) => {
+    apply(p, settingsSchema);
+    // The API has no PATCH /properties: the prices can be read but not changed.
+    readonly(p.electricityRate, () => !this.store.sample);
+    readonly(p.waterRate, () => !this.store.sample);
+  });
 
   private readonly savedForm = computed(() => toForm(this.store.settings()));
   protected readonly rooms = computed(() => this.store.settings().rents);
@@ -151,11 +163,13 @@ export class SettingsPage {
     if (this.saving()) return;
     this.saving.set(true);
     const ok = await submit(this.f, async () => {
-      this.store.save(fromForm(this.model(), this.store.settings(), this.qrUrl()));
+      const next = fromForm(this.model(), this.store.settings(), this.qrUrl());
+      if (this.store.sample) this.store.save(next);
+      else await firstValueFrom(this.store.saveRents(next)).catch(() => undefined);
       return undefined;
     });
     this.saving.set(false);
-    if (ok) {
+    if (ok && !this.store.saveError()) {
       this.model.set(toForm(this.store.settings()));
       this.f().reset();
       this.savedAt.set(nowHm());

@@ -1,4 +1,40 @@
-@if (draft(); as d) {
+<app-load-state [status]="roomStatus()" [error]="roomError()" (retry)="rooms.reload()" />
+
+<ng-template #missing>
+  <div class="card missing">
+    <h1 class="m-title">Không có người thuê để kết thúc</h1>
+    <p class="muted">Phòng này đang trống hoặc không tồn tại.</p>
+    <a class="btn sec" routerLink="/landlord/rooms"><app-icon name="i-back" />Về danh sách phòng</a>
+  </div>
+</ng-template>
+
+@if (!store.sample) {
+  @if (header(); as h) {
+    <nav class="crumb" aria-label="Vị trí">
+      <a routerLink="/landlord/rooms">Phòng</a><app-icon name="i-chev" size="sm" />{{ h.roomCode }}<app-icon name="i-chev" size="sm" /><span aria-current="page">Kết thúc thuê</span>
+    </nav>
+    <div class="top">
+      <div><h1>Kết thúc thuê {{ h.roomCode }}</h1><p class="sub">{{ h.tenantName || 'Chưa có tên người thuê' }} · thuê từ {{ h.tenancyStart ? day(h.tenancyStart) : '—' }}</p></div>
+    </div>
+    <div class="card step">
+      <dl class="kv">
+        <dt>Phòng</dt><dd>{{ h.roomCode }}</dd>
+        <dt>Người thuê</dt><dd>{{ h.tenantName || '—' }}</dd>
+        <dt>Tiền phòng</dt><dd>{{ h.monthlyRent | vnd }} / tháng</dd>
+      </dl>
+      <div class="banner warn" id="why-blocked" role="status">
+        <app-icon name="i-info" />
+        <span><b>Chưa kết thúc thuê được trên hệ thống:</b> máy chủ chưa có chức năng này.</span>
+      </div>
+      <div class="final-acts">
+        <a class="btn sec" routerLink="/landlord/rooms">Quay lại</a>
+        <button type="button" class="btn" disabled aria-describedby="why-blocked">Kết thúc thuê {{ h.roomCode }}</button>
+      </div>
+    </div>
+  } @else if (roomStatus() === 'ready') {
+    <ng-container [ngTemplateOutlet]="missing" />
+  }
+} @else if (draft(); as d) {
   @let inv = invoice()!;
   @let t = target();
 
@@ -252,11 +288,7 @@
     }
   }
 } @else {
-  <div class="card missing">
-    <h1 class="m-title">Không có người thuê để kết thúc</h1>
-    <p class="muted">Phòng này đang trống hoặc không tồn tại.</p>
-    <a class="btn sec" routerLink="/landlord/rooms"><app-icon name="i-back" />Về danh sách phòng</a>
-  </div>
+  <ng-container [ngTemplateOutlet]="missing" />
 }
 
 @if (toast(); as text) {
