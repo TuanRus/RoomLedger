@@ -81,9 +81,8 @@ export function initialDraft(room: RoomRow): EndTenancyDraft {
 }
 
 /**
- * End of tenancy and room moves (LL-10), sample-backed: the API has no end-tenancy or room-move endpoint
- * (API-GAPS.md). With environment.dataSource 'api' the screen only shows the room and its tenant (header()),
- * and nothing can be finished.
+ * End of tenancy and room moves (LL-10), sample-backed. In API mode the page uses EndTenancyApiStore instead and this
+ * store only keeps the sample draft logic.
  * Drafts live in memory per room, so "Lưu nháp" and leaving the page keep the work.
  */
 @Service()

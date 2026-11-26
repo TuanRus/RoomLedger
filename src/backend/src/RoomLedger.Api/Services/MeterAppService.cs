@@ -40,7 +40,7 @@ public class MeterAppService(AppDbContext db, ICurrentUser user, IStorage storag
             && (t.Status == TenancyStatus.Active || t.Status == TenancyStatus.MovingOut), ct)
             ?? throw new NotFoundException("Phòng không có hợp đồng đang hiệu lực");
 
-        var reading = await db.MeterReadings.FirstOrDefaultAsync(m => m.RoomId == roomId && m.Period == period && m.Kind == kind, ct);
+        var reading = await db.MeterReadings.FirstOrDefaultAsync(m => m.TenancyId == tenancy.Id && m.Period == period && m.Kind == kind, ct);
         var created = reading is null;
         if (reading is { Status: MeterReadingStatus.Confirmed })
         {
@@ -75,18 +75,19 @@ public class MeterAppService(AppDbContext db, ICurrentUser user, IStorage storag
             .Select(t => new { t.RoomId, t.Room!.Code, TenancyId = t.Id })
             .ToListAsync(ct);
         var roomIds = rooms.Select(r => r.RoomId).ToList();
+        var tenancyIds = rooms.Select(r => r.TenancyId).ToList();
         var readings = await db.MeterReadings.AsNoTracking()
-            .Where(m => roomIds.Contains(m.RoomId) && m.Period == p)
+            .Where(m => tenancyIds.Contains(m.TenancyId) && m.Period == p)
             .ToListAsync(ct);
         var previous = await PreviousValuesAsync(roomIds, p, ct);
 
-        MeterReadingResponse? Find(Guid roomId, MeterKind kind) =>
-            readings.FirstOrDefault(m => m.RoomId == roomId && m.Kind == kind) is { } m
+        MeterReadingResponse? Find(Guid roomId, Guid tenancyId, MeterKind kind) =>
+            readings.FirstOrDefault(m => m.TenancyId == tenancyId && m.Kind == kind) is { } m
                 ? ToResponse(m, previous.GetValueOrDefault((roomId, kind)))
                 : null;
 
         return rooms.Select(r => new RoomReadingsResponse(r.RoomId, r.Code, r.TenancyId,
-            Find(r.RoomId, MeterKind.Electricity), Find(r.RoomId, MeterKind.Water))).ToList();
+            Find(r.RoomId, r.TenancyId, MeterKind.Electricity), Find(r.RoomId, r.TenancyId, MeterKind.Water))).ToList();
     }
 
     /**
@@ -153,6 +154,7 @@ public class MeterAppService(AppDbContext db, ICurrentUser user, IStorage storag
         var p = Period.Parse(req.Period);
         var readings = await db.MeterReadings
             .Where(m => m.Period == p && m.Tenancy!.Room!.PropertyId == property.Id && m.Tenancy.LandlordId == property.LandlordId
+                && (m.Tenancy.Status == TenancyStatus.Active || m.Tenancy.Status == TenancyStatus.MovingOut)
                 && (m.Status == MeterReadingStatus.PendingConfirm || m.Status == MeterReadingStatus.NeedsReview))
             .ToListAsync(ct);
         var previous = await PreviousValuesAsync(readings.Select(r => r.RoomId).Distinct().ToList(), p, ct);
@@ -186,13 +188,8 @@ public class MeterAppService(AppDbContext db, ICurrentUser user, IStorage storag
      * @author Tuấn
      * @version 1.0
      */
-    public Task<long?> PreviousValueAsync(Guid roomId, MeterKind kind, string period, CancellationToken ct) =>
-        db.MeterReadings.AsNoTracking()
-            .Where(m => m.RoomId == roomId && m.Kind == kind && m.Status == MeterReadingStatus.Confirmed
-                && string.Compare(m.Period, period) < 0)
-            .OrderByDescending(m => m.Period)
-            .Select(m => m.Value)
-            .FirstOrDefaultAsync(ct);
+    public async Task<long?> PreviousValueAsync(Guid roomId, MeterKind kind, string period, CancellationToken ct) =>
+        (await PreviousValuesAsync([roomId], period, ct)).GetValueOrDefault((roomId, kind));
 
     /**
      * Chỉ số kỳ trước của nhiều phòng một lần, để không truy vấn từng phòng.
@@ -204,14 +201,21 @@ public class MeterAppService(AppDbContext db, ICurrentUser user, IStorage storag
      */
     public async Task<Dictionary<(Guid RoomId, MeterKind Kind), long?>> PreviousValuesAsync(List<Guid> roomIds, string period, CancellationToken ct)
     {
-        var rows = await db.MeterReadings.AsNoTracking()
-            .Where(m => roomIds.Contains(m.RoomId) && m.Status == MeterReadingStatus.Confirmed && string.Compare(m.Period, period) < 0)
-            .GroupBy(m => new { m.RoomId, m.Kind })
-            .Select(g => g.OrderByDescending(m => m.Period).Select(m => new { m.RoomId, m.Kind, m.TenancyId, m.Value }).First())
-            .ToListAsync(ct);
         var openings = await db.Tenancies.AsNoTracking()
             .Where(t => roomIds.Contains(t.RoomId) && t.Status != TenancyStatus.Settled)
             .Select(t => new { t.Id, t.RoomId, t.OpeningElectricity, t.OpeningWater })
+            .ToListAsync(ct);
+        var openIds = openings.Select(t => t.Id).ToList();
+        // Chỉ số của chính hợp đồng đang mở được ưu tiên: hai người thuê cùng ở một phòng trong một tháng đều có chỉ số kỳ đó
+        var own = await db.MeterReadings.AsNoTracking()
+            .Where(m => openIds.Contains(m.TenancyId) && m.Status == MeterReadingStatus.Confirmed && string.Compare(m.Period, period) < 0)
+            .GroupBy(m => new { m.TenancyId, m.Kind })
+            .Select(g => g.OrderByDescending(m => m.Period).Select(m => new { m.TenancyId, m.Kind, m.Value }).First())
+            .ToListAsync(ct);
+        var rows = await db.MeterReadings.AsNoTracking()
+            .Where(m => roomIds.Contains(m.RoomId) && m.Status == MeterReadingStatus.Confirmed && string.Compare(m.Period, period) < 0)
+            .GroupBy(m => new { m.RoomId, m.Kind })
+            .Select(g => g.OrderByDescending(m => m.Period).ThenByDescending(m => m.CreatedAt).Select(m => new { m.RoomId, m.Kind, m.TenancyId, m.Value }).First())
             .ToListAsync(ct);
 
         var result = new Dictionary<(Guid RoomId, MeterKind Kind), long?>();
@@ -220,11 +224,12 @@ public class MeterAppService(AppDbContext db, ICurrentUser user, IStorage storag
             var tenancy = openings.FirstOrDefault(t => t.RoomId == roomId);
             foreach (var kind in new[] { MeterKind.Electricity, MeterKind.Water })
             {
+                var mine = tenancy is null ? null : own.FirstOrDefault(r => r.TenancyId == tenancy.Id && r.Kind == kind);
                 var last = rows.FirstOrDefault(r => r.RoomId == roomId && r.Kind == kind);
                 var opening = kind == MeterKind.Electricity ? tenancy?.OpeningElectricity : tenancy?.OpeningWater;
                 // Chỉ số cũ của người thuê trước không dùng khi hợp đồng mới đã ghi chỉ số ban đầu
-                var value = last is not null && (tenancy is null || last.TenancyId == tenancy.Id || opening is null)
-                    ? last.Value
+                var value = mine is not null ? mine.Value
+                    : last is not null && (tenancy is null || opening is null) ? last.Value
                     : opening;
                 if (value is not null)
                 {

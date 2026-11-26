@@ -51,6 +51,10 @@ export class ApiClient {
     return this.unwrap(this.http.patch<ApiResponse<T>>(this.base + path, body));
   }
 
+  delete<T>(path: string): Observable<T> {
+    return this.unwrap(this.http.delete<ApiResponse<T>>(this.base + path));
+  }
+
   private unwrap<T>(req: Observable<ApiResponse<T>>): Observable<T> {
     return req.pipe(
       map((res) => res.data as T),

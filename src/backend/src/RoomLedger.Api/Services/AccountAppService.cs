@@ -120,9 +120,19 @@ public class AccountAppService(AppDbContext db, ICurrentUser user)
                 PropertyAddress = t.Room.Property.Address,
             })
             .FirstOrDefaultAsync(ct);
+        // Hóa đơn đã gửi của mọi hợp đồng của người thuê: hóa đơn cuối và nợ cũ vẫn hiện sau khi rời đi hoặc chuyển phòng
+        var invoices = await db.Invoices.AsNoTracking()
+            .Where(i => i.Tenancy!.TenantId == tenantId && i.Status != InvoiceStatus.Draft)
+            .OrderByDescending(i => i.Period).ThenByDescending(i => i.SentAt)
+            .Select(i => new { i.Id, i.Period, i.Status, i.Total })
+            .ToListAsync(ct);
+        var payTodos = invoices.Where(i => i.Status == InvoiceStatus.Sent)
+            .Select(i => new TenantTodoResponse("PAY_INVOICE", i.Id, $"Thanh toán hóa đơn kỳ {i.Period}")).ToList();
+        var latest = invoices.FirstOrDefault();
+        var latestSummary = latest is null ? null : new TenantInvoiceSummary(latest.Id, latest.Period, latest.Status, latest.Total);
         if (tenancy is null)
         {
-            return new TenantHomeResponse(null, null, null, null, null, null, null, null, null, [], null);
+            return new TenantHomeResponse(null, null, null, null, null, null, null, null, null, payTodos, latestSummary);
         }
 
         var versions = await db.TenancyVersions.AsNoTracking()
@@ -145,19 +155,12 @@ public class AccountAppService(AppDbContext db, ICurrentUser user)
         todos.AddRange(inspections.Select(i => new TenantTodoResponse("CONFIRM_INSPECTION", i.Id,
             i.Type == InspectionType.MoveIn ? "Chụp ảnh và xác nhận biên bản nhận phòng" : "Chụp ảnh trả phòng")));
 
-        var invoices = await db.Invoices.AsNoTracking()
-            .Where(i => i.TenancyId == tenancy.Id && i.Status != InvoiceStatus.Draft)
-            .OrderByDescending(i => i.Period)
-            .Select(i => new { i.Id, i.Period, i.Status, i.Total })
-            .ToListAsync(ct);
-        todos.AddRange(invoices.Where(i => i.Status == InvoiceStatus.Sent)
-            .Select(i => new TenantTodoResponse("PAY_INVOICE", i.Id, $"Thanh toán hóa đơn kỳ {i.Period}")));
-        var latest = invoices.FirstOrDefault();
+        todos.AddRange(payTodos);
 
         return new TenantHomeResponse(
             tenancy.Id, tenancy.RoomId, tenancy.RoomCode, tenancy.PropertyName, tenancy.PropertyAddress, tenancy.Status,
             effective?.MonthlyRent, effective?.Deposit, effective?.EndDate, todos,
-            latest is null ? null : new TenantInvoiceSummary(latest.Id, latest.Period, latest.Status, latest.Total));
+            latestSummary);
     }
 
     private async Task<Invite> FindUsableInviteAsync(string token, CancellationToken ct)

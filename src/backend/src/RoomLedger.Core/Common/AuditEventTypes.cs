@@ -44,6 +44,9 @@ public static class AuditEventTypes
     public const string TenancySettled = "TENANCY_SETTLED";      // Sang: BR-29 quyết toán
     public const string SettlementPdfCreated = "SETTLEMENT_PDF_CREATED";   // Sang: BR-29 biên bản thanh lý (render-pdf)
     public const string OpeningReadingsSet = "OPENING_READINGS_SET";   // Sang: BR-18 RULE 5
+    public const string TenancyEndStarted = "TENANCY_END_STARTED";
+    public const string TenancyEndCancelled = "TENANCY_END_CANCELLED";
+    public const string TenancyEnded = "TENANCY_ENDED";
     public const string EvidenceSealed = "EVIDENCE_SEALED";
     public const string EvidenceHashMismatch = "EVIDENCE_HASH_MISMATCH";
 }

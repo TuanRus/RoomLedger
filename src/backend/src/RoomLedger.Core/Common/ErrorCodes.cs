@@ -28,6 +28,7 @@ public static class ErrorCodes
     public const string FinalReadingUnconfirmed = "FINAL_READING_UNCONFIRMED";   // Sang: BR-29, quyết định B3
     public const string FinalInvoiceMissing = "FINAL_INVOICE_MISSING";    // Sang: BR-29 (Tuấn 10/11)
     public const string OpenDisputes = "OPEN_DISPUTES";                   // Sang: BR-29, quyết định B4
+    public const string AlreadyInvoiced = "ALREADY_INVOICED";
     public const string PeriodClosed = "PERIOD_CLOSED";
     public const string InviteInvalid = "INVITE_INVALID";
     public const string Unauthorized = "UNAUTHORIZED";

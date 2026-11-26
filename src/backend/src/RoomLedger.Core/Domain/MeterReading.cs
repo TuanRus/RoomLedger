@@ -4,7 +4,7 @@ namespace RoomLedger.Core.Domain;
 
 /**
  * Bảng meter_reading: chỉ số điện hoặc nước của một phòng trong một kỳ, kèm ảnh đồng hồ.
- * Unique (room_id, period, kind). AiValue do Lambda persist-results ghi; Value là số đã xác nhận.
+ * Unique (tenancy_id, period, kind). AiValue do Lambda persist-results ghi; Value là số đã xác nhận.
  *
  * @author Tuấn
  * @version 1.1

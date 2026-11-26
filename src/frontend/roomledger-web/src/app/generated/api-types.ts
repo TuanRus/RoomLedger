@@ -640,6 +640,15 @@ export interface paths {
                         "application/json": components["schemas"]["ApiError"];
                     };
                 };
+                /** @description FORBIDDEN: ảnh biên bản trả phòng chỉ người thuê gửi (BR-25); chủ nhà gửi vào biên bản trả phòng → 403 */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
                 /** @description RECORD_LOCKED, INVALID_STATE hoặc PERIOD_CLOSED */
                 409: {
                     headers: {
@@ -1116,6 +1125,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenancies/{tenancyId}/inspections/move-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenancyId: components["parameters"]["TenancyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Người thuê mở biên bản trả phòng (MD-06-FE-01, BR-25 RULE 1); đã có thì trả lại biên bản đó
+         * @description Khu vực chép nguyên bản sao của biên bản nhận phòng. Hợp đồng chuyển sang MOVING_OUT. referenceInspectionId là biên bản nhận phòng để lấy ảnh đối chiếu qua GET /inspections/{id}/photos.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tenancyId: components["parameters"]["TenancyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["Inspection"];
+                201: components["responses"]["Inspection"];
+                /** @description FORBIDDEN (không phải người thuê) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description NO_MOVE_IN_RECORD (chưa có biên bản nhận phòng đã khóa) hoặc INVALID_STATE (hợp đồng không ACTIVE) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inspections/{inspectionId}": {
         parameters: {
             query?: never;
@@ -1143,6 +1207,108 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inspections/{inspectionId}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inspectionId: components["parameters"]["InspectionId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Danh sách ảnh của biên bản theo thứ tự gửi, kèm URL xem và thumbnail có hạn 5 phút
+         * @description Bỏ ảnh PENDING_UPLOAD. Ảnh đang xử lý (RECEIVED) có viewUrl/thumbnailUrl null. Dùng cho màn hình biên bản và ảnh đối chiếu khi trả phòng (MD-06-FE-01).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    inspectionId: components["parameters"]["InspectionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["InspectionPhotoResponse"][];
+                        };
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inspections/{inspectionId}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inspectionId: components["parameters"]["InspectionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Người thuê gửi biên bản trả phòng cho chủ nhà duyệt (MD-06-FE-01, BR-25 RULE 4); OPEN → REVIEWING
+         * @description Mỗi khu vực phải đủ số ảnh tối thiểu và mọi ảnh READY. Cần chỉ số điện và nước của kỳ finalPeriod mà ảnh đồng hồ đã tải lên (hoặc chỉ số đã có số); chưa cần chủ nhà xác nhận (BR-25 RULE 3). Phát sự kiện MoveOutSubmitted (inspectionId, tenancyId, moveInInspectionId) để báo chủ nhà; không còn AI so ảnh, chủ nhà xem ảnh và tự ghi khoản trừ cọc. Gửi lại khi đang REVIEWING → 200, không phát lại. Sau khi gửi không thêm hoặc xóa ảnh được.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    inspectionId: components["parameters"]["InspectionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["Inspection"];
+                /** @description FORBIDDEN (không phải người thuê) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu), FINAL_READING_MISSING (thiếu ảnh đồng hồ tháng cuối; message vd 'Thiếu ảnh đồng hồ: điện, nước (kỳ 2026-11)'), INVALID_STATE (không phải biên bản trả phòng) hoặc RECORD_LOCKED (đã qua bước duyệt) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1265,7 +1431,7 @@ export interface paths {
                     };
                 };
                 404: components["responses"]["Error"];
-                /** @description INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu ảnh hoặc chỉ số điện nước ban đầu còn thiếu) hoặc RECORD_LOCKED */
+                /** @description INCOMPLETE_INSPECTION (message nêu khu vực còn thiếu ảnh hoặc chỉ số điện nước ban đầu còn thiếu), RECORD_LOCKED hoặc INVALID_STATE (biên bản trả phòng không xác nhận theo cách này) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -1336,6 +1502,832 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inspections/{inspectionId}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inspectionId: components["parameters"]["InspectionId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Danh sách mục so sánh trả phòng (MD-06-FE-03/04)
+         * @description Chủ nhà thấy mọi mục. Người thuê chỉ thấy mục CHARGED/ACCEPTED/DISPUTED/RESOLVED sau khi chủ nhà đã gửi (AWAITING_CONFIRM trở đi), trước đó danh sách rỗng.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    inspectionId: components["parameters"]["InspectionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["FindingResponse"][];
+                        };
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /** Chủ nhà thêm mục tay (BR-27 RULE 3), tạo ở trạng thái CHARGED */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    inspectionId: components["parameters"]["InspectionId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AddFindingRequest"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["FindingResponse"];
+                        };
+                    };
+                };
+                /** @description VALIDATION_ERROR (thiếu cặp ảnh nhận/trả cùng khu vực, số tiền ≤ 0) hoặc AMOUNT_EXCEEDS_DEPOSIT */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE (chưa REVIEWING) hoặc RECORD_LOCKED (đã gửi người thuê) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inspections/{inspectionId}/send-to-tenant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inspectionId: components["parameters"]["InspectionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chủ nhà gửi danh sách cho người thuê (BR-27 RULE 4); REVIEWING → AWAITING_CONFIRM, phát FindingsSent
+         * @description Gửi lại khi đã AWAITING_CONFIRM → 200, không báo lại. SKIPPED và NOT_ANALYZED không chặn việc gửi.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    inspectionId: components["parameters"]["InspectionId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["SendFindingsResponse"];
+                        };
+                    };
+                };
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description PENDING_FINDINGS (còn SUGGESTED chưa xử lý), INVALID_STATE hoặc RECORD_LOCKED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{findingId}/charge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chủ nhà tính tiền một mục (BR-27 RULE 1); đổi ý được tới khi gửi */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    findingId: components["parameters"]["FindingId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description VND
+                         */
+                        amount: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["FindingResponse"];
+                        };
+                    };
+                };
+                /** @description VALIDATION_ERROR hoặc AMOUNT_EXCEEDS_DEPOSIT (tổng các mục vượt tiền cọc) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description FORBIDDEN */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE hoặc RECORD_LOCKED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{findingId}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chủ nhà bỏ qua một mục (BR-27 RULE 2), không cần lý do */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    findingId: components["parameters"]["FindingId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["FindingResponse"];
+                        };
+                    };
+                };
+                /** @description FORBIDDEN */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE hoặc RECORD_LOCKED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{findingId}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Người thuê đồng ý (BR-28 RULE 1/3); CHARGED → ACCEPTED, hoặc DISPUTED đã được trả lời → RESOLVED */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    findingId: components["parameters"]["FindingId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["FindingResponse"];
+                        };
+                    };
+                };
+                /** @description FORBIDDEN (không phải người thuê) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description NOT_FOUND (mục không thuộc phòng của người thuê, BR-28 EXCEPTION 1) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description INVALID_STATE (chưa gửi, đã đồng ý, khiếu nại chưa được trả lời) hoặc RECORD_LOCKED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{findingId}/dispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Người thuê khiếu nại (BR-28 RULE 2); CHARGED → DISPUTED, tạo dispute FINDING, phát FindingDisputed */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    findingId: components["parameters"]["FindingId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        reason: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["FindingResponse"];
+                        };
+                    };
+                };
+                /** @description VALIDATION_ERROR (lý do dưới 10 ký tự) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description FORBIDDEN */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE hoặc RECORD_LOCKED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/findings/{findingId}/respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                findingId: components["parameters"]["FindingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chủ nhà trả lời khiếu nại (BR-28 RULE 3), một lần; phát DisputeAnswered
+         * @description CORRECTED (amount mới, trong giới hạn cọc) hoặc KEPT (response bắt buộc) → chờ người thuê đồng ý lại để RESOLVED. REMOVED → mục DISMISSED, khiếu nại đóng ngay.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    findingId: components["parameters"]["FindingId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        action: "CORRECTED" | "KEPT" | "REMOVED";
+                        /**
+                         * Format: int64
+                         * @description Bắt buộc khi CORRECTED
+                         */
+                        amount?: number;
+                        /** @description Bắt buộc khi KEPT */
+                        response?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            success?: boolean;
+                            message?: string;
+                            data?: components["schemas"]["FindingResponse"];
+                        };
+                    };
+                };
+                /** @description VALIDATION_ERROR hoặc AMOUNT_EXCEEDS_DEPOSIT */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE (không có khiếu nại chờ trả lời) hoặc RECORD_LOCKED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenancies/{tenancyId}/settlement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenancyId: components["parameters"]["TenancyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Xem quyết toán (MD-06-FE-05, BR-29); hai bên của hợp đồng
+         * @description Chưa quyết toán → status PENDING, số tính tại thời điểm xem và blockers (điều kiện còn thiếu); canSettle = không còn blocker. Đã quyết toán → status SETTLED, số đã chốt. Chỉ xem được sau khi chủ nhà đã gửi danh sách trừ cọc cho người thuê.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tenancyId: components["parameters"]["TenancyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["Settlement"];
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE (chưa có biên bản trả phòng hoặc chưa gửi danh sách cho người thuê) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Chủ nhà quyết toán (MD-06-FE-05, BR-29); phát TenancySettled
+         * @description Kiểm theo thứ tự FINAL_READING_UNCONFIRMED (chỉ số điện nước kỳ finalPeriod chưa CONFIRMED) → FINAL_INVOICE_MISSING (chưa có hóa đơn kỳ finalPeriod) → OPEN_DISPUTES (mục trừ cọc hoặc hóa đơn đang khiếu nại) → PENDING_FINDINGS (người thuê chưa trả lời mục bị tính tiền). Thiếu → 409 với errorCode là điều kiện đầu tiên và details = mọi điều kiện chưa đạt ({code, message}). Đủ → ghi quyết toán: refund = deposit − deductionsTotal (mục ACCEPTED, RESOLVED) − unpaidInvoicesTotal (mọi hóa đơn chưa PAID), có thể âm; biên bản trả phòng và hợp đồng → SETTLED, phòng → VACANT. Đã quyết toán → 200 trả lại quyết toán đó.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tenancyId: components["parameters"]["TenancyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["Settlement"];
+                201: components["responses"]["Settlement"];
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description FINAL_READING_UNCONFIRMED, FINAL_INVOICE_MISSING, OPEN_DISPUTES, PENDING_FINDINGS (details liệt kê tất cả) hoặc INVALID_STATE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenancies/{tenancyId}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenancyId: components["parameters"]["TenancyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Xem trạng thái kết thúc hợp đồng, chỉ số cuối, đơn giá và nợ kỳ trước
+         * @description Hợp đồng chưa từng kết thúc → 404 NOT_FOUND. unpaidPrevious là tổng hóa đơn SENT hoặc DISPUTED của hợp đồng (không gồm hóa đơn cuối), hiển thị riêng.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tenancyId: components["parameters"]["TenancyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: components["responses"]["EndTenancy"];
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+            };
+        };
+        put?: never;
+        /**
+         * Chủ nhà bắt đầu kết thúc hợp đồng (rời đi hoặc chuyển phòng); hợp đồng ACTIVE → MOVING_OUT
+         * @description kind LEAVE hoặc MOVE. endDate không trước ngày bắt đầu hợp đồng; kỳ cuối finalPeriod = tháng của endDate. MOVE cần targetRoomId là phòng trống (chưa có hợp đồng chưa quyết toán) cùng nhà trọ, khác phòng hiện tại. Gọi lại khi đang MOVING_OUT và chưa chốt thì sửa ngày, hình thức, phòng đích (200). Hợp đồng đã mở biên bản trả phòng thì 409 INVALID_STATE. Chỉ số cuối nhập bằng POST /rooms/{roomId}/meter-readings (period = finalPeriod) và PATCH /meter-readings/{id}.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tenancyId: components["parameters"]["TenancyId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EndTenancyRequest"];
+                };
+            };
+            responses: {
+                200: components["responses"]["EndTenancy"];
+                201: components["responses"]["EndTenancy"];
+                400: components["responses"]["Error"];
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE (hợp đồng không ACTIVE, đã có biên bản trả phòng, hoặc đổi sang kỳ khác khi đã có chỉ số cuối được xác nhận), ROOM_OCCUPIED (phòng đích không còn trống) hoặc ALREADY_INVOICED (kỳ cuối hoặc kỳ sau đó đã có hóa đơn) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        /** Hủy kết thúc hợp đồng (MOVING_OUT → ACTIVE), chỉ khi chưa chốt; chỉ số cuối chưa xác nhận bị xóa, chỉ số đã xác nhận giữ lại */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tenancyId: components["parameters"]["TenancyId"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Envelope"] & {
+                            data?: components["schemas"]["CancelEndTenancyResponse"];
+                        };
+                    };
+                };
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description INVALID_STATE (không ở bước kết thúc hoặc đã chốt) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenancies/{tenancyId}/end:finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenancyId: components["parameters"]["TenancyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chốt kết thúc hợp đồng, lập hóa đơn cuối (DRAFT) và hợp đồng → SETTLED
+         * @description Cần cả hai chỉ số cuối CONFIRMED, thiếu → 409 FINAL_READING_MISSING (details = [{field: electricity|water, message}]). Hóa đơn cuối kỳ finalPeriod: tiền phòng = lastRent (không tính theo ngày), điện nước theo chỉ số cuối và chỉ số kỳ trước, phí dịch vụ của nhà trọ; hóa đơn cũ chưa thu không gộp vào, chủ nhà gửi bằng POST /invoices/{id}/send. Kỳ đã có hóa đơn → 409 ALREADY_INVOICED. Phòng → VACANT. MOVE: tạo hợp đồng mới ở phòng đích cho cùng người thuê, trạng thái AWAITING_TENANT, phiên bản 1 chờ người thuê xác nhận bằng POST /tenancies/{id}/versions/1/confirm; startElectricity, startWater (chỉ số ban đầu ở phòng mới) bắt buộc. Tất cả trong một transaction.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    tenancyId: components["parameters"]["TenancyId"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["FinishEndTenancyRequest"];
+                };
+            };
+            responses: {
+                200: components["responses"]["EndTenancy"];
+                400: components["responses"]["Error"];
+                /** @description FORBIDDEN (không phải chủ nhà) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+                404: components["responses"]["Error"];
+                /** @description FINAL_READING_MISSING, ALREADY_INVOICED, ROOM_OCCUPIED hoặc INVALID_STATE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiError"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1352,7 +2344,7 @@ export interface components {
             /** @example Biên bản đã khóa, không xóa được ảnh */
             message: string;
             /** @enum {string} */
-            errorCode: "VALIDATION_ERROR" | "INVALID_EMAIL" | "INVALID_FILE" | "INVALID_PERIOD" | "UNAUTHORIZED" | "FORBIDDEN" | "INVITE_EMAIL_MISMATCH" | "NOT_FOUND" | "RECORD_LOCKED" | "INVALID_STATE" | "VERSION_CONFLICT" | "ROOM_CODE_EXISTS" | "ROOM_OCCUPIED" | "PERIOD_CLOSED" | "INVITE_INVALID" | "INTERNAL_ERROR";
+            errorCode: "VALIDATION_ERROR" | "INVALID_EMAIL" | "INVALID_FILE" | "INVALID_PERIOD" | "UNAUTHORIZED" | "FORBIDDEN" | "INVITE_EMAIL_MISMATCH" | "NOT_FOUND" | "RECORD_LOCKED" | "INVALID_STATE" | "VERSION_CONFLICT" | "ROOM_CODE_EXISTS" | "ROOM_OCCUPIED" | "PERIOD_CLOSED" | "ALREADY_INVOICED" | "FINAL_READING_MISSING" | "INVITE_INVALID" | "INTERNAL_ERROR";
             traceId: string;
             details?: {
                 field?: string;
@@ -1745,7 +2737,7 @@ export interface components {
                 roomId?: string;
                 roomCode?: string;
                 /** @enum {string} */
-                reason?: "MISSING_READINGS" | "MISSING_PREVIOUS_READING" | "NO_LOCKED_CONTRACT" | "ALREADY_INVOICED";
+                reason?: "MISSING_READINGS" | "MISSING_PREVIOUS_READING" | "NO_LOCKED_CONTRACT" | "ALREADY_INVOICED" | "ENDING_TENANCY";
             }[];
         };
         InvoiceResponse: {
@@ -1836,6 +2828,97 @@ export interface components {
             /** @description Số ảnh đã gửi cho khu vực này */
             photoCount?: number;
         };
+        InspectionPhotoResponse: {
+            /** Format: uuid */
+            photoId?: string;
+            /** Format: uuid */
+            areaId?: string;
+            fileName?: string;
+            /** @enum {string} */
+            status?: "RECEIVED" | "READY" | "SEALED";
+            /** @enum {string} */
+            uploaderRole?: "LANDLORD" | "TENANT";
+            uploadedByMe?: boolean;
+            /** @enum {string} */
+            captureSource?: "CAMERA" | "GALLERY";
+            /** Format: date-time */
+            exifTakenAt?: string | null;
+            /** @description Ảnh chụp cách lúc gửi quá ngưỡng (mặc định 3 ngày) */
+            oldPhotoWarning?: boolean;
+            /** Format: date-time */
+            uploadedAt?: string;
+            /**
+             * Format: uri
+             * @description Presigned GET bản xem trong bucket derived, hạn 5 phút
+             */
+            viewUrl?: string | null;
+            /**
+             * Format: uri
+             * @description Presigned GET thumbnail 400 px, hạn 5 phút
+             */
+            thumbnailUrl?: string | null;
+            /** @description Người gọi là người gửi và biên bản chưa khóa */
+            canDelete?: boolean;
+        };
+        FindingResponse: {
+            /** Format: uuid */
+            findingId?: string;
+            /** Format: uuid */
+            areaId?: string;
+            /** Format: uuid */
+            moveInPhotoId?: string | null;
+            /** Format: uuid */
+            moveOutPhotoId?: string | null;
+            /** @enum {string} */
+            status?: "SUGGESTED" | "SKIPPED" | "NOT_ANALYZED" | "CHARGED" | "DISMISSED" | "ACCEPTED" | "DISPUTED" | "RESOLVED";
+            title?: string;
+            description?: string | null;
+            /** @description Tỉ lệ 0–1 trên ảnh trả phòng */
+            boundingBox?: {
+                x?: number;
+                y?: number;
+                width?: number;
+                height?: number;
+            } | null;
+            confidence?: number | null;
+            phashDistance?: number | null;
+            isManual?: boolean;
+            usedFallback?: boolean;
+            /**
+             * Format: int64
+             * @description VND
+             */
+            amount?: number | null;
+        };
+        AddFindingRequest: {
+            /** Format: uuid */
+            areaId: string;
+            title: string;
+            description?: string;
+            /** Format: int64 */
+            amount: number;
+            /**
+             * Format: uuid
+             * @description Ảnh của biên bản nhận phòng cùng khu vực
+             */
+            moveInPhotoId: string;
+            /**
+             * Format: uuid
+             * @description Ảnh của biên bản trả phòng này cùng khu vực
+             */
+            moveOutPhotoId: string;
+        };
+        SendFindingsResponse: {
+            /** Format: uuid */
+            inspectionId?: string;
+            /** @enum {string} */
+            status?: "AWAITING_CONFIRM";
+            /**
+             * Format: int64
+             * @description Tổng tiền các mục CHARGED
+             */
+            total?: number;
+        };
         InspectionResponse: {
             /** Format: uuid */
             inspectionId?: string;
@@ -1852,6 +2935,11 @@ export interface components {
             /** @description Bản sao khu vực lúc mở biên bản (BR-15 R2) */
             areas?: components["schemas"]["InspectionAreaResponse"][];
             /**
+             * Format: uuid
+             * @description Biên bản trả phòng → id biên bản nhận phòng; biên bản nhận phòng → null
+             */
+            referenceInspectionId?: string | null;
+            /**
              * Format: int64
              * @description Chỉ số điện ban đầu (BR-18 RULE 5); chỉ biên bản nhận phòng
              */
@@ -1861,6 +2949,167 @@ export interface components {
              * @description Chỉ số nước ban đầu (BR-18 RULE 5); chỉ biên bản nhận phòng
              */
             openingWater?: number | null;
+            /**
+             * @description Biên bản trả phòng: kỳ (yyyy-MM, giờ Việt Nam lúc mở) của chỉ số tháng cuối và hóa đơn cuối; biên bản nhận phòng → null
+             * @example 2026-11
+             */
+            finalPeriod?: string | null;
+        };
+        SettlementBlocker: {
+            /** @enum {string} */
+            code?: "FINAL_READING_UNCONFIRMED" | "FINAL_INVOICE_MISSING" | "OPEN_DISPUTES" | "PENDING_FINDINGS";
+            /** @example Chưa xác nhận chỉ số tháng cuối: nước (kỳ 2026-11) */
+            message?: string;
+        };
+        SettlementResponse: {
+            /** Format: uuid */
+            tenancyId?: string;
+            /**
+             * Format: uuid
+             * @description Biên bản trả phòng
+             */
+            inspectionId?: string;
+            /** @example 2026-11 */
+            finalPeriod?: string;
+            /** @enum {string} */
+            status?: "PENDING" | "SETTLED";
+            /**
+             * Format: int64
+             * @description Tiền cọc của phiên bản hợp đồng khóa mới nhất
+             */
+            deposit?: number;
+            /**
+             * Format: int64
+             * @description Tổng mục ACCEPTED và RESOLVED
+             */
+            deductionsTotal?: number;
+            /**
+             * Format: int64
+             * @description Tổng mọi hóa đơn chưa PAID (gồm hóa đơn cuối)
+             */
+            unpaidInvoicesTotal?: number;
+            /**
+             * Format: int64
+             * @description deposit − deductionsTotal − unpaidInvoicesTotal; âm = người thuê còn nợ
+             */
+            refund?: number;
+            canSettle?: boolean;
+            blockers?: components["schemas"]["SettlementBlocker"][];
+            /** Format: uuid */
+            settlementId?: string | null;
+            /** Format: date-time */
+            settledAt?: string | null;
+            /** Format: uuid */
+            settledBy?: string | null;
+            /**
+             * Format: uri
+             * @description Link tải biên bản thanh lý (5 phút); null tới khi tạo xong
+             */
+            pdfUrl?: string | null;
+        };
+        /** @enum {string} */
+        EndKind: "LEAVE" | "MOVE";
+        EndTenancyRequest: {
+            /**
+             * Format: date
+             * @example 2026-11-25
+             */
+            endDate: string;
+            kind: components["schemas"]["EndKind"];
+            /**
+             * Format: uuid
+             * @description Bắt buộc khi kind = MOVE
+             */
+            targetRoomId?: string;
+        };
+        FinishEndTenancyRequest: {
+            /**
+             * Format: int64
+             * @description Tiền phòng kỳ cuối, chủ nhà tự nhập
+             */
+            lastRent: number;
+            /**
+             * Format: int64
+             * @description Chỉ số điện ban đầu ở phòng mới; bắt buộc khi MOVE
+             */
+            startElectricity?: number;
+            /**
+             * Format: int64
+             * @description Chỉ số nước ban đầu ở phòng mới; bắt buộc khi MOVE
+             */
+            startWater?: number;
+        };
+        EndTargetRoom: {
+            /** Format: uuid */
+            roomId?: string;
+            code?: string;
+            /** Format: int64 */
+            monthlyRent?: number;
+        };
+        /** @description Chỉ số cuối của một đồng hồ; mọi trường null khi chưa chụp ảnh */
+        FinalReading: {
+            /** Format: uuid */
+            readingId?: string | null;
+            /** Format: int64 */
+            previous?: number | null;
+            /** Format: int64 */
+            value?: number | null;
+            status?: (string & components["schemas"]["MeterReadingStatus"]) | null;
+            /** Format: uri */
+            photoUrl?: string | null;
+            /** Format: date-time */
+            confirmedAt?: string | null;
+            /** @description Đồng hồ đã thay: chỉ số kỳ trước tính là 0 */
+            meterReplaced?: boolean;
+        };
+        EndRates: {
+            /** Format: int64 */
+            electricity?: number;
+            /** Format: int64 */
+            water?: number;
+        };
+        EndTenancyResponse: {
+            /** Format: uuid */
+            tenancyId?: string;
+            /** Format: uuid */
+            roomId?: string;
+            roomCode?: string;
+            tenantName?: string | null;
+            /** Format: date */
+            endDate?: string;
+            kind?: components["schemas"]["EndKind"];
+            /** @example 2026-11 */
+            finalPeriod?: string;
+            targetRoom?: components["schemas"]["EndTargetRoom"] | null;
+            electricity?: components["schemas"]["FinalReading"];
+            water?: components["schemas"]["FinalReading"];
+            rates?: components["schemas"]["EndRates"];
+            /**
+             * Format: int64
+             * @description Tổng hóa đơn SENT hoặc DISPUTED của hợp đồng, không gồm hóa đơn cuối
+             */
+            unpaidPrevious?: number;
+            /**
+             * Format: int64
+             * @description Tiền cọc của phiên bản hợp đồng khóa mới nhất (0 nếu không có); chỉ để hiển thị, hệ thống không tự trừ cọc
+             */
+            deposit?: number;
+            /** Format: int64 */
+            lastRent?: number | null;
+            /** Format: uuid */
+            finalInvoiceId?: string | null;
+            /** Format: date-time */
+            endedAt?: string | null;
+            /**
+             * Format: uuid
+             * @description Hợp đồng mới ở phòng đích (MOVE đã chốt)
+             */
+            newTenancyId?: string | null;
+        };
+        CancelEndTenancyResponse: {
+            /** Format: uuid */
+            tenancyId?: string;
+            status?: components["schemas"]["TenancyStatus"];
         };
     };
     responses: {
@@ -2141,9 +3390,32 @@ export interface components {
                 };
             };
         };
+        /** @description OK */
+        Settlement: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Envelope"] & {
+                    data?: components["schemas"]["SettlementResponse"];
+                };
+            };
+        };
+        /** @description OK */
+        EndTenancy: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Envelope"] & {
+                    data?: components["schemas"]["EndTenancyResponse"];
+                };
+            };
+        };
     };
     parameters: {
         PropertyId: string;
+        FindingId: string;
         RoomId: string;
         TenancyId: string;
         InvoiceId: string;
