@@ -64,8 +64,9 @@ public sealed class StorageStack : Stack
             ],
         });
 
-        // dev: giữ 1 ngày để dọn được nhanh, không chuyển Deep Archive (tính tối thiểu 180 ngày, phí cho ảnh test).
-        // demo: 365 ngày, chuyển Deep Archive 30 ngày sau khi hợp đồng đóng. Đổi retention sau không áp lại cho object đã ghi.
+        // dev: giữ 1 ngày để dọn được nhanh, không tiering (ảnh test, tránh phí giám sát).
+        // demo/prod: 365 ngày, S3 Intelligent-Tiering tự chuyển lớp theo tần suất truy cập (không phí truy xuất, không tối thiểu lưu trữ như Glacier).
+        // Đổi retention sau không áp lại cho object đã ghi.
         EvidenceKey = NewEvidenceKey(props.Stage);
 
         Evidence = NewBucket("Evidence", props.EvidenceBucketName, RemovalPolicy.RETAIN, new BucketProps
@@ -81,9 +82,8 @@ public sealed class StorageStack : Stack
                 {
                     new LifecycleRule
                     {
-                        Id = "closed-tenancy-deep-archive",
-                        TagFilters = new Dictionary<string, object> { ["tenancy-status"] = "closed" },
-                        Transitions = [new Transition { StorageClass = StorageClass.DEEP_ARCHIVE, TransitionAfter = Duration.Days(30) }],
+                        Id = "evidence-intelligent-tiering",
+                        Transitions = [new Transition { StorageClass = StorageClass.INTELLIGENT_TIERING, TransitionAfter = Duration.Days(0) }],
                     },
                 },
         });

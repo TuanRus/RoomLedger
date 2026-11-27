@@ -112,21 +112,22 @@ public class StorageAuthApiStackTests
     }).Values.Single());
 
     [Fact]
-    public void Storage_Dev_EvidenceRetainsOneDay_AndNeverGoesToDeepArchive()
+    public void Storage_Dev_EvidenceRetainsOneDay_AndHasNoTiering()
     {
         var evidence = EvidenceJson(Templates.Value.Storage);
         Assert.Contains("\"Mode\":\"GOVERNANCE\"", evidence);
         Assert.Matches("\"Days\":1[,}]", evidence);
         Assert.DoesNotContain("DEEP_ARCHIVE", evidence);
+        Assert.DoesNotContain("INTELLIGENT_TIERING", evidence);
     }
 
     [Fact]
-    public void Storage_Demo_EvidenceRetains365Days_AndArchivesClosedTenancies()
+    public void Storage_Demo_EvidenceRetains365Days_AndUsesIntelligentTiering()
     {
         var evidence = EvidenceJson(DemoStorage.Value);
         Assert.Matches("\"Days\":365[,}]", evidence);
-        Assert.Contains("DEEP_ARCHIVE", evidence);
-        Assert.Contains("tenancy-status", evidence);
+        Assert.Contains("INTELLIGENT_TIERING", evidence);
+        Assert.DoesNotContain("DEEP_ARCHIVE", evidence);
     }
 
     [Fact]
