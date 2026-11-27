@@ -157,7 +157,7 @@ public sealed class ApiStack : Stack
             {
                 ManagedRuleGroupStatement = new CfnWebACL.ManagedRuleGroupStatementProperty { VendorName = "AWS", Name = name },
             },
-            OverrideAction = new CfnWebACL.OverrideActionProperty { None = new Dictionary<string, object>() },
+            OverrideAction = new CfnWebACL.OverrideActionProperty { None = new CfnWebACL.NoneActionProperty() },
             VisibilityConfig = Visibility(name),
         };
 
@@ -179,7 +179,7 @@ public sealed class ApiStack : Stack
                         AggregateKeyType = "IP",
                     },
                 },
-                Action = new CfnWebACL.RuleActionProperty { Block = new Dictionary<string, object>() },
+                Action = new CfnWebACL.RuleActionProperty { Block = new CfnWebACL.BlockActionProperty() },
                 VisibilityConfig = Visibility("RateLimitPerIp"),
             },
         };
@@ -188,7 +188,7 @@ public sealed class ApiStack : Stack
         {
             Name = Naming.Resource(stage, "api-waf"),
             Scope = "REGIONAL",
-            DefaultAction = new CfnWebACL.DefaultActionProperty { Allow = new Dictionary<string, object>() },
+            DefaultAction = new CfnWebACL.DefaultActionProperty { Allow = new CfnWebACL.AllowActionProperty() },
             Rules = rules,
             VisibilityConfig = Visibility(Naming.Resource(stage, "api-waf")),
         });
