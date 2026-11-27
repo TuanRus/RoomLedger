@@ -57,6 +57,7 @@ public sealed class AuthStack : Stack
         {
             FunctionName = Name("post-confirmation"),
             Runtime = Runtime.DOTNET_8,
+            Architecture = Architecture.ARM_64,
             Handler = "RoomLedger.Functions::RoomLedger.Functions.PostConfirmation.Function::HandleAsync",
             Code = Code.FromAsset(props.FunctionsAssetPath),
             MemorySize = 512,

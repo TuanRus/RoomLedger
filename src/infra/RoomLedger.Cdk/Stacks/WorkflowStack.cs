@@ -103,6 +103,7 @@ public sealed class WorkflowStack : Stack
                 FunctionName = Naming.Resource(props.Stage, shortName),
                 LogGroup = Logs(handlerClass, shortName),
                 Runtime = Runtime.DOTNET_8,
+                Architecture = Architecture.ARM_64,
                 Handler = $"RoomLedger.Functions::RoomLedger.Functions.{handlerClass}.Function::{method}",
                 Code = code,
                 MemorySize = memory,

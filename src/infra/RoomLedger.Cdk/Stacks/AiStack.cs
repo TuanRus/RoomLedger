@@ -155,6 +155,7 @@ public sealed class AiStack : Stack
             FunctionName = Name("read-document"),
             LogGroup = Logs("ReadDocumentLogs", "read-document"),
             Runtime = Runtime.DOTNET_8,
+            Architecture = Architecture.ARM_64,
             Handler = FunctionHandler("ReadDocument", "HandleAsync"),
             Code = code,
             MemorySize = 1536,   // Magick.NET giải mã ảnh điện thoại (HEIC 12 MP ≈ 50 MB điểm ảnh)
@@ -204,6 +205,7 @@ public sealed class AiStack : Stack
             FunctionName = Name(shortName),
             LogGroup = Logs($"{logicalId}Logs", shortName),
             Runtime = Runtime.DOTNET_8,
+            Architecture = Architecture.ARM_64,
             Handler = FunctionHandler("MeterResult", method),
             Code = code,
             MemorySize = 512,
@@ -329,6 +331,7 @@ public sealed class AiStack : Stack
                 FunctionName = Name("notify"),
                 LogGroup = Logs("NotifyLogs", "notify"),
                 Runtime = Runtime.DOTNET_8,
+                Architecture = Architecture.ARM_64,
                 Handler = FunctionHandler("Notify", "HandleAsync"),
                 Code = code,
                 MemorySize = 256,
