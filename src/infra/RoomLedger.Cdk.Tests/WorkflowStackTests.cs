@@ -19,7 +19,6 @@ public class WorkflowStackTests
     private const string Ingest = "roomledger-dev-photo-ingest";
     private const string Derive = "roomledger-dev-photo-derive";
     private const string SealFn = "roomledger-dev-evidence-seal";
-    private const string RenderFn = "roomledger-dev-render-pdf";
 
     private static readonly Lazy<Template> DevTemplate = new(Build);
 
@@ -75,7 +74,6 @@ public class WorkflowStackTests
     [InlineData(Ingest, "RoomLedger.Functions::RoomLedger.Functions.PhotoIngest.Function::HandleAsync")]
     [InlineData(Derive, "RoomLedger.Functions::RoomLedger.Functions.PhotoDerive.Function::HandleQueueAsync")]
     [InlineData(SealFn, "RoomLedger.Functions::RoomLedger.Functions.EvidenceSeal.Function::HandleOutboxAsync")]
-    [InlineData(RenderFn, "RoomLedger.Functions::RoomLedger.Functions.RenderPdf.Function::HandleOutboxAsync")]
     public void Functions_RunDotnet8_WithTheRightHandler_InsideTheVpc(string name, string handler)
     {
         var fn = Fn(name).Props;
@@ -215,30 +213,6 @@ public class WorkflowStackTests
     public void InspectionLockedFromTheApi_TriggersEvidenceSeal()
         => Assert.Contains(Fn(SealFn).LogicalId, Json(OutboxRule("roomledger.api", "InspectionLocked")["Targets"]));
 
-    /** MD-06-FE-05: quyết toán xong → biên bản thanh lý PDF và niêm phong ảnh trả phòng (evidence-seal nhận inspectionId). */
-    [Fact]
-    public void TenancySettledFromTheApi_TriggersRenderPdf_AndSealsTheMoveOutPhotos()
-    {
-        var rule = OutboxRule("roomledger.api", "TenancySettled");
-        var targets = Json(rule["Targets"]);
-        Assert.Contains(Fn(RenderFn).LogicalId, targets);
-        Assert.Contains(Fn(SealFn).LogicalId, targets);
-        Assert.Contains("DeadLetterConfig", targets);
-    }
-
-    [Fact]
-    public void RenderPdf_WritesOnlyDerivedReports_ReadsTheDatabase_NoEvidenceNoDeleteNoBedrock()
-    {
-        var policy = PolicyOf(Fn(RenderFn).LogicalId);
-        Assert.Contains("s3:PutObject", policy);
-        Assert.Contains("roomledger-dev-derived/reports/*", policy);
-        Assert.DoesNotContain("roomledger-dev-evidence", policy);
-        Assert.DoesNotContain("roomledger-dev-incoming", policy);
-        Assert.DoesNotContain("s3:DeleteObject", policy);
-        Assert.DoesNotContain("bedrock", policy);
-        Assert.Contains("rds-db:connect", policy);
-    }
-
     /** Báo động của WorkflowStack gửi vào topic chung của ObservabilityStack (người nhận do Phát chọn). */
     [Theory]
     [InlineData("roomledger-dev-workflow-dlq-not-empty")]
@@ -254,7 +228,7 @@ public class WorkflowStackTests
     [Fact]
     public void EveryWorkflowLambda_LogsToAGroupWithRetention()
     {
-        var names = new[] { Ingest, Derive, SealFn, RenderFn };
+        var names = new[] { Ingest, Derive, SealFn };
         var groups = Synth().FindResources("AWS::Logs::LogGroup").Values.Select(PropsOf).ToList();
         Assert.Equal(names.Length, groups.Count);
         foreach (var name in names)
@@ -294,14 +268,15 @@ public class WorkflowStackTests
     public void NoPolicyAllowsEveryAction()
         => Assert.DoesNotContain("\"Action\":\"*\"", Json(Synth().FindResources("AWS::IAM::Policy")));
 
-    // Đã bỏ AI so ảnh trả phòng (kiến trúc v8.5.2): không còn state machine, Lambda so ảnh hay quyền Bedrock.
+    // Không còn luồng trả phòng cũ: không state machine, Lambda so ảnh, quyền Bedrock, rule MoveOutSubmitted hay TenancySettled.
 
     [Fact]
-    public void NoCompareStateMachine_NoBedrockPermission_NoMoveOutSubmittedRule()
+    public void NoCompareStateMachine_NoBedrockPermission_NoMoveOutRules()
     {
         Synth().ResourceCountIs("AWS::StepFunctions::StateMachine", 0);
         Assert.DoesNotContain("bedrock", Json(Synth().FindResources("AWS::IAM::Policy")));
         Assert.DoesNotContain("MoveOutSubmitted", Json(Synth().FindResources("AWS::Events::Rule")));
+        Assert.DoesNotContain("TenancySettled", Json(Synth().FindResources("AWS::Events::Rule")));
         Assert.Empty(Synth().FindResources("AWS::SSM::Parameter"));
     }
 
@@ -309,7 +284,7 @@ public class WorkflowStackTests
     public void EveryRuleTarget_HasADeadLetterQueue()
     {
         var rules = Synth().FindResources("AWS::Events::Rule").Values.Select(PropsOf).ToList();
-        Assert.Equal(4, rules.Count);   // PhotoUploaded, PhotoReceived, InspectionLocked, TenancySettled
+        Assert.Equal(3, rules.Count);   // PhotoUploaded, PhotoReceived, InspectionLocked
         foreach (var target in rules.SelectMany(r => (object[])r["Targets"]).Cast<IDictionary<string, object>>())
         {
             Assert.True(target.ContainsKey("DeadLetterConfig"), Json(target));

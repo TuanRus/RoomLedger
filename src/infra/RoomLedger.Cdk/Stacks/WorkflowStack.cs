@@ -42,10 +42,6 @@ public sealed class WorkflowStackProps : StackProps
  * Luồng upload: S3 "Object Created" (incoming) → photo-ingest → PhotoReceived (outbox) → SQS photo-queue → photo-derive
  * (sơ đồ v8.5.2: hàng đợi đỡ đợt ảnh dồn dập, giới hạn số photo-derive chạy cùng lúc; lỗi 3 lần → DLQ).
  * Khóa biên bản: API InspectionLocked → evidence-seal (chép sang bucket evidence Object Lock, BR-18 RULE 4).
- * Trả phòng: không còn AI so ảnh (kiến trúc v8.5.2); API chuyển biên bản sang REVIEWING, chủ nhà xem ảnh và tự ghi
- * khoản trừ cọc. Sự kiện MoveOutSubmitted vẫn được phát để notify báo chủ nhà sau này.
- * Quyết toán (MD-06-FE-05): API TenancySettled → render-pdf (VPC, biên bản thanh lý PDF vào derived/reports/) và
- * evidence-seal (niêm phong ảnh biên bản trả phòng, detail có inspectionId).
  * Log của mọi Lambda ở đây có hạn giữ (30 ngày, prod 90); báo động DLQ gửi vào topic của ObservabilityStack.
  * Lambda trong VPC đăng nhập roomledger_app bằng IAM token; quyền S3 tối thiểu. Mọi rule có DLQ chung,
  * báo động khi DLQ có tin (chưa gắn SNS: chờ chọn email nhận báo động).
@@ -60,8 +56,6 @@ public sealed class WorkflowStack : Stack
     public const string PhotoReceived = "PhotoReceived";
     public const string ApiSource = $"{Naming.Project}.api";
     public const string InspectionLocked = "InspectionLocked";
-    public const string MoveOutSubmitted = "MoveOutSubmitted";
-    public const string TenancySettled = "TenancySettled";
 
     /** Hạn giữ log của Lambda theo stage. */
     public static RetentionDays LogRetentionFor(string stage) =>
@@ -70,7 +64,6 @@ public sealed class WorkflowStack : Stack
     public Function PhotoIngest { get; }
     public Function PhotoDerive { get; }
     public Function EvidenceSeal { get; }
-    public Function RenderPdf { get; }
     public Queue DeadLetterQueue { get; }
     public Queue PhotoQueue { get; }
 
@@ -187,7 +180,7 @@ public sealed class WorkflowStack : Stack
             }));
         Allow(PhotoIngest, "s3:PutObject", Outbox($"{FunctionsSource}/*"));
         Allow(PhotoDerive, "s3:GetObject", Outbox($"{FunctionsSource}/{PhotoReceived}/*"));
-        Allow(EvidenceSeal, "s3:GetObject", Outbox($"{ApiSource}/{InspectionLocked}/*"), Outbox($"{ApiSource}/{TenancySettled}/*"));
+        Allow(EvidenceSeal, "s3:GetObject", Outbox($"{ApiSource}/{InspectionLocked}/*"));
         props.Db.GrantConnect(PhotoIngest, DataStack.AppUser);
         props.Db.GrantConnect(PhotoDerive, DataStack.AppUser);
         props.Db.GrantConnect(EvidenceSeal, DataStack.AppUser);
@@ -252,28 +245,6 @@ public sealed class WorkflowStack : Stack
             Description = "Inspection locked (API) -> evidence-seal",
             EventPattern = FromOutbox(ApiSource, InspectionLocked),
             Targets = new IRuleTarget[] { new LambdaFunction(EvidenceSeal, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }) },
-        });
-
-        // ---- MD-06-FE-05: quyết toán (Sang) ----
-        // render-pdf: QuestPDF + font Lato đi kèm gói; đọc RDS, chỉ được ghi derived/reports/ (không đọc ảnh, không evidence)
-        RenderPdf = VpcFunction("RenderPdf", "render-pdf", 512, Duration.Minutes(1), "HandleOutboxAsync");
-        RenderPdf.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
-        {
-            Actions = new[] { "s3:PutObject" },
-            Resources = new[] { $"arn:{Aws.PARTITION}:s3:::{props.DerivedBucketName}/reports/*" },
-        }));
-        props.Db.GrantConnect(RenderPdf, DataStack.AppUser);
-        Allow(RenderPdf, "s3:GetObject", Outbox($"{ApiSource}/{TenancySettled}/*"));
-
-        new Rule(this, "TenancySettledRule", new RuleProps
-        {
-            Description = "Tenancy settled (API) -> render-pdf (termination record) + evidence-seal (move-out photos)",
-            EventPattern = FromOutbox(ApiSource, TenancySettled),
-            Targets = new IRuleTarget[]
-            {
-                new LambdaFunction(RenderPdf, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }),
-                new LambdaFunction(EvidenceSeal, new LambdaFunctionProps { RetryAttempts = 2, DeadLetterQueue = DeadLetterQueue }),
-            },
         });
     }
 }

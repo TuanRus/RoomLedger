@@ -85,7 +85,7 @@ public sealed class AiStack : Stack
     /** Tiền tố khóa outbox (events/{source}/{loại}/) của các sự kiện có mẫu email. */
     public static IReadOnlyList<string> NotifyKeyPrefixes() =>
     [
-        .. new[] { "InviteCreated", "TenancyMoved", "InvoiceSent", "InvoiceDisputed", "FindingsSent", "FindingDisputed", "DisputeAnswered" }
+        .. new[] { "InviteCreated", "TenancyMoved", "InvoiceSent", "InvoiceDisputed", "DisputeAnswered" }
             .Select(t => $"events/{WorkflowStack.ApiSource}/{t}/"),
         $"events/{WorkflowStack.FunctionsSource}/MeterReadingNeedsReview/",
     ];
