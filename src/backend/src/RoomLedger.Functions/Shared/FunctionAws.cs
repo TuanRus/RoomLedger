@@ -1,7 +1,12 @@
+using Amazon.BedrockRuntime;
 using Amazon.S3;
+using Amazon.SimpleSystemsManagement;
+using RoomLedger.Ai;
 using Microsoft.Extensions.Options;
 using RoomLedger.Core.Abstractions;
 using RoomLedger.Core.Services;
+using RoomLedger.Infrastructure.Bedrock;
+using RoomLedger.Infrastructure.Config;
 using RoomLedger.Infrastructure.Events;
 using RoomLedger.Infrastructure.S3;
 
@@ -21,7 +26,7 @@ public sealed record PhotoEventDetail(Guid PhotoId)
 /**
  * Client AWS thật cho Lambda, tạo một lần mỗi môi trường chạy (dùng lại giữa các lần gọi).
  * Cấu hình qua biến môi trường do CDK (WorkflowStack) đặt: INCOMING_BUCKET, DERIVED_BUCKET, EVIDENCE_BUCKET,
- * OUTBOX_BUCKET, PHOTO_MAX_AGE_DAYS.
+ * OUTBOX_BUCKET, PHOTO_MAX_AGE_DAYS; AI_PARAM_PREFIX (tiền tố Parameter Store, ví dụ /roomledger/dev) cho read-document.
  *
  * @author Sang
  * @version 1.0
@@ -43,7 +48,15 @@ public static class FunctionAws
             Source = "roomledger.functions",
         })));
 
+    // Bedrock: giới hạn thời gian dưới timeout của Lambda read-document (60 s) để lỗi mạng nổi lên cho state machine thử lại.
+    private static readonly Lazy<IAiClient> AiClient = new(() => new BedrockAiClient(
+        new AmazonBedrockRuntimeClient(new AmazonBedrockRuntimeConfig { Timeout = TimeSpan.FromSeconds(45), MaxErrorRetry = 1 }),
+        new SsmConfigProvider(new AmazonSimpleSystemsManagementClient(), Env("AI_PARAM_PREFIX")),
+        AiTasks.Schema));
+
     public static IObjectStore ObjectStore => Store.Value;
+
+    public static IAiClient Ai => AiClient.Value;
 
     public static IEventPublisher Events => Publisher.Value;
 
