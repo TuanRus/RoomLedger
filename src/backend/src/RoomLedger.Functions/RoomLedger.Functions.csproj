@@ -17,6 +17,5 @@
     <PackageReference Include="Amazon.Lambda.SQSEvents" Version="2.2.0" />
     <PackageReference Include="Amazon.Lambda.CloudWatchEvents" Version="4.4.0" />
     <PackageReference Include="AWSSDK.CognitoIdentityProvider" Version="3.7.405" />
-    <PackageReference Include="QuestPDF" Version="2024.7.3" />
   </ItemGroup>
 </Project>
