@@ -1,5 +1,7 @@
 using Amazon.CDK;
+using Amazon.CDK.AWS.CloudTrail;
 using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.S3;
 using Constructs;
 
 namespace RoomLedger.Cdk.Stacks;
@@ -14,6 +16,9 @@ public class SecurityStackProps : StackProps
 {
     /** Stage triển khai, chỉ nhận stage có trong githubBranches (dev, demo, prod). */
     public string Stage { get; set; } = "";
+
+    /** Tên bucket evidence (cùng tên Program.cs truyền cho StorageStack), CloudTrail ghi data events của bucket này. */
+    public string EvidenceBucketName { get; set; } = "";
 }
 
 /**
@@ -38,7 +43,7 @@ public class SecurityStackProps : StackProps
  * chỉ assume được ba role trên. Giảm rủi ro: chỉ nhánh develop/main lấy được token (đã có); bootstrap kèm
  * --cloudformation-execution-policies trỏ tới policy hẹp hơn (chỉ dịch vụ các stack dùng) khi danh sách dịch vụ đã ổn định.
  *
- * KMS, CloudTrail, GuardDuty, Budgets, Secrets Manager sẽ được thêm ở các PR sau.
+ * CloudTrail ghi S3 data events của bucket evidence (ai đọc/ghi/xóa ảnh bằng chứng). KMS key của evidence nằm ở StorageStack.
  *
  * @author Phát
  * @version 1.2
@@ -119,7 +124,48 @@ public class SecurityStack : Stack
             Resources = bootstrapRoleArns,
         }));
 
+        AddEvidenceTrail(stage, props.EvidenceBucketName);
+
         _ = new CfnOutput(this, "GitHubDeployRoleArn", new CfnOutputProps { Value = GitHubDeployRole.RoleArn });
+    }
+
+    /**
+     * Trail một region, ghi management events (bản đầu tiên miễn phí) và S3 data events (đọc + ghi) của bucket evidence.
+     * Log vào bucket riêng (SSE-S3, chặn truy cập công khai, TLS), xóa sau 90 ngày, bật xác thực file log.
+     * Không gửi sang CloudWatch Logs để tránh phí ingest.
+     */
+    private void AddEvidenceTrail(string stage, string evidenceBucketName)
+    {
+        if (string.IsNullOrWhiteSpace(evidenceBucketName))
+        {
+            throw new ArgumentException("Thiếu EvidenceBucketName: CloudTrail cần biết bucket evidence để ghi data events.");
+        }
+
+        var isDev = stage == "dev";
+        var logBucket = new Bucket(this, "TrailLogBucket", new BucketProps
+        {
+            BucketName = $"{Naming.Resource(stage, "trail-logs")}-{Account}",
+            BlockPublicAccess = BlockPublicAccess.BLOCK_ALL,
+            Encryption = BucketEncryption.S3_MANAGED,
+            EnforceSSL = true,
+            ObjectOwnership = ObjectOwnership.BUCKET_OWNER_ENFORCED,
+            LifecycleRules = [new LifecycleRule { Id = "expire-90-days", Expiration = Duration.Days(90) }],
+            RemovalPolicy = isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
+            AutoDeleteObjects = isDev,
+        });
+
+        var trail = new Trail(this, "EvidenceTrail", new TrailProps
+        {
+            TrailName = Naming.Resource(stage, "trail"),
+            Bucket = logBucket,
+            EnableFileValidation = true,
+            IncludeGlobalServiceEvents = false,
+            IsMultiRegionTrail = false,
+            SendToCloudWatchLogs = false,
+        });
+        trail.AddS3EventSelector(
+            [new S3EventSelector { Bucket = Bucket.FromBucketName(this, "EvidenceBucketRef", evidenceBucketName) }],
+            new AddEventSelectorOptions { ReadWriteType = ReadWriteType.ALL });
     }
 
     private string? ContextValue(string key) => Node.TryGetContext(key) as string is { Length: > 0 } v ? v : null;

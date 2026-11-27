@@ -38,6 +38,7 @@ public class SecurityStackTests
         var stack = new SecurityStack(app, "TestSecurity", new SecurityStackProps
         {
             Stage = stage,
+            EvidenceBucketName = $"roomledger-{stage}-evidence",
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = Region },
         });
         return Template.FromStack(stack);
@@ -195,5 +196,45 @@ public class SecurityStackTests
     {
         // IAM chỉ nhận Description theo mẫu [\u0009\u000A\u000D\u0020-\u007E\u00A1-\u00FF]; System.Text.Json thoát ký tự ngoài ASCII thành \uXXXX.
         Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\\u(?!00)[0-9a-fA-F]{4}"), Json(Build()));
+    }
+
+    [Fact]
+    public void Trail_RecordsS3DataEventsOfTheEvidenceBucket_WithFileValidation()
+    {
+        var t = Build();
+        t.ResourceCountIs("AWS::CloudTrail::Trail", 1);
+        t.HasResourceProperties("AWS::CloudTrail::Trail", new Dictionary<string, object>
+        {
+            ["TrailName"] = "roomledger-dev-trail",
+            ["IsLogging"] = true,
+            ["EnableLogFileValidation"] = true,
+            ["IsMultiRegionTrail"] = false,
+        });
+        var json = Json(t);
+        Assert.Contains("AWS::S3::Object", json);
+        Assert.Contains("roomledger-dev-evidence", json);
+    }
+
+    [Fact]
+    public void TrailLogBucket_IsPrivateEncryptedAndExpires()
+    {
+        var t = Build();
+        t.HasResourceProperties("AWS::S3::Bucket", new Dictionary<string, object>
+        {
+            ["BucketName"] = Match.StringLikeRegexp("^roomledger-dev-trail-logs-"),
+            ["PublicAccessBlockConfiguration"] = Match.ObjectLike(new Dictionary<string, object> { ["BlockPublicAcls"] = true }),
+        });
+        Assert.Contains("expire-90-days", Json(t));
+    }
+
+    [Fact]
+    public void Trail_WithoutEvidenceBucketName_FailsAtSynth()
+    {
+        var app = new App(new AppProps { Context = BaseContext() });
+        Assert.Throws<ArgumentException>(() => new SecurityStack(app, "NoEvidence", new SecurityStackProps
+        {
+            Stage = "dev",
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = Region },
+        }));
     }
 }
