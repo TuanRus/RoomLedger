@@ -19,15 +19,12 @@ public static class EmailTemplates
     public const string TenancyMoved = "TenancyMoved";
     public const string InvoiceSent = "InvoiceSent";
     public const string InvoiceDisputed = "InvoiceDisputed";
-    public const string FindingsSent = "FindingsSent";
-    public const string FindingDisputed = "FindingDisputed";
-    public const string DisputeAnswered = "DisputeAnswered";
     public const string MeterReadingNeedsReview = "MeterReadingNeedsReview";
 
     /** Các templateId có mẫu; rule EventBridge của AiStack chỉ chuyển đúng những sự kiện này cho Lambda notify. */
     public static readonly IReadOnlyList<string> Supported =
     [
-        InviteCreated, TenancyMoved, InvoiceSent, InvoiceDisputed, FindingsSent, FindingDisputed, DisputeAnswered, MeterReadingNeedsReview,
+        InviteCreated, TenancyMoved, InvoiceSent, InvoiceDisputed, MeterReadingNeedsReview,
     ];
 
     /** Dựng email; templateId không có mẫu thì null. webOrigin là địa chỉ web app (không có dấu / cuối). */
@@ -46,12 +43,6 @@ public static class EmailTemplates
                 $"Chủ nhà vừa gửi hóa đơn tiền phòng.\n\nXem chi tiết và thanh toán trong RoomLedger: {origin}"),
             InvoiceDisputed => new RenderedEmail("Người thuê khiếu nại hóa đơn",
                 $"Người thuê vừa khiếu nại một hóa đơn.\n\nXem và trả lời trong RoomLedger: {origin}"),
-            FindingsSent => new RenderedEmail("Chủ nhà gửi kết quả kiểm tra phòng",
-                $"Chủ nhà đã gửi kết quả kiểm tra phòng để bạn xem.\n\nXem và phản hồi trong RoomLedger: {origin}"),
-            FindingDisputed => new RenderedEmail("Người thuê phản hồi kết quả kiểm tra phòng",
-                $"Người thuê vừa phản hồi một khoản trong kết quả kiểm tra phòng.\n\nXem trong RoomLedger: {origin}"),
-            DisputeAnswered => new RenderedEmail("Chủ nhà đã trả lời phản hồi của bạn",
-                $"Chủ nhà vừa trả lời phản hồi của bạn về kết quả kiểm tra phòng.\n\nXem trong RoomLedger: {origin}"),
             MeterReadingNeedsReview => new RenderedEmail("Có chỉ số điện nước cần kiểm tra",
                 $"AI chưa chắc chắn khi đọc chỉ số {KindName(model)} {PeriodText(model)}.\n\nMở RoomLedger, xem ảnh và nhập hoặc xác nhận chỉ số: {origin}"),
             _ => null,
