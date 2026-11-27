@@ -112,6 +112,32 @@ Nhánh `feature/md-06-move-out-compare`.
 - `/src/infra/` do Phát duyệt (CODEOWNERS): thay đổi WorkflowStack cần Phát xem.
 - Chưa kiểm trên AWS.
 
+## AI đọc đồng hồ và thông báo (AiStack, cập nhật 2026-11-27)
+
+Sơ đồ final, luồng AI và email. Code: `RoomLedger.Functions` (ReadDocument, MeterResult, Notify), `RoomLedger.Infrastructure` (BedrockAiClient, SsmConfigProvider, SesNotifier), `RoomLedger.Ai` (prompt, schema).
+
+| Phần | Cách hoạt động |
+|---|---|
+| Kích hoạt | Ảnh tải lên bucket `incoming` → EventBridge → state machine `roomledger-{stage}-read-meter` (Standard). Rule này nhận mọi ảnh của bucket; bước đầu bỏ qua ảnh không phải ảnh đồng hồ |
+| `meter-prepare` (VPC) | Tìm `meter_reading` PENDING_AI có `photo_key` đúng ảnh này; đổi `photo_status` PENDING_UPLOAD → READY. Chưa có Lambda nào làm việc này trước đây |
+| `read-document` (**ngoài VPC**) | Thu ảnh về cạnh dài 1568 px (bỏ EXIF/GPS), gọi Bedrock Converse với Claude Haiku 4.5 qua inference profile `au.*`, kết quả JSON `{readable, value, confidence, note}`. Chỉ có quyền đọc ảnh `incoming`, đọc 3 tham số SSM và `bedrock:InvokeModel` đúng profile Haiku 4.5 |
+| `meter-persist` (VPC) | Ghi `ai_value`, `ai_confidence`, `status`, `review_reason` bằng `MeterReadingService.Assess` (BR-20). Bedrock lỗi sau 2 lần thử lại hay ảnh không đọc được thành NEEDS_REVIEW (`AI_FAILED`) để chủ nhà nhập tay. NEEDS_REVIEW phát sự kiện `MeterReadingNeedsReview` cho chủ nhà |
+| Parameter Store (Standard) | `/roomledger/{stage}/ai/model-id` và `/ai/prompt/readElectricMeter`, `/ai/prompt/readWaterMeter`. Nạp từ file ở `src/backend/src/RoomLedger.Ai/Prompts` mỗi lần deploy (sửa tay trên console thì lần deploy sau ghi đè). Sửa có hiệu lực sau tối đa 5 phút. Đổi sang họ mô hình khác phải sửa cả policy (`AiStack.BedrockProfilePrefix`) |
+| `notify` (**ngoài VPC**) | Sự kiện trong bucket `outbox` → Lambda → SES. Mẫu có sẵn: InviteCreated, TenancyMoved, InvoiceSent, InvoiceDisputed, FindingsSent, FindingDisputed, DisputeAnswered, MeterReadingNeedsReview. Người nhận lấy từ `email`/`tenantEmail` của sự kiện, hoặc tra Cognito theo `notifyUserId`/`tenantId`/`landlordId`. Lỗi thử lại 2 lần rồi vào SQS `roomledger-{stage}-ai-dlq` (có báo động) |
+
+**Cần làm trước khi chạy thật**
+1. **Bedrock:** tài khoản phải gửi form use-case Anthropic và được dùng Claude Haiku 4.5 (Bedrock → Model access). Profile `au.*` định tuyến giữa `ap-southeast-2` và `ap-southeast-4`: SCP chặn `ap-southeast-4` thì Converse bị từ chối, khi đó phải nhờ mentor mở region hoặc đổi sang profile khác (đổi `-c aiModelId=...` và `BedrockProfilePrefix`).
+2. **SES sandbox:** tài khoản SES mới chỉ gửi được tới địa chỉ đã xác minh. Stack **không** tạo identity và không ghi địa chỉ email nào. Xác minh người gửi rồi từng người nhận thử:
+   ```
+   aws sesv2 create-email-identity --email-identity <địa chỉ người gửi> --region ap-southeast-2
+   aws sesv2 create-email-identity --email-identity <địa chỉ người nhận thử> --region ap-southeast-2
+   ```
+   Mỗi địa chỉ nhận một email xác minh, bấm liên kết trong đó. Gửi cho người lạ cần xin rời sandbox (SES → Account dashboard → Request production access).
+3. **Deploy:** `cdk deploy --all -c stage=dev -c sesSender=<địa chỉ người gửi đã xác minh> -c webOrigin=<origin web>`. Không truyền `sesSender` thì stack vẫn dựng phần AI nhưng không dựng Lambda `notify` (truyền `sesSender` mà thiếu `webOrigin` thì synth báo lỗi).
+4. `ObservabilityStack.FunctionShortNames` chưa có `read-document`, `meter-prepare`, `meter-persist`, `notify`: thêm vào để dashboard hiện lỗi của chúng.
+
+**Chi phí tăng thêm (ước lượng, chưa đo):** Step Functions Standard 3 đến 4 chuyển trạng thái mỗi ảnh tải lên (mọi ảnh, không chỉ ảnh đồng hồ); Bedrock Haiku 4.5 một lần gọi mỗi ảnh đồng hồ (ảnh ~1568 px); Parameter Store Standard, SES và SQS gần như 0 ở quy mô vài chục người dùng. Dọn dẹp: `cdk destroy` xóa toàn bộ (log group có hạn giữ, tham số SSM bị xóa theo stack).
+
 ## Giám sát (ObservabilityStack, Sang, cập nhật 2026-11-17)
 
 Nhánh `feature/observability-stack` (dựa trên MD-06, mở PR sau khi MD-06 được merge).
