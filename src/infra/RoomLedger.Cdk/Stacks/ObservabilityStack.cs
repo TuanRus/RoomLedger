@@ -38,10 +38,10 @@ public class ObservabilityStack : Stack
     public static readonly string[] FunctionShortNames =
     [
         "api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
-        "render-pdf",
+        "render-pdf", "read-document", "meter-prepare", "meter-persist", "notify",
     ];
 
-    /** Lambda có báo động lỗi riêng: 6 trong 7 Lambda của FunctionShortNames, trừ migrate. */
+    /** Lambda có báo động lỗi riêng: 6 Lambda của FunctionShortNames, trừ migrate và 4 Lambda của AiStack (AiStack có báo động riêng: DLQ và state machine). */
     public static readonly string[] AlarmedLambdas =
         ["api", "post-confirmation", "photo-ingest", "photo-derive", "evidence-seal", "render-pdf"];
 
