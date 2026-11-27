@@ -259,4 +259,54 @@ public class SecurityStackTests
         var t = Build(context: new Dictionary<string, object?> { ["createGuardDutyDetector"] = "false" });
         t.ResourceCountIs("AWS::GuardDuty::Detector", 0);
     }
+
+    [Fact]
+    public void Budget_Defaults100UsdMonthly_WithThreeActualAlertsAndOneForecast()
+    {
+        var t = Build();
+        t.ResourceCountIs("AWS::Budgets::Budget", 1);
+        t.HasResourceProperties("AWS::Budgets::Budget", new Dictionary<string, object>
+        {
+            ["Budget"] = Match.ObjectLike(new Dictionary<string, object>
+            {
+                ["BudgetName"] = "roomledger-dev-monthly",
+                ["BudgetType"] = "COST",
+                ["TimeUnit"] = "MONTHLY",
+                ["BudgetLimit"] = new Dictionary<string, object> { ["Amount"] = 100, ["Unit"] = "USD" },
+            }),
+        });
+        var json = Json(t);
+        foreach (var threshold in new[] { "20", "50", "80", "100" })
+        {
+            Assert.Contains($"\"Threshold\":{threshold}", json);
+        }
+        Assert.Contains("FORECASTED", json);
+    }
+
+    [Fact]
+    public void Budget_AmountComesFromContext()
+    {
+        var t = Build(context: new Dictionary<string, object?> { ["monthlyBudgetUsd"] = "150" });
+        Assert.Contains("\"Amount\":150", Json(t));
+    }
+
+    [Fact]
+    public void Budget_AlertsGoToATopicThatBudgetsMayPublishTo_AndHasNoEmailByDefault()
+    {
+        var t = Build();
+        t.HasResourceProperties("AWS::SNS::Topic", new Dictionary<string, object> { ["TopicName"] = "roomledger-dev-budget-alerts" });
+        Assert.Contains("budgets.amazonaws.com", Json(t));
+        t.ResourceCountIs("AWS::SNS::Subscription", 0);
+    }
+
+    [Fact]
+    public void Budget_EmailSubscription_IsAddedOnlyWhenGivenByContext()
+    {
+        var t = Build(context: new Dictionary<string, object?> { ["budgetAlertEmail"] = "alerts@example.com" });
+        t.HasResourceProperties("AWS::SNS::Subscription", new Dictionary<string, object>
+        {
+            ["Protocol"] = "email",
+            ["Endpoint"] = "alerts@example.com",
+        });
+    }
 }

@@ -1,8 +1,11 @@
 using Amazon.CDK;
+using Amazon.CDK.AWS.Budgets;
 using Amazon.CDK.AWS.CloudTrail;
 using Amazon.CDK.AWS.GuardDuty;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.S3;
+using Amazon.CDK.AWS.SNS;
+using Amazon.CDK.AWS.SNS.Subscriptions;
 using Constructs;
 
 namespace RoomLedger.Cdk.Stacks;
@@ -127,6 +130,7 @@ public class SecurityStack : Stack
 
         AddEvidenceTrail(stage, props.EvidenceBucketName);
         AddGuardDuty();
+        AddBudget(stage);
 
         _ = new CfnOutput(this, "GitHubDeployRoleArn", new CfnOutputProps { Value = GitHubDeployRole.RoleArn });
     }
@@ -190,6 +194,63 @@ public class SecurityStack : Stack
             {
                 new CfnDetector.CFNFeatureConfigurationProperty { Name = "S3_DATA_EVENTS", Status = "ENABLED" },
             },
+        });
+    }
+
+    /**
+     * AWS Budgets: ngân sách chi phí hằng tháng (mặc định 100 USD, đổi bằng -c monthlyBudgetUsd=...), cảnh báo khi chi thực tế
+     * đạt 20% / 50% / 80% và khi dự báo vượt 100%. Cảnh báo vào topic SNS riêng (Budgets cần quyền publish);
+     * muốn nhận email thì truyền -c budgetAlertEmail=... (không ghi email trong code).
+     */
+    private void AddBudget(string stage)
+    {
+        var limit = double.TryParse(ContextValue("monthlyBudgetUsd"), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : 100d;
+
+        var topic = new Topic(this, "BudgetTopic", new TopicProps
+        {
+            TopicName = Naming.Resource(stage, "budget-alerts"),
+            DisplayName = "RoomLedger budget alerts",
+        });
+        topic.AddToResourcePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Sid = "AllowBudgetsToPublish",
+            Effect = Effect.ALLOW,
+            Principals = [new ServicePrincipal("budgets.amazonaws.com")],
+            Actions = ["sns:Publish"],
+            Resources = [topic.TopicArn],
+            Conditions = new Dictionary<string, object>
+            {
+                ["StringEquals"] = new Dictionary<string, object> { ["aws:SourceAccount"] = Account },
+            },
+        }));
+        if (ContextValue("budgetAlertEmail") is { } email)
+        {
+            topic.AddSubscription(new EmailSubscription(email));
+        }
+
+        CfnBudget.NotificationWithSubscribersProperty Notify(string type, double threshold) => new()
+        {
+            Notification = new CfnBudget.NotificationProperty
+            {
+                NotificationType = type,
+                ComparisonOperator = "GREATER_THAN",
+                Threshold = threshold,
+                ThresholdType = "PERCENTAGE",
+            },
+            Subscribers = new[] { new CfnBudget.SubscriberProperty { SubscriptionType = "SNS", Address = topic.TopicArn } },
+        };
+
+        _ = new CfnBudget(this, "MonthlyBudget", new CfnBudgetProps
+        {
+            Budget = new CfnBudget.BudgetDataProperty
+            {
+                BudgetName = Naming.Resource(stage, "monthly"),
+                BudgetType = "COST",
+                TimeUnit = "MONTHLY",
+                BudgetLimit = new CfnBudget.SpendProperty { Amount = limit, Unit = "USD" },
+            },
+            NotificationsWithSubscribers = new[] { Notify("ACTUAL", 20), Notify("ACTUAL", 50), Notify("ACTUAL", 80), Notify("FORECASTED", 100) },
         });
     }
 
