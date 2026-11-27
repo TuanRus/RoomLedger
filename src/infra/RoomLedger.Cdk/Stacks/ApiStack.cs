@@ -4,6 +4,7 @@ using Amazon.CDK.AWS.EC2;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.RDS;
+using Amazon.CDK.AWS.WAFv2;
 using Constructs;
 
 namespace RoomLedger.Cdk.Stacks;
@@ -132,7 +133,80 @@ public sealed class ApiStack : Stack
         v1.AddResource("invites").AddResource("{token}").AddMethod("GET", integration);
 
         _ = new CfnOutput(this, "ApiUrl", new CfnOutputProps { Value = Api.Url });
+
+        AddWebAcl(props.Stage);
     }
+
+    /** Số rule của Web ACL, cố định 5 (khớp dự toán: 1 Web ACL + 5 rule trong Pricing Calculator). */
+    public const int WafRuleCount = 5;
+
+    /** Giới hạn request mỗi IP trong 5 phút trước khi bị chặn. */
+    private const int RateLimitPerFiveMinutes = 2000;
+
+    /**
+     * WAF Regional gắn vào stage của API Gateway, đúng 5 rule: bốn managed rule group của AWS
+     * (Common, KnownBadInputs, SQLi, AmazonIpReputation) và một rate-based rule theo IP. Mặc định cho phép.
+     */
+    private void AddWebAcl(string stage)
+    {
+        CfnWebACL.RuleProperty Managed(string name, int priority) => new()
+        {
+            Name = name,
+            Priority = priority,
+            Statement = new CfnWebACL.StatementProperty
+            {
+                ManagedRuleGroupStatement = new CfnWebACL.ManagedRuleGroupStatementProperty { VendorName = "AWS", Name = name },
+            },
+            OverrideAction = new CfnWebACL.OverrideActionProperty { None = new Dictionary<string, object>() },
+            VisibilityConfig = Visibility(name),
+        };
+
+        var rules = new[]
+        {
+            Managed("AWSManagedRulesCommonRuleSet", 1),
+            Managed("AWSManagedRulesKnownBadInputsRuleSet", 2),
+            Managed("AWSManagedRulesSQLiRuleSet", 3),
+            Managed("AWSManagedRulesAmazonIpReputationList", 4),
+            new CfnWebACL.RuleProperty
+            {
+                Name = "RateLimitPerIp",
+                Priority = 5,
+                Statement = new CfnWebACL.StatementProperty
+                {
+                    RateBasedStatement = new CfnWebACL.RateBasedStatementProperty
+                    {
+                        Limit = RateLimitPerFiveMinutes,
+                        AggregateKeyType = "IP",
+                    },
+                },
+                Action = new CfnWebACL.RuleActionProperty { Block = new Dictionary<string, object>() },
+                VisibilityConfig = Visibility("RateLimitPerIp"),
+            },
+        };
+
+        var webAcl = new CfnWebACL(this, "WebAcl", new CfnWebACLProps
+        {
+            Name = Naming.Resource(stage, "api-waf"),
+            Scope = "REGIONAL",
+            DefaultAction = new CfnWebACL.DefaultActionProperty { Allow = new Dictionary<string, object>() },
+            Rules = rules,
+            VisibilityConfig = Visibility(Naming.Resource(stage, "api-waf")),
+        });
+
+        var association = new CfnWebACLAssociation(this, "WebAclAssociation", new CfnWebACLAssociationProps
+        {
+            WebAclArn = webAcl.AttrArn,
+            ResourceArn = $"arn:{Aws.PARTITION}:apigateway:{Region}::/restapis/{Api.RestApiId}/stages/{Api.DeploymentStage.StageName}",
+        });
+        association.Node.AddDependency(Api.DeploymentStage);
+    }
+
+    private static CfnWebACL.VisibilityConfigProperty Visibility(string metricName) => new()
+    {
+        CloudWatchMetricsEnabled = true,
+        SampledRequestsEnabled = true,
+        MetricName = metricName,
+    };
 
     /**
      * Connection string của user roomledger_app (không có mật khẩu: Lambda tự sinh RDS IAM token).

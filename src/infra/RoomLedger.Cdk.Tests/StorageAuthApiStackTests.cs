@@ -259,6 +259,53 @@ public class StorageAuthApiStackTests
         Assert.Contains("rds-db:connect", Json(Templates.Value.Api.FindResources("AWS::IAM::Policy")));
     }
 
+    private static IDictionary<string, object> WebAclProps() =>
+        (IDictionary<string, object>)((IDictionary<string, object>)Templates.Value.Api.FindResources("AWS::WAFv2::WebACL").Values.Single())["Properties"];
+
+    [Fact]
+    public void Api_HasARegionalWebAcl_WithExactlyFiveRules_AllowingByDefault()
+    {
+        Templates.Value.Api.ResourceCountIs("AWS::WAFv2::WebACL", 1);
+        var props = WebAclProps();
+        Assert.Equal("REGIONAL", props["Scope"]);
+        Assert.Equal("roomledger-dev-api-waf", props["Name"]);
+        Assert.Contains("Allow", Json(props["DefaultAction"]));
+        Assert.Equal(5, ApiStack.WafRuleCount);
+        Assert.Equal(ApiStack.WafRuleCount, ((object[])props["Rules"]).Length);
+    }
+
+    [Theory]
+    [InlineData("AWSManagedRulesCommonRuleSet")]
+    [InlineData("AWSManagedRulesKnownBadInputsRuleSet")]
+    [InlineData("AWSManagedRulesSQLiRuleSet")]
+    [InlineData("AWSManagedRulesAmazonIpReputationList")]
+    public void WebAcl_UsesTheAwsManagedRuleGroup(string group)
+    {
+        var rules = Json(WebAclProps()["Rules"]);
+        Assert.Contains($"\"Name\":\"{group}\"", rules);
+        Assert.Contains("\"VendorName\":\"AWS\"", rules);
+    }
+
+    [Fact]
+    public void WebAcl_HasAnIpRateLimitRuleThatBlocks()
+    {
+        var rule = Json(((object[])WebAclProps()["Rules"]).Single(r => Json(r).Contains("RateBasedStatement")));
+        Assert.Contains("\"AggregateKeyType\":\"IP\"", rule);
+        Assert.Contains("\"Limit\":2000", rule);
+        Assert.Contains("Block", rule);
+    }
+
+    [Fact]
+    public void WebAcl_IsAssociatedWithTheApiStage_AfterTheStageExists()
+    {
+        var assoc = Templates.Value.Api.FindResources("AWS::WAFv2::WebACLAssociation").Values.Single();
+        var json = Json(assoc);
+        Assert.Contains("apigateway", json);
+        Assert.Contains("/stages/", json);
+        Assert.Contains("DependsOn", json);
+        Assert.Contains("RestDeploymentStage", json);
+    }
+
     /** D1 (BR-17): API xóa được ảnh ở incoming và bản xem *.jpg ở derived; không xóa được evidence hay PDF thanh lý. */
     [Fact]
     public void Api_CanDeleteOnlyIncomingAndDerivedJpg_NeverEvidenceNorReports()
