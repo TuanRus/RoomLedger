@@ -27,9 +27,9 @@ jobs:
       - run: npm install -g aws-cdk
       - run: dotnet tool restore
       # DataStack, AuthStack, WorkflowStack cần gói Lambda (Program.cs đọc artifacts/functions.zip)
-      - run: dotnet lambda package --project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip
+      - run: dotnet lambda package --project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip --function-architecture arm64
       # ApiStack cần gói Lambda api (Program.cs đọc artifacts/api.zip)
-      - run: dotnet lambda package --project-location src/backend/src/RoomLedger.Api -c Release -o artifacts/api.zip
+      - run: dotnet lambda package --project-location src/backend/src/RoomLedger.Api -c Release -o artifacts/api.zip --function-architecture arm64
       - run: dotnet test src/infra/RoomLedger.Cdk.Tests
       - run: cdk synth -c stage=dev
         working-directory: src/infra/RoomLedger.Cdk
