@@ -96,7 +96,7 @@ public sealed class ApiStack : Stack
         }));
 
         // D1 (BR-17): xóa ảnh trước khi khóa. Chỉ incoming, ảnh chuyển đổi trong derived (*.jpg gồm .thumb.jpg) và mã QR (derived/qr/*).
-        // Không có quyền xóa trên evidence; PDF thanh lý (derived/reports/*.pdf) không khớp *.jpg nên không xóa được.
+        // Không có quyền xóa trên evidence.
         ApiFunction.AddToRolePolicy(new PolicyStatement(new PolicyStatementProps
         {
             Sid = "DeleteUnlockedPhotoObjects",

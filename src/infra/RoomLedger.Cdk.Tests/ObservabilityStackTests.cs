@@ -7,9 +7,9 @@ using Xunit;
 namespace RoomLedger.Cdk.Tests;
 
 /**
- * ObservabilityStack (Sang): topic SNS nhận báo động (chưa có người nhận; Phát chọn sau), một dashboard và 14 báo động,
+ * ObservabilityStack (Sang): topic SNS nhận báo động (chưa có người nhận; Phát chọn sau), một dashboard và 13 báo động,
  * tất cả dựa trên tên tài nguyên roomledger-{stage}-… nên không phụ thuộc output của stack khác.
- * Cộng báo động DLQ của WorkflowStack, cả hệ thống có 15 báo động.
+ * Cộng báo động DLQ của WorkflowStack, cả hệ thống có 14 báo động.
  *
  * @author Sang
  * @version 1.0
@@ -86,7 +86,7 @@ public class ObservabilityStackTests
         }
         Assert.Equal(
             ["api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
-             "render-pdf", "read-document", "meter-prepare", "meter-persist", "notify"],
+             "read-document", "meter-prepare", "meter-persist", "notify"],
             ObservabilityStack.FunctionShortNames);
     }
 
@@ -138,10 +138,10 @@ public class ObservabilityStackTests
     }
 
     [Fact]
-    public void FourteenAlarmsHere_FifteenInTotalWithTheWorkflowDlqAlarm()
+    public void ThirteenAlarmsHere_FourteenInTotalWithTheWorkflowDlqAlarm()
     {
         Dev.Value.Template.ResourceCountIs("AWS::CloudWatch::Alarm", ObservabilityStack.AlarmCount);
-        Assert.Equal(14, ObservabilityStack.AlarmCount);
+        Assert.Equal(13, ObservabilityStack.AlarmCount);
     }
 
     [Fact]
@@ -159,7 +159,6 @@ public class ObservabilityStackTests
     [InlineData("photo-ingest")]
     [InlineData("photo-derive")]
     [InlineData("evidence-seal")]
-    [InlineData("render-pdf")]
     public void EveryLambdaButMigrate_HasAnErrorAlarm(string fn)
     {
         var a = Alarm($"roomledger-dev-{fn}-errors");

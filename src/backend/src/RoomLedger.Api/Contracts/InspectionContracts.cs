@@ -24,10 +24,8 @@ public record InspectionResponse(
     DateTimeOffset? LandlordConfirmedAt,
     DateTimeOffset? TenantConfirmedAt,
     IReadOnlyList<InspectionAreaResponse> Areas,
-    Guid? ReferenceInspectionId = null,   // biên bản trả phòng: id biên bản nhận phòng để hiện ảnh đối chiếu
     long? OpeningElectricity = null,   // BR-18 RULE 5: chỉ số ban đầu (chỉ biên bản nhận phòng)
-    long? OpeningWater = null,
-    string? FinalPeriod = null);   // biên bản trả phòng: kỳ chỉ số tháng cuối và hóa đơn cuối (A3)
+    long? OpeningWater = null);
 
 /**
  * Body POST /inspections/{id}/confirm: agreed = người dùng đã tích ô cam kết (BR-18 TRIGGER).

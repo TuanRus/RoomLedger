@@ -23,27 +23,13 @@ public static class InspectionEndpoints
                 : ApiResults.Ok(inspection, "Hợp đồng đã có biên bản nhận phòng");
         }).RequireAuthorization(Policies.LandlordOrTenant);
 
-        // MD-06-FE-01: người thuê mở biên bản trả phòng; tạo mới → 201, đã có → 200
-        api.MapPost("/tenancies/{tenancyId:guid}/inspections/move-out", async (Guid tenancyId, InspectionAppService svc, CancellationToken ct) =>
-        {
-            var (inspection, created) = await svc.OpenMoveOutAsync(tenancyId, ct);
-            return created
-                ? ApiResults.Created(inspection, "Đã mở biên bản trả phòng")
-                : ApiResults.Ok(inspection, "Hợp đồng đã có biên bản trả phòng");
-        }).RequireAuthorization(Policies.LandlordOrTenant);
-
         var group = api.MapGroup("/inspections");
         group.MapGet("/{inspectionId:guid}", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.GetAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
 
-        // Danh sách ảnh kèm URL xem có hạn (màn hình biên bản, ảnh đối chiếu khi trả phòng)
+        // Danh sách ảnh kèm URL xem có hạn (màn hình biên bản)
         group.MapGet("/{inspectionId:guid}/photos", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
             ApiResults.Ok(await svc.ListPhotosAsync(inspectionId, ct))).RequireAuthorization(Policies.LandlordOrTenant);
-
-        // MD-06-FE-01 RULE 4: người thuê gửi biên bản trả phòng cho chủ nhà duyệt
-        group.MapPost("/{inspectionId:guid}/submit", async (Guid inspectionId, InspectionAppService svc, CancellationToken ct) =>
-            ApiResults.Ok(await svc.SubmitMoveOutAsync(inspectionId, ct), "Đã gửi biên bản cho chủ nhà duyệt"))
-            .RequireAuthorization(Policies.LandlordOrTenant);
 
         // MD-04-FE-04 BR-18 RULE 5: chỉ số điện nước ban đầu
         group.MapPut("/{inspectionId:guid}/opening-readings", async (Guid inspectionId, OpeningReadingsRequest req, InspectionAppService svc, CancellationToken ct) =>

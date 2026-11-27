@@ -253,132 +253,6 @@ public class InspectionAppService(
     }
 
     /**
-     * Mở biên bản trả phòng (MD-06-FE-01, BR-25 RULE 1). Chỉ người thuê; hợp đồng ACTIVE và biên bản nhận phòng LOCKED
-     * (không thì 409 NO_MOVE_IN_RECORD). Khu vực chép nguyên bản sao của biên bản nhận phòng để so đúng khu vực cũ;
-     * hợp đồng → MOVING_OUT trong cùng lần lưu. Đã có biên bản trả phòng → trả lại biên bản đó (200); hai request
-     * cùng lúc: index unique (tenancy_id, type) chỉ cho một bản, bên thua rollback cả việc đổi trạng thái hợp đồng.
-     * 1.1: chốt kỳ trả phòng (finalPeriod, tháng giờ Việt Nam lúc mở; quyết định A3).
-     *
-     * @author Sang
-     * @version 1.1
-     */
-    public async Task<(InspectionResponse Inspection, bool Created)> OpenMoveOutAsync(Guid tenancyId, CancellationToken ct)
-    {
-        var tenancy = await db.Tenancies.FirstOrDefaultAsync(t => t.Id == tenancyId, ct)
-            ?? throw new NotFoundException("Không tìm thấy hợp đồng");
-        if (user.UserId != tenancy.TenantId)
-        {
-            throw new ForbiddenException("Chỉ người thuê mới mở được biên bản trả phòng");
-        }
-        if (await FindIdAsync(tenancyId, InspectionType.MoveOut, ct) is { } existingId)
-        {
-            return (await GetAsync(existingId, ct), false);
-        }
-
-        var moveIn = await db.Inspections.AsNoTracking()
-            .Where(i => i.TenancyId == tenancyId && i.Type == InspectionType.MoveIn)
-            .Select(i => new { i.Status, i.AreaSnapshotJson }).FirstOrDefaultAsync(ct);
-        InspectionStateMachine.EnsureCanOpenMoveOut(tenancy, moveIn?.Status);
-
-        var inspection = new Inspection
-        {
-            TenancyId = tenancy.Id,
-            Type = InspectionType.MoveOut,
-            Status = InspectionStatus.Open,
-            AreaSnapshotJson = moveIn!.AreaSnapshotJson,
-            FinalPeriod = InspectionService.FinalPeriod(clock.GetUtcNow()),   // A3: chốt kỳ lúc mở
-        };
-        db.Inspections.Add(inspection);
-        tenancy.Status = TenancyStatus.MovingOut;
-        db.Audit(AuditEventTypes.InspectionOpened, nameof(Inspection), inspection.Id, """{"type":"MOVE_OUT"}""");
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateException e) when (e.InnerException is PostgresException
-                                          { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: OneInspectionPerTypeIndex })
-        {
-            db.ChangeTracker.Clear();
-            var winner = await FindIdAsync(tenancyId, InspectionType.MoveOut, ct);
-            if (winner is null)
-            {
-                throw;
-            }
-            return (await GetAsync(winner.Value, ct), false);
-        }
-
-        return (await GetAsync(inspection.Id, ct), true);
-    }
-
-    /**
-     * Gửi biên bản trả phòng cho chủ nhà duyệt (MD-06-FE-01, BR-25 RULE 4). Chỉ người thuê. Trong một transaction:
-     * UPDATE có điều kiện OPEN → REVIEWING trước (giữ khóa dòng, nên xóa ảnh không chen vào), rồi kiểm mỗi khu vực
-     * đủ ảnh READY (thiếu → rollback, 409 INCOMPLETE_INSPECTION). Sau commit phát MoveOutSubmitted (notify báo chủ nhà).
-     * Không còn AI so ảnh (kiến trúc v8.5.2): chủ nhà xem ảnh nhận và trả phòng rồi tự ghi khoản trừ cọc (mục tay).
-     * Đã REVIEWING → 200, không phát lại; đã qua bước duyệt → 409 RECORD_LOCKED.
-     * 1.1: sau ảnh phòng, cần chỉ số điện và nước của kỳ trả phòng mà ảnh đồng hồ đã tới (quyết định B1);
-     * thiếu → rollback, 409 FINAL_READING_MISSING nêu đồng hồ còn thiếu (B2). Chưa cần chủ nhà xác nhận.
-     *
-     * @author Sang
-     * @version 1.2
-     */
-    public async Task<InspectionResponse> SubmitMoveOutAsync(Guid inspectionId, CancellationToken ct)
-    {
-        var inspection = await db.Inspections.AsNoTracking().Include(i => i.Tenancy)
-            .FirstOrDefaultAsync(i => i.Id == inspectionId, ct)
-            ?? throw new NotFoundException("Không tìm thấy biên bản");
-        InspectionStateMachine.EnsureIsMoveOut(inspection.Type);
-        var tenancy = inspection.Tenancy!;
-        if (user.UserId != tenancy.TenantId)
-        {
-            throw new ForbiddenException("Chỉ người thuê mới gửi được biên bản trả phòng");
-        }
-
-        await using (var tx = await db.Database.BeginTransactionAsync(ct))
-        {
-            var rows = await db.Inspections.Where(i => i.Id == inspectionId && i.Status == InspectionStatus.Open)
-                .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, InspectionStatus.Reviewing)
-                    .SetProperty(i => i.UpdatedAt, clock.GetUtcNow()), ct);
-            if (rows == 0)
-            {
-                var current = await db.Inspections.Where(i => i.Id == inspectionId).Select(i => i.Status).SingleAsync(ct);
-                if (current == InspectionStatus.Reviewing)
-                {
-                    return await GetAsync(inspectionId, ct);   // gửi lại (bấm hai lần): không phát sự kiện lần nữa
-                }
-                throw new RecordLockedException("Biên bản trả phòng đã qua bước duyệt");
-            }
-
-            var photos = await db.Photos.Where(p => p.InspectionId == inspectionId)
-                .Select(p => new { p.RoomAreaId, p.Status }).ToListAsync(ct);
-            var missing = InspectionService.FindIncompleteAreas(
-                InspectionService.ParseSnapshot(inspection.AreaSnapshotJson), photos.Select(p => (p.RoomAreaId, p.Status)));
-            if (missing.Count > 0)
-            {
-                throw new ConflictException(ErrorCodes.IncompleteInspection, "Biên bản chưa đủ ảnh: " + string.Join(", ", missing));
-            }
-
-            // B1, B2: ảnh đồng hồ điện và nước của kỳ trả phòng đã tới (chưa cần xác nhận)
-            var period = FinalPeriodOf(inspection);
-            var readings = await db.MeterReadings.Where(m => m.TenancyId == tenancy.Id && m.Period == period)
-                .Select(m => new { m.Kind, m.PhotoStatus, m.Status }).ToListAsync(ct);
-            var missingMeters = InspectionService.MissingFinalReadings(readings.Select(r => (r.Kind, r.PhotoStatus, r.Status)));
-            if (missingMeters.Count > 0)
-            {
-                throw new ConflictException(ErrorCodes.FinalReadingMissing, InspectionService.FinalReadingMissingMessage(missingMeters, period));
-            }
-
-            db.Audit(AuditEventTypes.MoveOutSubmitted, nameof(Inspection), inspectionId);
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-        }
-
-        var moveInId = await FindMoveInIdAsync(tenancy.Id, ct);
-        await events.PublishAsync("MoveOutSubmitted", new { inspectionId, tenancyId = tenancy.Id, moveInInspectionId = moveInId }, ct);
-        return await GetAsync(inspectionId, ct);
-    }
-
-    /**
      * Xem biên bản: khu vực theo bản sao lúc mở, kèm số ảnh đã gửi mỗi khu vực.
      *
      * @author Sang
@@ -399,17 +273,10 @@ public class InspectionAppService(
             ? await db.Tenancies.Where(t => t.Id == inspection.TenancyId)
                 .Select(t => new { t.OpeningElectricity, t.OpeningWater }).FirstOrDefaultAsync(ct)
             : null;
-        var reference = inspection.Type == InspectionType.MoveOut ? await FindMoveInIdAsync(inspection.TenancyId, ct) : null;
         return new InspectionResponse(inspection.Id, inspection.TenancyId, inspection.Type, inspection.Status,
             inspection.LandlordConfirmedAt, inspection.TenantConfirmedAt, areas,
-            ReferenceInspectionId: reference,
-            OpeningElectricity: opening?.OpeningElectricity, OpeningWater: opening?.OpeningWater,
-            FinalPeriod: inspection.Type == InspectionType.MoveOut ? FinalPeriodOf(inspection) : null);
+            OpeningElectricity: opening?.OpeningElectricity, OpeningWater: opening?.OpeningWater);
     }
-
-    /** Kỳ trả phòng; biên bản mở trước khi có cột final_period thì lấy theo lúc mở (migration cũng điền sẵn). */
-    internal static string FinalPeriodOf(Inspection inspection) =>
-        inspection.FinalPeriod ?? InspectionService.FinalPeriod(inspection.CreatedAt);
 
     /**
      * Chỉ số điện nước ban đầu (MD-04-FE-04, BR-18 RULE 5). Hai bên nhập khi biên bản nhận phòng chưa khóa; ghi vào

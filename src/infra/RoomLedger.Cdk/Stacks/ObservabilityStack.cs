@@ -25,8 +25,8 @@ public sealed class ObservabilityStackProps : StackProps
  *   nhận: Phát chọn email rồi thêm subscription.
  * - Dashboard roomledger-{stage}: API (lỗi, độ trễ), lỗi và throttle của từng Lambda, RDS (CPU, kết nối, dung lượng
  *   trống), DLQ.
- * - 14 báo động ở đây: API 5xx và độ trễ, Lambda bị throttle (toàn tài khoản), lỗi của 6 Lambda, tuổi tin nhắn cũ nhất của
- *   photo-queue, RDS (hết dung lượng, CPU, số kết nối, thiếu bộ nhớ). Cộng báo động DLQ của WorkflowStack là 15
+ * - 13 báo động ở đây: API 5xx và độ trễ, Lambda bị throttle (toàn tài khoản), lỗi của 5 Lambda, tuổi tin nhắn cũ nhất của
+ *   photo-queue, RDS (hết dung lượng, CPU, số kết nối, thiếu bộ nhớ). Cộng báo động DLQ của WorkflowStack là 14
  *   (vượt 10 báo động free tier, tính phí theo Pricing Calculator); một dashboard nằm trong free tier (3).
  *
  * @author Sang
@@ -38,15 +38,15 @@ public class ObservabilityStack : Stack
     public static readonly string[] FunctionShortNames =
     [
         "api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
-        "render-pdf", "read-document", "meter-prepare", "meter-persist", "notify",
+        "read-document", "meter-prepare", "meter-persist", "notify",
     ];
 
-    /** Lambda có báo động lỗi riêng: 6 Lambda của FunctionShortNames, trừ migrate và 4 Lambda của AiStack (AiStack có báo động riêng: DLQ và state machine). */
+    /** Lambda có báo động lỗi riêng: 5 Lambda của FunctionShortNames, trừ migrate và 4 Lambda của AiStack (AiStack có báo động riêng: DLQ và state machine). */
     public static readonly string[] AlarmedLambdas =
-        ["api", "post-confirmation", "photo-ingest", "photo-derive", "evidence-seal", "render-pdf"];
+        ["api", "post-confirmation", "photo-ingest", "photo-derive", "evidence-seal"];
 
-    /** Số báo động của stack này (cộng 1 báo động DLQ của WorkflowStack là 15). */
-    public const int AlarmCount = 14;
+    /** Số báo động của stack này (cộng 1 báo động DLQ của WorkflowStack là 14). */
+    public const int AlarmCount = 13;
 
     private static readonly Duration Period = Duration.Minutes(5);
 

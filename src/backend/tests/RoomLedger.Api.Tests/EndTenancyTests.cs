@@ -259,7 +259,7 @@ public class EndTenancyTests(ApiFactory factory) : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task EndFlowAndMoveOutInspection_ExcludeEachOther()
+    public async Task End_WithLegacyMoveOutInspection_Returns409()
     {
         var withInspection = await new Scenario(factory).WithActiveTenancyAsync();
         await factory.WithDbAsync(async db =>
@@ -270,12 +270,6 @@ public class EndTenancyTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var blocked = await withInspection.LandlordClient.PostJsonAsync($"/api/v1/tenancies/{withInspection.TenancyId}/end", new { endDate = EndDate, kind = "LEAVE" });
         Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
         Assert.Equal("INVALID_STATE", (await blocked.JsonAsync()).GetProperty("errorCode").GetString());
-
-        var ending = await new Scenario(factory).WithActiveTenancyAsync();
-        await StartLeaveAsync(ending);
-        var open = await ending.TenantClient.PostAsync($"/api/v1/tenancies/{ending.TenancyId}/inspections/move-out", null);
-        Assert.Equal(HttpStatusCode.Conflict, open.StatusCode);
-        Assert.Equal("INVALID_STATE", (await open.JsonAsync()).GetProperty("errorCode").GetString());
     }
 
     [Fact]

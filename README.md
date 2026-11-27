@@ -1,6 +1,6 @@
 # RoomLedger
 
-Ứng dụng quản lý phòng trọ: biên bản nhận/trả phòng có ảnh được khóa bằng S3 Object Lock, hai bên xác nhận, AI so ảnh khi trả phòng, ghi điện nước và hợp đồng scan.
+Ứng dụng quản lý phòng trọ: biên bản nhận phòng có ảnh được khóa bằng S3 Object Lock, hai bên xác nhận, kết thúc hợp đồng và chuyển phòng, ghi điện nước và hợp đồng scan.
 
 ## Cấu trúc
 
@@ -84,30 +84,12 @@ Dọn dẹp: `cdk destroy --all -c stage=<stage>`. Được giữ lại và ph�
 
 **Chưa kiểm trên AWS (T13):** chưa deploy. Cần Network + Data, StorageStack (bucket `roomledger-{stage}-incoming`, `-derived`, `-evidence` có versioning + Object Lock, bật EventBridge cho incoming) và Api/Auth.
 
-## Trạng thái MD-06 Trả phòng và quyết toán (Sang, cập nhật 2026-11-17)
+## Trả phòng (MD-06 cũ đã gỡ)
 
-Nhánh `feature/md-06-move-out-compare`.
+Luồng trả phòng cũ (biên bản trả phòng, duyệt khoản trừ cọc, khiếu nại, quyết toán, Lambda `render-pdf`, rule `TenancySettled`) đã bị gỡ khỏi code. Thay bằng kết thúc hợp đồng (`EndTenancyAppService`, hợp đồng ACTIVE → MOVING_OUT → SETTLED) kèm chuyển phòng. Biên bản nhận phòng, `InspectionLocked` → evidence-seal, chỉ số điện nước và hóa đơn giữ nguyên.
 
-| Chức năng | Trạng thái | Ghi chú |
-|---|---|---|
-| Danh sách ảnh biên bản | ✅ Xong | `GET /inspections/{id}/photos`: URL xem và thumbnail 5 phút (bucket derived), `canDelete`; dùng cho màn MD-04 và ảnh đối chiếu MD-06 |
-| MD-06-FE-01 Mở biên bản trả phòng (BR-25 RULE 1–2) | ✅ Xong | `POST /tenancies/{id}/inspections/move-out`: chỉ người thuê; cần biên bản nhận phòng LOCKED (không thì 409 `NO_MOVE_IN_RECORD`); chép khu vực của biên bản nhận phòng; hợp đồng → MOVING_OUT; `referenceInspectionId` để hiện ảnh nhận phòng |
-| MD-06-FE-01 Gửi để so sánh (BR-25 RULE 4) | ✅ Xong | `POST /inspections/{id}/submit`: đủ ảnh → COMPARING đúng một lần, phát sự kiện `MoveOutSubmitted`; biên bản trả phòng không dùng được `confirm` |
-| MD-06-FE-01 Ảnh đồng hồ tháng cuối (BR-25 RULE 3) | ✅ Xong | Mở biên bản trả phòng chốt `finalPeriod` (tháng giờ Việt Nam lúc mở, cột `inspection.final_period`); gửi biên bản cần chỉ số điện và nước của kỳ đó mà ảnh đồng hồ đã tới (hoặc đã có số), thiếu → 409 `FINAL_READING_MISSING`. Ảnh đồng hồ vẫn tải qua luồng chỉ số MD-05 của Tuấn |
-| MD-06-FE-02 Giải thích gợi ý (`explainFinding`, BR-26 RULE 4) và email chủ nhà (RULE 5) | ⬜ Chưa làm | `explainFinding` chờ Tuấn quyết (đề xuất bỏ); email chờ `notify` nghe `MoveOutCompared` |
-| MD-06-FE-03 Chủ nhà duyệt gợi ý (BR-27) | ✅ Xong | Bảng `finding` (thiết kế của Sang, chờ Tuấn duyệt; migration `Md06_Finding`). `GET/POST /inspections/{id}/findings`, `POST /findings/{id}/charge`, `/dismiss`, `POST /inspections/{id}/send-to-tenant`; tổng tiền ≤ tiền cọc (`AMOUNT_EXCEEDS_DEPOSIT`); còn gợi ý chưa xử lý → `PENDING_FINDINGS` |
-| MD-06-FE-04 Người thuê đồng ý hoặc khiếu nại (BR-28) | ✅ Xong | `POST /findings/{id}/accept`, `/dispute` (lý do ≥ 10 ký tự, tạo `dispute` FINDING), `/respond` (chủ nhà: CORRECTED / KEPT / REMOVED); người thuê đồng ý lại → RESOLVED. Email báo hai bên chờ `notify` |
-| MD-06-FE-05 Quyết toán (BR-29) | ✅ Xong | `GET /tenancies/{id}/settlement` (hai bên xem trước: cọc, tiền trừ ACCEPTED + RESOLVED, hóa đơn chưa trả, tiền trả lại có thể âm, điều kiện còn thiếu); `POST` (chủ nhà): kiểm `FINAL_READING_UNCONFIRMED` → `FINAL_INVOICE_MISSING` → `OPEN_DISPUTES` → `PENDING_FINDINGS` (details liệt kê tất cả), ghi bảng `settlement`, biên bản trả phòng và hợp đồng → SETTLED, phòng → VACANT, phát `TenancySettled`; quyết toán hai lần chỉ ghi một lần. Thiết kế đã được Tuấn duyệt 17/11 (A2, A3, B1–B5) |
-| MD-06-FE-05 Biên bản thanh lý PDF và niêm phong ảnh trả phòng | ✅ Xong (chưa chạy trên AWS) | Rule `TenancySettled` → Lambda `render-pdf` (VPC, QuestPDF với font Lato đi kèm gói, đủ dấu tiếng Việt): hai bên, phòng, kỳ, từng khoản trừ cọc, hóa đơn chưa trả, tổng kết (âm → "Người thuê còn phải trả"); ghi `derived/reports/{tenancyId}/thanh-ly-{settlementId}.pdf`, điền `settlement.pdf_key`, API trả `pdfUrl` (5 phút). Cùng rule gọi evidence-seal để niêm phong ảnh biên bản trả phòng. Thay đổi `WorkflowStack.cs` cần Phát duyệt |
-
-**Cần biết:**
-- Bedrock thật chưa gọi được: tài khoản AWS của dự án chưa gửi form use-case Anthropic (không phải do SCP). Test dùng Bedrock giả.
-- Ảnh biên bản trả phòng chỉ người thuê gửi (BR-25, quyết định D4): chủ nhà gọi `/uploads` vào biên bản trả phòng → 403 `FORBIDDEN`.
-- Ngưỡng 6 mới kiểm trên ảnh dựng; cần chỉnh trên bộ ảnh thật (đổi trong SSM, không cần deploy).
+- Bảng `finding`, `settlement`, các migration của chúng và cột `inspection.final_period` vẫn nằm trong database và mô hình EF (chưa có migration xóa).
 - Báo động chưa gắn SNS/email: cần chọn người nhận.
-- Ảnh đồng hồ: chưa Lambda nào chuyển `photo_status` của chỉ số khỏi PENDING_UPLOAD, nên lúc gửi biên bản chỉ số được tính khi ảnh đã tới **hoặc** đã có số. Cần luồng chỉ số MD-05 cập nhật `photo_status` khi ảnh tới.
-- `/src/infra/` do Phát duyệt (CODEOWNERS): thay đổi WorkflowStack cần Phát xem.
-- Chưa kiểm trên AWS.
 
 ## AI đọc đồng hồ và thông báo (AiStack, cập nhật 2026-11-27)
 
@@ -120,7 +102,7 @@ Sơ đồ final, luồng AI và email. Code: `RoomLedger.Functions` (ReadDocumen
 | `read-document` (**ngoài VPC**) | Thu ảnh về cạnh dài 1568 px (bỏ EXIF/GPS), gọi Bedrock Converse với Claude Haiku 4.5 qua inference profile `au.*`, kết quả JSON `{readable, value, confidence, note}`. Chỉ có quyền đọc ảnh `incoming`, đọc 3 tham số SSM và `bedrock:InvokeModel` đúng profile Haiku 4.5 |
 | `meter-persist` (VPC) | Ghi `ai_value`, `ai_confidence`, `status`, `review_reason` bằng `MeterReadingService.Assess` (BR-20). Bedrock lỗi sau 2 lần thử lại hay ảnh không đọc được thành NEEDS_REVIEW (`AI_FAILED`) để chủ nhà nhập tay. NEEDS_REVIEW phát sự kiện `MeterReadingNeedsReview` cho chủ nhà |
 | Parameter Store (Standard) | `/roomledger/{stage}/ai/model-id` và `/ai/prompt/readElectricMeter`, `/ai/prompt/readWaterMeter`. Nạp từ file ở `src/backend/src/RoomLedger.Ai/Prompts` mỗi lần deploy (sửa tay trên console thì lần deploy sau ghi đè). Sửa có hiệu lực sau tối đa 5 phút. Đổi sang họ mô hình khác phải sửa cả policy (`AiStack.BedrockProfilePrefix`) |
-| `notify` (**ngoài VPC**) | Sự kiện trong bucket `outbox` → Lambda → SES. Mẫu có sẵn: InviteCreated, TenancyMoved, InvoiceSent, InvoiceDisputed, FindingsSent, FindingDisputed, DisputeAnswered, MeterReadingNeedsReview. Người nhận lấy từ `email`/`tenantEmail` của sự kiện, hoặc tra Cognito theo `notifyUserId`/`tenantId`/`landlordId`. Lỗi thử lại 2 lần rồi vào SQS `roomledger-{stage}-ai-dlq` (có báo động) |
+| `notify` (**ngoài VPC**) | Sự kiện trong bucket `outbox` → Lambda → SES. Mẫu có sẵn: InviteCreated, TenancyMoved, InvoiceSent, InvoiceDisputed, MeterReadingNeedsReview. Người nhận lấy từ `email`/`tenantEmail` của sự kiện, hoặc tra Cognito theo `notifyUserId`/`tenantId`/`landlordId`. Lỗi thử lại 2 lần rồi vào SQS `roomledger-{stage}-ai-dlq` (có báo động) |
 
 **Cần làm trước khi chạy thật**
 1. **Bedrock:** tài khoản phải gửi form use-case Anthropic và được dùng Claude Haiku 4.5 (Bedrock → Model access). Profile `au.*` định tuyến giữa `ap-southeast-2` và `ap-southeast-4`: SCP chặn `ap-southeast-4` thì Converse bị từ chối, khi đó phải nhờ mentor mở region hoặc đổi sang profile khác (đổi `-c aiModelId=...` và `BedrockProfilePrefix`).
@@ -142,7 +124,7 @@ Nhánh `feature/observability-stack` (dựa trên MD-06, mở PR sau khi MD-06 �
 | Thành phần | Chi tiết |
 |---|---|
 | Topic SNS `roomledger-{stage}-alarms` | Mọi báo động gửi vào đây, kể cả hai báo động của WorkflowStack. **Chưa có người nhận**: Phát chọn email rồi thêm subscription |
-| Dashboard `roomledger-{stage}` | API (4xx/5xx, độ trễ), lỗi và throttle của từng Lambda, RDS (CPU, kết nối, dung lượng trống), so ảnh trả phòng (lần chạy, chỉ số `RoomLedger/Compare`), DLQ |
+| Dashboard `roomledger-{stage}` | API (4xx/5xx, độ trễ), lỗi và throttle của từng Lambda, RDS (CPU, kết nối, dung lượng trống), DLQ |
 | Báo động mới | `api-5xx` (≥ 5 lỗi/5 phút), `lambda-throttles` (bất kỳ throttle nào trong tài khoản), `rds-free-storage` (< 2 GB) |
 | Hạn giữ log | Lambda của WorkflowStack: 30 ngày (dev, demo), 90 ngày (prod). Lambda của Api/Auth/Data (Tuấn) chưa đặt |
 
