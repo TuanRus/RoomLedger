@@ -94,9 +94,6 @@ Nhánh `feature/md-06-move-out-compare`.
 | MD-06-FE-01 Mở biên bản trả phòng (BR-25 RULE 1–2) | ✅ Xong | `POST /tenancies/{id}/inspections/move-out`: chỉ người thuê; cần biên bản nhận phòng LOCKED (không thì 409 `NO_MOVE_IN_RECORD`); chép khu vực của biên bản nhận phòng; hợp đồng → MOVING_OUT; `referenceInspectionId` để hiện ảnh nhận phòng |
 | MD-06-FE-01 Gửi để so sánh (BR-25 RULE 4) | ✅ Xong | `POST /inspections/{id}/submit`: đủ ảnh → COMPARING đúng một lần, phát sự kiện `MoveOutSubmitted`; biên bản trả phòng không dùng được `confirm` |
 | MD-06-FE-01 Ảnh đồng hồ tháng cuối (BR-25 RULE 3) | ✅ Xong | Mở biên bản trả phòng chốt `finalPeriod` (tháng giờ Việt Nam lúc mở, cột `inspection.final_period`); gửi biên bản cần chỉ số điện và nước của kỳ đó mà ảnh đồng hồ đã tới (hoặc đã có số), thiếu → 409 `FINAL_READING_MISSING`. Ảnh đồng hồ vẫn tải qua luồng chỉ số MD-05 của Tuấn |
-| MD-06-FE-02 Lọc và ghép cặp ảnh (BR-26 RULE 1–2) | ✅ Xong | Perceptual hash DCT 64 bit; ghép ảnh cùng khu vực gần nhất; dưới ngưỡng (6) → SKIPPED; giới hạn số lần gọi (30) chia đều giữa các khu vực, vượt → NOT_ANALYZED |
-| MD-06-FE-02 So ảnh bằng Bedrock (BR-26 RULE 3, EXCEPTION 2) | ✅ Xong | Prompt và schema `compareRoomPhotos`; Sonnet 4.5 → Haiku 4.5 dự phòng; cả hai lỗi → NOT_ANALYZED |
-| MD-06-FE-02 Step Functions, lưu kết quả, chỉ số (BR-26) | ✅ Xong (chưa chạy trên AWS) | State machine `roomledger-{stage}-move-out-compare` chạy khi có `MoveOutSubmitted`: đọc ngưỡng (`/roomledger/{stage}/compare/phash-threshold` = 6) và giới hạn (`.../max-calls` = 30) từ SSM → `plan-compare` (VPC, pHash trên thumbnail) → Map `compare-pairs` (ngoài VPC, Bedrock, 3 cặp song song; lỗi → NOT_ANALYZED) → `persist-results` (VPC: dòng `finding` SUGGESTED / SKIPPED / NOT_ANALYZED, COMPARING → REVIEWING, audit `MOVE_OUT_COMPARED`) → chỉ số CloudWatch `RoomLedger/Compare` → sự kiện `MoveOutCompared`. Mọi rule EventBridge có DLQ chung; báo động khi DLQ có tin hoặc lần chạy lỗi |
 | MD-06-FE-02 Giải thích gợi ý (`explainFinding`, BR-26 RULE 4) và email chủ nhà (RULE 5) | ⬜ Chưa làm | `explainFinding` chờ Tuấn quyết (đề xuất bỏ); email chờ `notify` nghe `MoveOutCompared` |
 | MD-06-FE-03 Chủ nhà duyệt gợi ý (BR-27) | ✅ Xong | Bảng `finding` (thiết kế của Sang, chờ Tuấn duyệt; migration `Md06_Finding`). `GET/POST /inspections/{id}/findings`, `POST /findings/{id}/charge`, `/dismiss`, `POST /inspections/{id}/send-to-tenant`; tổng tiền ≤ tiền cọc (`AMOUNT_EXCEEDS_DEPOSIT`); còn gợi ý chưa xử lý → `PENDING_FINDINGS` |
 | MD-06-FE-04 Người thuê đồng ý hoặc khiếu nại (BR-28) | ✅ Xong | `POST /findings/{id}/accept`, `/dispute` (lý do ≥ 10 ký tự, tạo `dispute` FINDING), `/respond` (chủ nhà: CORRECTED / KEPT / REMOVED); người thuê đồng ý lại → RESOLVED. Email báo hai bên chờ `notify` |
@@ -104,13 +101,39 @@ Nhánh `feature/md-06-move-out-compare`.
 | MD-06-FE-05 Biên bản thanh lý PDF và niêm phong ảnh trả phòng | ✅ Xong (chưa chạy trên AWS) | Rule `TenancySettled` → Lambda `render-pdf` (VPC, QuestPDF với font Lato đi kèm gói, đủ dấu tiếng Việt): hai bên, phòng, kỳ, từng khoản trừ cọc, hóa đơn chưa trả, tổng kết (âm → "Người thuê còn phải trả"); ghi `derived/reports/{tenancyId}/thanh-ly-{settlementId}.pdf`, điền `settlement.pdf_key`, API trả `pdfUrl` (5 phút). Cùng rule gọi evidence-seal để niêm phong ảnh biên bản trả phòng. Thay đổi `WorkflowStack.cs` cần Phát duyệt |
 
 **Cần biết:**
-- Bedrock thật chưa gọi được: tài khoản 479365371363 chưa gửi form use-case Anthropic (không phải do SCP). Test dùng Bedrock giả.
+- Bedrock thật chưa gọi được: tài khoản AWS của dự án chưa gửi form use-case Anthropic (không phải do SCP). Test dùng Bedrock giả.
 - Ảnh biên bản trả phòng chỉ người thuê gửi (BR-25, quyết định D4): chủ nhà gọi `/uploads` vào biên bản trả phòng → 403 `FORBIDDEN`.
 - Ngưỡng 6 mới kiểm trên ảnh dựng; cần chỉnh trên bộ ảnh thật (đổi trong SSM, không cần deploy).
 - Báo động chưa gắn SNS/email: cần chọn người nhận.
 - Ảnh đồng hồ: chưa Lambda nào chuyển `photo_status` của chỉ số khỏi PENDING_UPLOAD, nên lúc gửi biên bản chỉ số được tính khi ảnh đã tới **hoặc** đã có số. Cần luồng chỉ số MD-05 cập nhật `photo_status` khi ảnh tới.
 - `/src/infra/` do Phát duyệt (CODEOWNERS): thay đổi WorkflowStack cần Phát xem.
 - Chưa kiểm trên AWS.
+
+## AI đọc đồng hồ và thông báo (AiStack, cập nhật 2026-11-27)
+
+Sơ đồ final, luồng AI và email. Code: `RoomLedger.Functions` (ReadDocument, MeterResult, Notify), `RoomLedger.Infrastructure` (BedrockAiClient, SsmConfigProvider, SesNotifier), `RoomLedger.Ai` (prompt, schema).
+
+| Phần | Cách hoạt động |
+|---|---|
+| Kích hoạt | Ảnh tải lên bucket `incoming` → EventBridge → state machine `roomledger-{stage}-read-meter` (Standard). Rule này nhận mọi ảnh của bucket; bước đầu bỏ qua ảnh không phải ảnh đồng hồ |
+| `meter-prepare` (VPC) | Tìm `meter_reading` PENDING_AI có `photo_key` đúng ảnh này; đổi `photo_status` PENDING_UPLOAD → READY. Chưa có Lambda nào làm việc này trước đây |
+| `read-document` (**ngoài VPC**) | Thu ảnh về cạnh dài 1568 px (bỏ EXIF/GPS), gọi Bedrock Converse với Claude Haiku 4.5 qua inference profile `au.*`, kết quả JSON `{readable, value, confidence, note}`. Chỉ có quyền đọc ảnh `incoming`, đọc 3 tham số SSM và `bedrock:InvokeModel` đúng profile Haiku 4.5 |
+| `meter-persist` (VPC) | Ghi `ai_value`, `ai_confidence`, `status`, `review_reason` bằng `MeterReadingService.Assess` (BR-20). Bedrock lỗi sau 2 lần thử lại hay ảnh không đọc được thành NEEDS_REVIEW (`AI_FAILED`) để chủ nhà nhập tay. NEEDS_REVIEW phát sự kiện `MeterReadingNeedsReview` cho chủ nhà |
+| Parameter Store (Standard) | `/roomledger/{stage}/ai/model-id` và `/ai/prompt/readElectricMeter`, `/ai/prompt/readWaterMeter`. Nạp từ file ở `src/backend/src/RoomLedger.Ai/Prompts` mỗi lần deploy (sửa tay trên console thì lần deploy sau ghi đè). Sửa có hiệu lực sau tối đa 5 phút. Đổi sang họ mô hình khác phải sửa cả policy (`AiStack.BedrockProfilePrefix`) |
+| `notify` (**ngoài VPC**) | Sự kiện trong bucket `outbox` → Lambda → SES. Mẫu có sẵn: InviteCreated, TenancyMoved, InvoiceSent, InvoiceDisputed, FindingsSent, FindingDisputed, DisputeAnswered, MeterReadingNeedsReview. Người nhận lấy từ `email`/`tenantEmail` của sự kiện, hoặc tra Cognito theo `notifyUserId`/`tenantId`/`landlordId`. Lỗi thử lại 2 lần rồi vào SQS `roomledger-{stage}-ai-dlq` (có báo động) |
+
+**Cần làm trước khi chạy thật**
+1. **Bedrock:** tài khoản phải gửi form use-case Anthropic và được dùng Claude Haiku 4.5 (Bedrock → Model access). Profile `au.*` định tuyến giữa `ap-southeast-2` và `ap-southeast-4`: SCP chặn `ap-southeast-4` thì Converse bị từ chối, khi đó phải nhờ mentor mở region hoặc đổi sang profile khác (đổi `-c aiModelId=...` và `BedrockProfilePrefix`).
+2. **SES sandbox:** tài khoản SES mới chỉ gửi được tới địa chỉ đã xác minh. Stack **không** tạo identity và không ghi địa chỉ email nào. Xác minh người gửi rồi từng người nhận thử:
+   ```
+   aws sesv2 create-email-identity --email-identity <địa chỉ người gửi> --region ap-southeast-2
+   aws sesv2 create-email-identity --email-identity <địa chỉ người nhận thử> --region ap-southeast-2
+   ```
+   Mỗi địa chỉ nhận một email xác minh, bấm liên kết trong đó. Gửi cho người lạ cần xin rời sandbox (SES → Account dashboard → Request production access).
+3. **Deploy:** `cdk deploy --all -c stage=dev -c sesSender=<địa chỉ người gửi đã xác minh> -c webOrigin=<origin web>`. Không truyền `sesSender` thì stack vẫn dựng phần AI nhưng không dựng Lambda `notify` (truyền `sesSender` mà thiếu `webOrigin` thì synth báo lỗi).
+4. Dashboard của ObservabilityStack đã có 4 Lambda này; chưa có báo động lỗi riêng cho chúng (báo động lỗi hiện có là `AlarmedLambdas`).
+
+**Chi phí tăng thêm (ước lượng, chưa đo):** Step Functions Standard 3 đến 4 chuyển trạng thái mỗi ảnh tải lên (mọi ảnh, không chỉ ảnh đồng hồ); Bedrock Haiku 4.5 một lần gọi mỗi ảnh đồng hồ (ảnh ~1568 px); Parameter Store Standard, SES và SQS gần như 0 ở quy mô vài chục người dùng. Dọn dẹp: `cdk destroy` xóa toàn bộ (log group có hạn giữ, tham số SSM bị xóa theo stack).
 
 ## Giám sát (ObservabilityStack, Sang, cập nhật 2026-11-17)
 

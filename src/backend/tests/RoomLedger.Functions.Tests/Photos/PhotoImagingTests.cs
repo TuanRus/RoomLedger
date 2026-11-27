@@ -66,4 +66,16 @@ public class PhotoImagingTests
         Assert.Null(view.GetExifProfile()?.GetValue(ExifTag.GPSLatitude));
         Assert.Equal((800u, 600u), (view.Width, view.Height));
     }
+    [Fact]
+    public void CreateForAi_Heic_IsShrunkToTheAiLimit_Upright_WithoutExif()
+    {
+        using var heic = new MemoryStream(SampleImages.Heic());
+        var bytes = PhotoImaging.CreateForAi(heic);
+
+        using var img = new MagickImage(bytes);
+        Assert.Equal(MagickFormat.Jpeg, img.Format);
+        Assert.Equal(PhotoImaging.AiMaxEdge, System.Math.Max((int)img.Width, (int)img.Height));
+        Assert.True(img.Height > img.Width, "HEIC mẫu xoay 6: sau AutoOrient phải là ảnh dọc");
+        Assert.Null(img.GetExifProfile());
+    }
 }

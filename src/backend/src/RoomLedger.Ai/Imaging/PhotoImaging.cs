@@ -22,6 +22,9 @@ public static class PhotoImaging
 {
     public const int ThumbnailSize = 400;
 
+    /** Cạnh dài tối đa của ảnh gửi cho AI: đủ rõ để đọc chữ số, vẫn dưới giới hạn 3,75 MB mỗi ảnh của Bedrock. */
+    public const int AiMaxEdge = 1568;
+
     /** EXIF không ghi múi giờ thì coi là giờ Việt Nam (người dùng của hệ thống ở Việt Nam). */
     public static readonly TimeSpan DefaultOffset = TimeSpan.FromHours(7);
 
@@ -80,6 +83,33 @@ public static class PhotoImaging
         img.Quality = 80;
         var thumbnail = img.ToByteArray(MagickFormat.Jpeg);
         return new DerivedImages(view, thumbnail);
+    }
+
+    /**
+     * Ảnh gửi cho AI đọc đồng hồ: xoay theo EXIF, xóa metadata, thu về cạnh dài tối đa 1568 px, JPEG chất lượng 85.
+     * Không phóng to ảnh nhỏ. Không ghi gì ra bucket nào.
+     *
+     * @author Tuấn
+     * @version 1.0
+     */
+    public static byte[] CreateForAi(Stream image)
+    {
+        using var img = new MagickImage(image);
+        img.AutoOrient();
+        img.Strip();
+        if (img.HasAlpha)
+        {
+            img.BackgroundColor = MagickColors.White;
+            img.Alpha(AlphaOption.Remove);
+        }
+
+        if (Math.Max(img.Width, img.Height) > AiMaxEdge)
+        {
+            img.Resize(new MagickGeometry(AiMaxEdge, AiMaxEdge));
+        }
+
+        img.Quality = 85;
+        return img.ToByteArray(MagickFormat.Jpeg);
     }
 
     /** "+09:00" hoặc "-05:00" → TimeSpan; không hợp lệ → null. */

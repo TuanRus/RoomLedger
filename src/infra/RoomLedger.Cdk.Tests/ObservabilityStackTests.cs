@@ -86,7 +86,7 @@ public class ObservabilityStackTests
         }
         Assert.Equal(
             ["api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
-             "render-pdf"],
+             "render-pdf", "read-document", "meter-prepare", "meter-persist", "notify"],
             ObservabilityStack.FunctionShortNames);
     }
 
@@ -172,10 +172,10 @@ public class ObservabilityStackTests
     }
 
     [Fact]
-    public void ErrorAlarms_CoverTheFunctionListMinusMigrate()
+    public void ErrorAlarms_CoverTheFunctionListMinusMigrateAndTheAiStackLambdas()
     {
         Assert.Equal(
-            ObservabilityStack.FunctionShortNames.Where(f => f != "migrate").OrderBy(f => f),
+            ObservabilityStack.FunctionShortNames.Where(f => f is not ("migrate" or "read-document" or "meter-prepare" or "meter-persist" or "notify")).OrderBy(f => f),
             ObservabilityStack.AlarmedLambdas.OrderBy(f => f));
     }
 
