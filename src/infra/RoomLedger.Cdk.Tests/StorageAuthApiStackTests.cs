@@ -356,4 +356,15 @@ public class StorageAuthApiStackTests
         Assert.Contains("/events/roomledger.api/*", policies);
         Assert.DoesNotContain("events:PutEvents", policies);
     }
+
+    [Fact]
+    public void EveryDotnetLambda_RunsOnArm64()
+    {
+        // Gói Lambda đóng bằng --function-architecture arm64 (Magick.NET, QuestPDF có native linux-arm64)
+        var lambdas = new[] { Templates.Value.Auth, Templates.Value.Api }.SelectMany(t => t.FindResources("AWS::Lambda::Function").Values)
+            .Select(r => (IDictionary<string, object>)((IDictionary<string, object>)r)["Properties"])
+            .Where(p => p.TryGetValue("Runtime", out var rt) && "dotnet8".Equals(rt)).ToList();
+        Assert.NotEmpty(lambdas);
+        Assert.All(lambdas, p => Assert.Equal(new[] { "arm64" }, ((IEnumerable<object>)p["Architectures"]).Cast<string>().ToArray()));
+    }
 }

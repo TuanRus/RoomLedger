@@ -50,6 +50,7 @@ public sealed class ApiStack : Stack
         {
             FunctionName = Name("api"),
             Runtime = Runtime.DOTNET_8,
+            Architecture = Architecture.ARM_64,
             // ASP.NET Core minimal API chạy bằng Amazon.Lambda.AspNetCoreServer.Hosting: handler là tên assembly
             Handler = "RoomLedger.Api",
             Code = Code.FromAsset(props.ApiAssetPath),

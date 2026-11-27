@@ -83,6 +83,7 @@ public sealed class DataStack : Stack
         {
             FunctionName = Naming.Resource(props.Stage, "migrate"),
             Runtime = Runtime.DOTNET_8,
+            Architecture = Architecture.ARM_64,
             Handler = "RoomLedger.Functions::RoomLedger.Functions.Migrate.Function::HandleAsync",
             Code = Code.FromAsset(props.FunctionsAssetPath),
             MemorySize = 512,

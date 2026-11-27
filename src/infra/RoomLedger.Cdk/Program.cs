@@ -19,7 +19,7 @@ StackProps P() => new() { Env = env };
 string Id(string name) => Naming.Resource(stage, name);
 
 // Lambda đã đóng gói. Chạy trước (từ thư mục gốc repo):
-//   dotnet lambda package --project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip
+//   dotnet lambda package --project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip --function-architecture arm64
 // Hoặc truyền -c functionsAsset=<zip hoặc thư mục>.
 var functionsAsset = (string?)app.Node.TryGetContext("functionsAsset")
     ?? Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "artifacts", "functions.zip"));
@@ -27,12 +27,12 @@ if (!File.Exists(functionsAsset) && !Directory.Exists(functionsAsset))
 {
     throw new InvalidOperationException(
         $"Không tìm thấy gói Lambda tại '{functionsAsset}'. Từ thư mục gốc repo chạy: dotnet lambda package " +
-        "--project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip " +
+        "--project-location src/backend/src/RoomLedger.Functions -c Release -o artifacts/functions.zip --function-architecture arm64 " +
         "(hoặc truyền -c functionsAsset=<đường dẫn>).");
 }
 
 // Gói Lambda api (ASP.NET Core). Chạy trước (từ thư mục gốc repo):
-//   dotnet lambda package --project-location src/backend/src/RoomLedger.Api -c Release -o artifacts/api.zip
+//   dotnet lambda package --project-location src/backend/src/RoomLedger.Api -c Release -o artifacts/api.zip --function-architecture arm64
 // Hoặc truyền -c apiAsset=<zip hoặc thư mục>.
 var apiAsset = (string?)app.Node.TryGetContext("apiAsset")
     ?? Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "..", "artifacts", "api.zip"));
@@ -40,7 +40,7 @@ if (!File.Exists(apiAsset) && !Directory.Exists(apiAsset))
 {
     throw new InvalidOperationException(
         $"Không tìm thấy gói Lambda api tại '{apiAsset}'. Từ thư mục gốc repo chạy: dotnet lambda package " +
-        "--project-location src/backend/src/RoomLedger.Api -c Release -o artifacts/api.zip " +
+        "--project-location src/backend/src/RoomLedger.Api -c Release -o artifacts/api.zip --function-architecture arm64 " +
         "(hoặc truyền -c apiAsset=<đường dẫn>).");
 }
 

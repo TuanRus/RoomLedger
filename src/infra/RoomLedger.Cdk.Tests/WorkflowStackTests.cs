@@ -302,4 +302,15 @@ public class WorkflowStackTests
             ["ComparisonOperator"] = "GreaterThanOrEqualToThreshold",
         });
     }
+
+    [Fact]
+    public void EveryDotnetLambda_RunsOnArm64()
+    {
+        // Gói Lambda đóng bằng --function-architecture arm64 (Magick.NET, QuestPDF có native linux-arm64)
+        var lambdas = DevTemplate.Value.FindResources("AWS::Lambda::Function").Values
+            .Select(r => (IDictionary<string, object>)((IDictionary<string, object>)r)["Properties"])
+            .Where(p => p.TryGetValue("Runtime", out var rt) && "dotnet8".Equals(rt)).ToList();
+        Assert.NotEmpty(lambdas);
+        Assert.All(lambdas, p => Assert.Equal(new[] { "arm64" }, ((IEnumerable<object>)p["Architectures"]).Cast<string>().ToArray()));
+    }
 }
