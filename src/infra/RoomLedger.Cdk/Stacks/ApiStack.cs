@@ -157,7 +157,7 @@ public sealed class ApiStack : Stack
             {
                 ManagedRuleGroupStatement = new CfnWebACL.ManagedRuleGroupStatementProperty { VendorName = "AWS", Name = name },
             },
-            OverrideAction = new CfnWebACL.OverrideActionProperty { None = new CfnWebACL.NoneActionProperty() },
+            OverrideAction = new CfnWebACL.OverrideActionProperty { None = new Dictionary<string, object>() },
             VisibilityConfig = Visibility(name),
         };
 
