@@ -1,4 +1,6 @@
 using Amazon.BedrockRuntime;
+using Amazon.CognitoIdentityProvider;
+using Amazon.SimpleEmailV2;
 using Amazon.S3;
 using Amazon.SimpleSystemsManagement;
 using RoomLedger.Ai;
@@ -9,6 +11,7 @@ using RoomLedger.Infrastructure.Bedrock;
 using RoomLedger.Infrastructure.Config;
 using RoomLedger.Infrastructure.Events;
 using RoomLedger.Infrastructure.S3;
+using RoomLedger.Infrastructure.Ses;
 
 namespace RoomLedger.Functions.Shared;
 
@@ -26,7 +29,8 @@ public sealed record PhotoEventDetail(Guid PhotoId)
 /**
  * Client AWS thật cho Lambda, tạo một lần mỗi môi trường chạy (dùng lại giữa các lần gọi).
  * Cấu hình qua biến môi trường do CDK (WorkflowStack) đặt: INCOMING_BUCKET, DERIVED_BUCKET, EVIDENCE_BUCKET,
- * OUTBOX_BUCKET, PHOTO_MAX_AGE_DAYS; AI_PARAM_PREFIX (tiền tố Parameter Store, ví dụ /roomledger/dev) cho read-document.
+ * OUTBOX_BUCKET, PHOTO_MAX_AGE_DAYS; AI_PARAM_PREFIX (tiền tố Parameter Store, ví dụ /roomledger/dev) cho read-document;
+ * SES_SENDER, WEB_ORIGIN, USER_POOL_ID cho notify.
  *
  * @author Sang
  * @version 1.0
@@ -54,7 +58,17 @@ public static class FunctionAws
         new SsmConfigProvider(new AmazonSimpleSystemsManagementClient(), Env("AI_PARAM_PREFIX")),
         AiTasks.Schema));
 
+    private static readonly Lazy<INotifier> SesClient = new(() => new SesNotifier(new AmazonSimpleEmailServiceV2Client(),
+        new SesOptions(Env("SES_SENDER"), Env("WEB_ORIGIN"))));
+
+    private static readonly Lazy<IUserEmailLookup> Emails = new(() =>
+        new CognitoUserEmailLookup(new AmazonCognitoIdentityProviderClient(), Env("USER_POOL_ID")));
+
     public static IObjectStore ObjectStore => Store.Value;
+
+    public static INotifier Notifier => SesClient.Value;
+
+    public static IUserEmailLookup UserEmails => Emails.Value;
 
     public static IAiClient Ai => AiClient.Value;
 
