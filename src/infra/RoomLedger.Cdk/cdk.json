@@ -3,7 +3,6 @@
   "context": {
     "stage": "dev",
     "region": "ap-southeast-2",
-    "edgeRegion": "us-east-1",
     "githubRepo": "TuanRus/RoomLedger",
     "githubBranches": {
       "dev": "develop",
