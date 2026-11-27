@@ -110,6 +110,35 @@ new WorkflowStack(app, Id("workflow"), new WorkflowStackProps
     EvidenceBucketName = evidenceBucket,
     OutboxBucketName = outboxBucket,
 });
+// AI đọc đồng hồ + thông báo. Prompt đọc từ file trong repo (src/backend/src/RoomLedger.Ai/Prompts), đưa vào Parameter Store.
+// SES: không có -c sesSender=<địa chỉ đã xác minh> thì không dựng Lambda notify (xem README, phần SES sandbox).
+string Prompt(string task)
+{
+    var dir = (string?)app.Node.TryGetContext("promptsDir")
+        ?? Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", "backend", "src", "RoomLedger.Ai", "Prompts"));
+    var file = Path.Combine(dir, $"{task}.md");
+    return File.Exists(file)
+        ? File.ReadAllText(file).Trim()
+        : throw new InvalidOperationException($"Không tìm thấy prompt '{file}' (hoặc truyền -c promptsDir=<thư mục>).");
+}
+new AiStack(app, Id("ai"), new AiStackProps
+{
+    AlarmTopic = observability.AlarmTopic,
+    Env = env,
+    Stage = stage,
+    Vpc = network.Vpc,
+    LambdaSg = network.LambdaSg,
+    Db = data.Db,
+    FunctionsAssetPath = functionsAsset,
+    IncomingBucketName = incomingBucket,
+    OutboxBucketName = outboxBucket,
+    Users = auth.Users,
+    ElectricPrompt = Prompt("readElectricMeter"),
+    WaterPrompt = Prompt("readWaterMeter"),
+    ModelId = (string?)app.Node.TryGetContext("aiModelId") ?? AiStack.DefaultModelId,
+    SesSender = (string?)app.Node.TryGetContext("sesSender"),
+    WebOrigin = (string?)app.Node.TryGetContext("webOrigin"),
+});
 // WAF cho CloudFront phải ở us-east-1 (context edgeRegion), nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi.
 // Cần cả nhóm quyết định.
 var edgeRegion = RequiredContext("edgeRegion");
