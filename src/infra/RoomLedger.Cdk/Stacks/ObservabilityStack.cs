@@ -25,11 +25,12 @@ public sealed class ObservabilityStackProps : StackProps
  *   nhận: Phát chọn email rồi thêm subscription.
  * - Dashboard roomledger-{stage}: API (lỗi, độ trễ), lỗi và throttle của từng Lambda, RDS (CPU, kết nối, dung lượng
  *   trống), DLQ.
- * - Ba báo động: API 5xx, Lambda bị throttle (toàn tài khoản), RDS sắp hết dung lượng. Cộng báo động DLQ của
- *   WorkflowStack là 4, nằm trong free tier (10 báo động) của CloudWatch; một dashboard cũng trong free tier (3).
+ * - 14 báo động ở đây: API 5xx và độ trễ, Lambda bị throttle (toàn tài khoản), lỗi của 6 Lambda, tuổi tin nhắn cũ nhất của
+ *   photo-queue, RDS (hết dung lượng, CPU, số kết nối, thiếu bộ nhớ). Cộng báo động DLQ của WorkflowStack là 15
+ *   (vượt 10 báo động free tier, tính phí theo Pricing Calculator); một dashboard nằm trong free tier (3).
  *
  * @author Sang
- * @version 1.2
+ * @version 1.3
  */
 public class ObservabilityStack : Stack
 {
@@ -39,6 +40,13 @@ public class ObservabilityStack : Stack
         "api", "post-confirmation", "migrate", "photo-ingest", "photo-derive", "evidence-seal",
         "render-pdf",
     ];
+
+    /** Lambda có báo động lỗi riêng: 6 trong 7 Lambda của FunctionShortNames, trừ migrate. */
+    public static readonly string[] AlarmedLambdas =
+        ["api", "post-confirmation", "photo-ingest", "photo-derive", "evidence-seal", "render-pdf"];
+
+    /** Số báo động của stack này (cộng 1 báo động DLQ của WorkflowStack là 15). */
+    public const int AlarmCount = 14;
 
     private static readonly Duration Period = Duration.Minutes(5);
 
@@ -88,6 +96,28 @@ public class ObservabilityStack : Stack
             1, ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD);
         Alert("RdsFreeStorage", Name("rds-free-storage"), "RDS còn dưới 2 GB dung lượng trống",
             M("AWS/RDS", "FreeStorageSpace", db, "Minimum"), 2d * 1024 * 1024 * 1024, ComparisonOperator.LESS_THAN_THRESHOLD);
+
+        Alert("ApiLatencyP90", Name("api-latency-p90"), "Độ trễ p90 của API từ 5 giây trong 5 phút",
+            M("AWS/ApiGateway", "Latency", api, "p90"), 5000, ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD);
+
+        // Lỗi từng Lambda (migrate chạy tay khi deploy nên không có báo động)
+        foreach (var fn in AlarmedLambdas)
+        {
+            Alert($"LambdaErrors{string.Concat(fn.Split('-').Select(p => char.ToUpperInvariant(p[0]) + p[1..]))}", Name($"{fn}-errors"),
+                $"Lambda {Name(fn)} báo lỗi từ 1 lần trong 5 phút",
+                M("AWS/Lambda", "Errors", new() { ["FunctionName"] = Name(fn) }, "Sum"), 1, ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD);
+        }
+
+        Alert("PhotoQueueAge", Name("photo-queue-age"), "Tin nhắn cũ nhất trong photo-queue chờ quá 5 phút (photo-derive chậm hoặc kẹt)",
+            M("AWS/SQS", "ApproximateAgeOfOldestMessage", new() { ["QueueName"] = Name("photo-queue") }, "Maximum"),
+            300, ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD);
+
+        Alert("RdsCpu", Name("rds-cpu"), "CPU của RDS từ 80% trong 5 phút",
+            M("AWS/RDS", "CPUUtilization", db, "Average"), 80, ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD);
+        Alert("RdsConnections", Name("rds-connections"), "RDS có từ 60 kết nối cùng lúc (Lambda mở quá nhiều kết nối)",
+            M("AWS/RDS", "DatabaseConnections", db, "Maximum"), 60, ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD);
+        Alert("RdsFreeableMemory", Name("rds-freeable-memory"), "RDS còn dưới 128 MB bộ nhớ trống",
+            M("AWS/RDS", "FreeableMemory", db, "Minimum"), 128d * 1024 * 1024, ComparisonOperator.LESS_THAN_THRESHOLD);
     }
 
     private static Metric M(string ns, string name, Dictionary<string, string> dimensions, string statistic, string? label = null) =>

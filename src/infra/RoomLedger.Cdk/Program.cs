@@ -55,7 +55,7 @@ var evidenceBucket = BucketName("evidence");
 var outboxBucket = BucketName("outbox");
 
 var network = new NetworkStack(app, Id("network"), new NetworkStackProps { Env = env, Stage = stage });
-new SecurityStack(app, Id("security"), new SecurityStackProps { Env = env, Stage = stage });
+new SecurityStack(app, Id("security"), new SecurityStackProps { Env = env, Stage = stage, EvidenceBucketName = evidenceBucket });
 var data = new DataStack(app, Id("data"), new DataStackProps
 {
     Env = env,
