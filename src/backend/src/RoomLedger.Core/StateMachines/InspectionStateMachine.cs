@@ -49,25 +49,7 @@ public static class InspectionStateMachine
     }
 
     /**
-     * Mở biên bản trả phòng (BR-25): hợp đồng phải ACTIVE và biên bản nhận phòng đã LOCKED.
-     *
-     * @author Sang
-     * @version 1.0
-     */
-    public static void EnsureCanOpenMoveOut(Tenancy tenancy, InspectionStatus? moveInStatus)
-    {
-        if (tenancy.Status != TenancyStatus.Active)
-        {
-            throw new InvalidStateException("Hợp đồng không ở trạng thái đang thuê, không mở biên bản trả phòng được");
-        }
-        if (moveInStatus != InspectionStatus.Locked)
-        {
-            throw new ConflictException(ErrorCodes.NoMoveInRecord, "Chưa có biên bản nhận phòng đã khóa");
-        }
-    }
-
-    /**
-     * Xác nhận và khóa hai bên chỉ dành cho biên bản nhận phòng; biên bản trả phòng đi qua bước chủ nhà duyệt và quyết toán.
+     * Xác nhận và khóa hai bên chỉ dành cho biên bản nhận phòng; biên bản trả phòng cũ (MOVE_OUT) không còn luồng.
      *
      * @author Sang
      * @version 1.0
@@ -76,21 +58,7 @@ public static class InspectionStateMachine
     {
         if (type != InspectionType.MoveIn)
         {
-            throw new InvalidStateException("Biên bản trả phòng không xác nhận theo cách này; hãy gửi cho chủ nhà duyệt");
-        }
-    }
-
-    /**
-     * Gửi duyệt (BR-25 RULE 4): chỉ biên bản trả phòng.
-     *
-     * @author Sang
-     * @version 1.0
-     */
-    public static void EnsureIsMoveOut(InspectionType type)
-    {
-        if (type != InspectionType.MoveOut)
-        {
-            throw new InvalidStateException("Chỉ gửi duyệt được biên bản trả phòng");
+            throw new InvalidStateException("Chỉ xác nhận được biên bản nhận phòng");
         }
     }
 

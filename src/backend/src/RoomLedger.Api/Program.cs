@@ -62,8 +62,6 @@ builder.Services.AddScoped<TenancyAppService>();
 builder.Services.AddScoped<AccountAppService>();
 builder.Services.AddScoped<UploadAppService>();
 builder.Services.AddScoped<InspectionAppService>();
-builder.Services.AddScoped<FindingAppService>();
-builder.Services.AddScoped<SettlementAppService>();   // Sang: MD-06-FE-05
 builder.Services.AddScoped<MeterAppService>();
 builder.Services.AddScoped<InvoiceAppService>();
 builder.Services.AddScoped<EndTenancyAppService>();
@@ -91,7 +89,6 @@ api.MapInspectionEndpoints();
 api.MapUploadEndpoints();
 api.MapMeterEndpoints();
 api.MapInvoiceEndpoints();
-api.MapCheckoutEndpoints();
 api.MapDisputeEndpoints();
 api.MapAdminEndpoints();
 if (localDev)
