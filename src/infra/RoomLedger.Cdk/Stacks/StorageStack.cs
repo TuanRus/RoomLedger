@@ -1,4 +1,6 @@
 using Amazon.CDK;
+using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.KMS;
 using Amazon.CDK.AWS.S3;
 using Constructs;
 
@@ -38,6 +40,8 @@ public sealed class StorageStack : Stack
     public Bucket Evidence { get; }
     public Bucket Derived { get; }
     public Bucket Outbox { get; }
+    /** Khóa KMS (CMK) duy nhất của hệ thống, mã hóa bucket evidence (SSE-KMS). */
+    public Key EvidenceKey { get; }
 
     public StorageStack(Construct scope, string id, StorageStackProps props) : base(scope, id, props)
     {
@@ -62,8 +66,11 @@ public sealed class StorageStack : Stack
 
         // dev: giữ 1 ngày để dọn được nhanh, không chuyển Deep Archive (tính tối thiểu 180 ngày, phí cho ảnh test).
         // demo: 365 ngày, chuyển Deep Archive 30 ngày sau khi hợp đồng đóng. Đổi retention sau không áp lại cho object đã ghi.
+        EvidenceKey = NewEvidenceKey(props.Stage);
+
         Evidence = NewBucket("Evidence", props.EvidenceBucketName, RemovalPolicy.RETAIN, new BucketProps
         {
+            EncryptionKey = EvidenceKey,
             Versioned = true,
             ObjectLockEnabled = true,
             // Governance ở dev/demo để còn dọn được khi cần; production dùng Compliance
@@ -90,6 +97,7 @@ public sealed class StorageStack : Stack
             LifecycleRules = [new LifecycleRule { Id = "expire-7-days", Expiration = Duration.Days(7) }],
         });
 
+        new CfnOutput(this, "EvidenceKeyArn", new CfnOutputProps { Value = EvidenceKey.KeyArn });
         new CfnOutput(this, "OutboxBucket", new CfnOutputProps { Value = Outbox.BucketName });
         new CfnOutput(this, "IncomingBucket", new CfnOutputProps { Value = Incoming.BucketName });
         new CfnOutput(this, "EvidenceBucket", new CfnOutputProps { Value = Evidence.BucketName });
@@ -112,12 +120,49 @@ public sealed class StorageStack : Stack
         return origin;
     }
 
+    /**
+     * CMK cho evidence: bật xoay khóa hằng năm, luôn RETAIN (bucket evidence là RETAIN; xóa khóa thì ảnh không đọc lại được).
+     * Ngoài chính sách mặc định (tin cậy tài khoản), cho mọi principal trong tài khoản dùng khóa nhưng CHỈ qua S3
+     * (kms:ViaService + kms:CallerAccount); quyền thật vẫn do IAM của từng Lambda quyết định.
+     * Nhờ vậy Lambda của WorkflowStack (khai báo quyền S3 theo ARN) ghi và đọc evidence mà không cần sửa stack đó.
+     */
+    private Key NewEvidenceKey(string stage)
+    {
+        var key = new Key(this, "EvidenceKey", new KeyProps
+        {
+            Alias = $"alias/{Naming.Resource(stage, "evidence")}",
+            Description = "RoomLedger evidence bucket encryption key",
+            EnableKeyRotation = true,
+            RemovalPolicy = RemovalPolicy.RETAIN,
+        });
+        key.AddToResourcePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Sid = "AllowAccountPrincipalsViaS3Only",
+            Effect = Effect.ALLOW,
+            Principals = [new AnyPrincipal()],
+            Actions = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"],
+            Resources = ["*"],
+            Conditions = new Dictionary<string, object>
+            {
+                ["StringEquals"] = new Dictionary<string, object>
+                {
+                    ["kms:ViaService"] = $"s3.{Region}.amazonaws.com",
+                    ["kms:CallerAccount"] = Account,
+                },
+            },
+        }));
+        return key;
+    }
+
     private Bucket NewBucket(string id, string name, RemovalPolicy removal, BucketProps extra) =>
         new(this, id, new BucketProps
         {
             BucketName = name,
             BlockPublicAccess = BlockPublicAccess.BLOCK_ALL,
-            Encryption = BucketEncryption.S3_MANAGED,
+            // Có khóa KMS thì dùng SSE-KMS kèm S3 Bucket Key (giảm số lần gọi KMS); không thì SSE-S3
+            Encryption = extra.EncryptionKey is null ? BucketEncryption.S3_MANAGED : BucketEncryption.KMS,
+            EncryptionKey = extra.EncryptionKey,
+            BucketKeyEnabled = extra.EncryptionKey is not null,
             EnforceSSL = true,
             ObjectOwnership = ObjectOwnership.BUCKET_OWNER_ENFORCED,
             RemovalPolicy = removal,

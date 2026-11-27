@@ -130,6 +130,32 @@ public class StorageAuthApiStackTests
     }
 
     [Fact]
+    public void Storage_EvidenceUsesTheCmk_WithRotation_AndTheKeyIsRetained()
+    {
+        var storage = Templates.Value.Storage;
+        storage.ResourceCountIs("AWS::KMS::Key", 1);   // một khóa duy nhất cho cả hệ thống
+        storage.HasResourceProperties("AWS::KMS::Key", new Dictionary<string, object> { ["EnableKeyRotation"] = true });
+        storage.HasResource("AWS::KMS::Key", new Dictionary<string, object> { ["DeletionPolicy"] = "Retain" });
+        storage.HasResourceProperties("AWS::KMS::Alias", new Dictionary<string, object> { ["AliasName"] = "alias/roomledger-dev-evidence" });
+
+        var evidence = EvidenceJson(storage);
+        Assert.Contains("aws:kms", evidence);
+        Assert.Contains("EvidenceKey", evidence);
+        Assert.Contains("\"BucketKeyEnabled\":true", evidence);
+        // 3 bucket còn lại vẫn dùng SSE-S3
+        Assert.Equal(3, storage.FindResources("AWS::S3::Bucket").Values.Count(b => Json(b).Contains("AES256")));
+    }
+
+    [Fact]
+    public void Storage_KeyPolicy_LetsAccountPrincipalsUseTheKeyOnlyThroughS3()
+    {
+        var key = Json(Templates.Value.Storage.FindResources("AWS::KMS::Key").Values.Single());
+        Assert.Contains("kms:ViaService", key);
+        Assert.Contains("s3.ap-southeast-2.amazonaws.com", key);
+        Assert.Contains("kms:CallerAccount", key);
+    }
+
+    [Fact]
     public void Storage_HasFourBuckets_WithTheNamesWorkflowStackUses()
     {
         var storage = Templates.Value.Storage;
