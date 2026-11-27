@@ -7,9 +7,9 @@ using Xunit;
 namespace RoomLedger.Cdk.Tests;
 
 /**
- * ObservabilityStack (Sang): topic SNS nhận báo động (chưa có người nhận; Phát chọn sau), một dashboard và ba báo động
- * mới, tất cả dựa trên tên tài nguyên roomledger-{stage}-… nên không phụ thuộc output của stack khác.
- * Tổng báo động cả hệ thống (3 ở đây + 2 ở WorkflowStack) ≤ 10 để nằm trong free tier của CloudWatch.
+ * ObservabilityStack (Sang): topic SNS nhận báo động (chưa có người nhận; Phát chọn sau), một dashboard và 14 báo động,
+ * tất cả dựa trên tên tài nguyên roomledger-{stage}-… nên không phụ thuộc output của stack khác.
+ * Cộng báo động DLQ của WorkflowStack, cả hệ thống có 15 báo động.
  *
  * @author Sang
  * @version 1.0
@@ -138,9 +138,70 @@ public class ObservabilityStackTests
     }
 
     [Fact]
-    public void ThreeAlarmsHere_FiveInTotal_StaysInTheFreeTier()
+    public void FourteenAlarmsHere_FifteenInTotalWithTheWorkflowDlqAlarm()
     {
-        Dev.Value.Template.ResourceCountIs("AWS::CloudWatch::Alarm", 3);
+        Dev.Value.Template.ResourceCountIs("AWS::CloudWatch::Alarm", ObservabilityStack.AlarmCount);
+        Assert.Equal(14, ObservabilityStack.AlarmCount);
+    }
+
+    [Fact]
+    public void ApiLatencyAlarm_FiresWhenP90ReachesFiveSeconds()
+    {
+        var a = Alarm("roomledger-dev-api-latency-p90");
+        Assert.Equal("Latency", a["MetricName"]);
+        Assert.Equal("p90", a["ExtendedStatistic"]);
+        Assert.Equal(5000d, Convert.ToDouble(a["Threshold"]));
+    }
+
+    [Theory]
+    [InlineData("api")]
+    [InlineData("post-confirmation")]
+    [InlineData("photo-ingest")]
+    [InlineData("photo-derive")]
+    [InlineData("evidence-seal")]
+    [InlineData("render-pdf")]
+    public void EveryLambdaButMigrate_HasAnErrorAlarm(string fn)
+    {
+        var a = Alarm($"roomledger-dev-{fn}-errors");
+        Assert.Equal("AWS/Lambda", a["Namespace"]);
+        Assert.Equal("Errors", a["MetricName"]);
+        Assert.Contains($"roomledger-dev-{fn}", Json(a["Dimensions"]));
+        Assert.Equal("Sum", a["Statistic"]);
+        Assert.Equal(1d, Convert.ToDouble(a["Threshold"]));
+        Assert.Contains("AlarmTopic", Json(a["AlarmActions"]));
+    }
+
+    [Fact]
+    public void ErrorAlarms_CoverTheFunctionListMinusMigrate()
+    {
+        Assert.Equal(
+            ObservabilityStack.FunctionShortNames.Where(f => f != "migrate").OrderBy(f => f),
+            ObservabilityStack.AlarmedLambdas.OrderBy(f => f));
+    }
+
+    [Fact]
+    public void PhotoQueueAgeAlarm_FiresWhenTheOldestMessageWaitsFiveMinutes()
+    {
+        var a = Alarm("roomledger-dev-photo-queue-age");
+        Assert.Equal("AWS/SQS", a["Namespace"]);
+        Assert.Equal("ApproximateAgeOfOldestMessage", a["MetricName"]);
+        Assert.Contains("roomledger-dev-photo-queue", Json(a["Dimensions"]));
+        Assert.Equal(300d, Convert.ToDouble(a["Threshold"]));
+        Assert.Contains("AlarmTopic", Json(a["AlarmActions"]));
+    }
+
+    [Theory]
+    [InlineData("roomledger-dev-rds-cpu", "CPUUtilization", 80d, "GreaterThanOrEqualToThreshold")]
+    [InlineData("roomledger-dev-rds-connections", "DatabaseConnections", 60d, "GreaterThanOrEqualToThreshold")]
+    [InlineData("roomledger-dev-rds-freeable-memory", "FreeableMemory", 134217728d, "LessThanThreshold")]
+    public void RdsAlarms_WatchCpuConnectionsAndMemory(string name, string metric, double threshold, string comparison)
+    {
+        var a = Alarm(name);
+        Assert.Equal("AWS/RDS", a["Namespace"]);
+        Assert.Equal(metric, a["MetricName"]);
+        Assert.Equal(threshold, Convert.ToDouble(a["Threshold"]));
+        Assert.Equal(comparison, a["ComparisonOperator"]);
+        Assert.Contains("AlarmTopic", Json(a["AlarmActions"]));
     }
 
     [Fact]

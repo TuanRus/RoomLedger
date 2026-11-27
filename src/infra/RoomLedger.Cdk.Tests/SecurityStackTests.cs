@@ -38,6 +38,7 @@ public class SecurityStackTests
         var stack = new SecurityStack(app, "TestSecurity", new SecurityStackProps
         {
             Stage = stage,
+            EvidenceBucketName = $"roomledger-{stage}-evidence",
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = Region },
         });
         return Template.FromStack(stack);
@@ -195,5 +196,117 @@ public class SecurityStackTests
     {
         // IAM chỉ nhận Description theo mẫu [\u0009\u000A\u000D\u0020-\u007E\u00A1-\u00FF]; System.Text.Json thoát ký tự ngoài ASCII thành \uXXXX.
         Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\\u(?!00)[0-9a-fA-F]{4}"), Json(Build()));
+    }
+
+    [Fact]
+    public void Trail_RecordsS3DataEventsOfTheEvidenceBucket_WithFileValidation()
+    {
+        var t = Build();
+        t.ResourceCountIs("AWS::CloudTrail::Trail", 1);
+        t.HasResourceProperties("AWS::CloudTrail::Trail", new Dictionary<string, object>
+        {
+            ["TrailName"] = "roomledger-dev-trail",
+            ["IsLogging"] = true,
+            ["EnableLogFileValidation"] = true,
+            ["IsMultiRegionTrail"] = false,
+        });
+        var json = Json(t);
+        Assert.Contains("AWS::S3::Object", json);
+        Assert.Contains("roomledger-dev-evidence", json);
+    }
+
+    [Fact]
+    public void TrailLogBucket_IsPrivateEncryptedAndExpires()
+    {
+        var t = Build();
+        t.HasResourceProperties("AWS::S3::Bucket", new Dictionary<string, object>
+        {
+            ["BucketName"] = Match.StringLikeRegexp("^roomledger-dev-trail-logs-"),
+            ["PublicAccessBlockConfiguration"] = Match.ObjectLike(new Dictionary<string, object> { ["BlockPublicAcls"] = true }),
+        });
+        Assert.Contains("expire-90-days", Json(t));
+    }
+
+    [Fact]
+    public void Trail_WithoutEvidenceBucketName_FailsAtSynth()
+    {
+        var app = new App(new AppProps { Context = BaseContext() });
+        Assert.Throws<ArgumentException>(() => new SecurityStack(app, "NoEvidence", new SecurityStackProps
+        {
+            Stage = "dev",
+            Env = new Amazon.CDK.Environment { Account = "123456789012", Region = Region },
+        }));
+    }
+
+    [Fact]
+    public void GuardDuty_IsEnabled_WithS3Protection()
+    {
+        var t = Build();
+        t.ResourceCountIs("AWS::GuardDuty::Detector", 1);
+        t.HasResourceProperties("AWS::GuardDuty::Detector", new Dictionary<string, object>
+        {
+            ["Enable"] = true,
+            ["Features"] = new object[]
+            {
+                Match.ObjectLike(new Dictionary<string, object> { ["Name"] = "S3_DATA_EVENTS", ["Status"] = "ENABLED" }),
+            },
+        });
+    }
+
+    [Fact]
+    public void GuardDuty_CanBeSkipped_WhenTheAccountAlreadyHasADetector()
+    {
+        var t = Build(context: new Dictionary<string, object?> { ["createGuardDutyDetector"] = "false" });
+        t.ResourceCountIs("AWS::GuardDuty::Detector", 0);
+    }
+
+    [Fact]
+    public void Budget_Defaults100UsdMonthly_WithThreeActualAlertsAndOneForecast()
+    {
+        var t = Build();
+        t.ResourceCountIs("AWS::Budgets::Budget", 1);
+        t.HasResourceProperties("AWS::Budgets::Budget", new Dictionary<string, object>
+        {
+            ["Budget"] = Match.ObjectLike(new Dictionary<string, object>
+            {
+                ["BudgetName"] = "roomledger-dev-monthly",
+                ["BudgetType"] = "COST",
+                ["TimeUnit"] = "MONTHLY",
+                ["BudgetLimit"] = new Dictionary<string, object> { ["Amount"] = 100, ["Unit"] = "USD" },
+            }),
+        });
+        var json = Json(t);
+        foreach (var threshold in new[] { "20", "50", "80", "100" })
+        {
+            Assert.Contains($"\"Threshold\":{threshold}", json);
+        }
+        Assert.Contains("FORECASTED", json);
+    }
+
+    [Fact]
+    public void Budget_AmountComesFromContext()
+    {
+        var t = Build(context: new Dictionary<string, object?> { ["monthlyBudgetUsd"] = "150" });
+        Assert.Contains("\"Amount\":150", Json(t));
+    }
+
+    [Fact]
+    public void Budget_AlertsGoToATopicThatBudgetsMayPublishTo_AndHasNoEmailByDefault()
+    {
+        var t = Build();
+        t.HasResourceProperties("AWS::SNS::Topic", new Dictionary<string, object> { ["TopicName"] = "roomledger-dev-budget-alerts" });
+        Assert.Contains("budgets.amazonaws.com", Json(t));
+        t.ResourceCountIs("AWS::SNS::Subscription", 0);
+    }
+
+    [Fact]
+    public void Budget_EmailSubscription_IsAddedOnlyWhenGivenByContext()
+    {
+        var t = Build(context: new Dictionary<string, object?> { ["budgetAlertEmail"] = "alerts@example.com" });
+        t.HasResourceProperties("AWS::SNS::Subscription", new Dictionary<string, object>
+        {
+            ["Protocol"] = "email",
+            ["Endpoint"] = "alerts@example.com",
+        });
     }
 }

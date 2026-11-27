@@ -112,21 +112,48 @@ public class StorageAuthApiStackTests
     }).Values.Single());
 
     [Fact]
-    public void Storage_Dev_EvidenceRetainsOneDay_AndNeverGoesToDeepArchive()
+    public void Storage_Dev_EvidenceRetainsOneDay_AndHasNoTiering()
     {
         var evidence = EvidenceJson(Templates.Value.Storage);
         Assert.Contains("\"Mode\":\"GOVERNANCE\"", evidence);
         Assert.Matches("\"Days\":1[,}]", evidence);
         Assert.DoesNotContain("DEEP_ARCHIVE", evidence);
+        Assert.DoesNotContain("INTELLIGENT_TIERING", evidence);
     }
 
     [Fact]
-    public void Storage_Demo_EvidenceRetains365Days_AndArchivesClosedTenancies()
+    public void Storage_Demo_EvidenceRetains365Days_AndUsesIntelligentTiering()
     {
         var evidence = EvidenceJson(DemoStorage.Value);
         Assert.Matches("\"Days\":365[,}]", evidence);
-        Assert.Contains("DEEP_ARCHIVE", evidence);
-        Assert.Contains("tenancy-status", evidence);
+        Assert.Contains("INTELLIGENT_TIERING", evidence);
+        Assert.DoesNotContain("DEEP_ARCHIVE", evidence);
+    }
+
+    [Fact]
+    public void Storage_EvidenceUsesTheCmk_WithRotation_AndTheKeyIsRetained()
+    {
+        var storage = Templates.Value.Storage;
+        storage.ResourceCountIs("AWS::KMS::Key", 1);   // một khóa duy nhất cho cả hệ thống
+        storage.HasResourceProperties("AWS::KMS::Key", new Dictionary<string, object> { ["EnableKeyRotation"] = true });
+        storage.HasResource("AWS::KMS::Key", new Dictionary<string, object> { ["DeletionPolicy"] = "Retain" });
+        storage.HasResourceProperties("AWS::KMS::Alias", new Dictionary<string, object> { ["AliasName"] = "alias/roomledger-dev-evidence" });
+
+        var evidence = EvidenceJson(storage);
+        Assert.Contains("aws:kms", evidence);
+        Assert.Contains("EvidenceKey", evidence);
+        Assert.Contains("\"BucketKeyEnabled\":true", evidence);
+        // 3 bucket còn lại vẫn dùng SSE-S3
+        Assert.Equal(3, storage.FindResources("AWS::S3::Bucket").Values.Count(b => Json(b).Contains("AES256")));
+    }
+
+    [Fact]
+    public void Storage_KeyPolicy_LetsAccountPrincipalsUseTheKeyOnlyThroughS3()
+    {
+        var key = Json(Templates.Value.Storage.FindResources("AWS::KMS::Key").Values.Single());
+        Assert.Contains("kms:ViaService", key);
+        Assert.Contains("s3.ap-southeast-2.amazonaws.com", key);
+        Assert.Contains("kms:CallerAccount", key);
     }
 
     [Fact]
@@ -230,6 +257,53 @@ public class StorageAuthApiStackTests
         Assert.Contains("Username=roomledger_app", fn);
         Assert.DoesNotContain("ReservedConcurrentExecutions", fn); // giới hạn tài khoản là 10
         Assert.Contains("rds-db:connect", Json(Templates.Value.Api.FindResources("AWS::IAM::Policy")));
+    }
+
+    private static IDictionary<string, object> WebAclProps() =>
+        (IDictionary<string, object>)((IDictionary<string, object>)Templates.Value.Api.FindResources("AWS::WAFv2::WebACL").Values.Single())["Properties"];
+
+    [Fact]
+    public void Api_HasARegionalWebAcl_WithExactlyFiveRules_AllowingByDefault()
+    {
+        Templates.Value.Api.ResourceCountIs("AWS::WAFv2::WebACL", 1);
+        var props = WebAclProps();
+        Assert.Equal("REGIONAL", props["Scope"]);
+        Assert.Equal("roomledger-dev-api-waf", props["Name"]);
+        Assert.Contains("Allow", Json(props["DefaultAction"]));
+        Assert.Equal(5, ApiStack.WafRuleCount);
+        Assert.Equal(ApiStack.WafRuleCount, ((object[])props["Rules"]).Length);
+    }
+
+    [Theory]
+    [InlineData("AWSManagedRulesCommonRuleSet")]
+    [InlineData("AWSManagedRulesKnownBadInputsRuleSet")]
+    [InlineData("AWSManagedRulesSQLiRuleSet")]
+    [InlineData("AWSManagedRulesAmazonIpReputationList")]
+    public void WebAcl_UsesTheAwsManagedRuleGroup(string group)
+    {
+        var rules = Json(WebAclProps()["Rules"]);
+        Assert.Contains($"\"Name\":\"{group}\"", rules);
+        Assert.Contains("\"VendorName\":\"AWS\"", rules);
+    }
+
+    [Fact]
+    public void WebAcl_HasAnIpRateLimitRuleThatBlocks()
+    {
+        var rule = Json(((object[])WebAclProps()["Rules"]).Single(r => Json(r).Contains("RateBasedStatement")));
+        Assert.Contains("\"AggregateKeyType\":\"IP\"", rule);
+        Assert.Contains("\"Limit\":2000", rule);
+        Assert.Contains("Block", rule);
+    }
+
+    [Fact]
+    public void WebAcl_IsAssociatedWithTheApiStage_AfterTheStageExists()
+    {
+        var assoc = Templates.Value.Api.FindResources("AWS::WAFv2::WebACLAssociation").Values.Single();
+        var json = Json(assoc);
+        Assert.Contains("apigateway", json);
+        Assert.Contains("/stages/", json);
+        Assert.Contains("DependsOn", json);
+        Assert.Contains("RestDeploymentStage", json);
     }
 
     /** D1 (BR-17): API xóa được ảnh ở incoming và bản xem *.jpg ở derived; không xóa được evidence hay PDF thanh lý. */

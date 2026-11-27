@@ -55,7 +55,7 @@ var evidenceBucket = BucketName("evidence");
 var outboxBucket = BucketName("outbox");
 
 var network = new NetworkStack(app, Id("network"), new NetworkStackProps { Env = env, Stage = stage });
-new SecurityStack(app, Id("security"), new SecurityStackProps { Env = env, Stage = stage });
+new SecurityStack(app, Id("security"), new SecurityStackProps { Env = env, Stage = stage, EvidenceBucketName = evidenceBucket });
 var data = new DataStack(app, Id("data"), new DataStackProps
 {
     Env = env,
@@ -83,7 +83,7 @@ var auth = new AuthStack(app, Id("auth"), new AuthStackProps
     Db = data.Db,
     FunctionsAssetPath = functionsAsset,
 });
-new ApiStack(app, Id("api"), new ApiStackProps
+var api = new ApiStack(app, Id("api"), new ApiStackProps
 {
     Env = env,
     Stage = stage,
@@ -139,10 +139,8 @@ new AiStack(app, Id("ai"), new AiStackProps
     SesSender = (string?)app.Node.TryGetContext("sesSender"),
     WebOrigin = (string?)app.Node.TryGetContext("webOrigin"),
 });
-// WAF cho CloudFront phải ở us-east-1 (context edgeRegion), nhưng SCP chặn us-east-1: synth được, deploy sẽ lỗi.
-// Cần cả nhóm quyết định.
-var edgeRegion = RequiredContext("edgeRegion");
-new EdgeStack(app, Id("edge"), new StackProps { Env = new Amazon.CDK.Environment { Region = edgeRegion } });
+// CloudFront + S3 web, /api/* chuyển sang API Gateway. Không có WAF CloudFront (cần us-east-1, SCP chặn) nên chạy cùng region với API.
+new EdgeStack(app, Id("edge"), new EdgeStackProps { Env = env, Stage = stage, Api = api.Api });
 
 Tags.Of(app).Add("Project", "RoomLedger");
 Tags.Of(app).Add("Stage", stage);

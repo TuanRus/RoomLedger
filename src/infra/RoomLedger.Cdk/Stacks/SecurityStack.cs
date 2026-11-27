@@ -1,5 +1,11 @@
 using Amazon.CDK;
+using Amazon.CDK.AWS.Budgets;
+using Amazon.CDK.AWS.CloudTrail;
+using Amazon.CDK.AWS.GuardDuty;
 using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.S3;
+using Amazon.CDK.AWS.SNS;
+using Amazon.CDK.AWS.SNS.Subscriptions;
 using Constructs;
 
 namespace RoomLedger.Cdk.Stacks;
@@ -14,6 +20,9 @@ public class SecurityStackProps : StackProps
 {
     /** Stage triển khai, chỉ nhận stage có trong githubBranches (dev, demo, prod). */
     public string Stage { get; set; } = "";
+
+    /** Tên bucket evidence (cùng tên Program.cs truyền cho StorageStack), CloudTrail ghi data events của bucket này. */
+    public string EvidenceBucketName { get; set; } = "";
 }
 
 /**
@@ -38,7 +47,7 @@ public class SecurityStackProps : StackProps
  * chỉ assume được ba role trên. Giảm rủi ro: chỉ nhánh develop/main lấy được token (đã có); bootstrap kèm
  * --cloudformation-execution-policies trỏ tới policy hẹp hơn (chỉ dịch vụ các stack dùng) khi danh sách dịch vụ đã ổn định.
  *
- * KMS, CloudTrail, GuardDuty, Budgets, Secrets Manager sẽ được thêm ở các PR sau.
+ * CloudTrail ghi S3 data events của bucket evidence (ai đọc/ghi/xóa ảnh bằng chứng). KMS key của evidence nằm ở StorageStack.
  *
  * @author Phát
  * @version 1.2
@@ -119,7 +128,130 @@ public class SecurityStack : Stack
             Resources = bootstrapRoleArns,
         }));
 
+        AddEvidenceTrail(stage, props.EvidenceBucketName);
+        AddGuardDuty();
+        AddBudget(stage);
+
         _ = new CfnOutput(this, "GitHubDeployRoleArn", new CfnOutputProps { Value = GitHubDeployRole.RoleArn });
+    }
+
+    /**
+     * Trail một region, ghi management events (bản đầu tiên miễn phí) và S3 data events (đọc + ghi) của bucket evidence.
+     * Log vào bucket riêng (SSE-S3, chặn truy cập công khai, TLS), xóa sau 90 ngày, bật xác thực file log.
+     * Không gửi sang CloudWatch Logs để tránh phí ingest.
+     */
+    private void AddEvidenceTrail(string stage, string evidenceBucketName)
+    {
+        if (string.IsNullOrWhiteSpace(evidenceBucketName))
+        {
+            throw new ArgumentException("Thiếu EvidenceBucketName: CloudTrail cần biết bucket evidence để ghi data events.");
+        }
+
+        var isDev = stage == "dev";
+        var logBucket = new Bucket(this, "TrailLogBucket", new BucketProps
+        {
+            BucketName = $"{Naming.Resource(stage, "trail-logs")}-{Account}",
+            BlockPublicAccess = BlockPublicAccess.BLOCK_ALL,
+            Encryption = BucketEncryption.S3_MANAGED,
+            EnforceSSL = true,
+            ObjectOwnership = ObjectOwnership.BUCKET_OWNER_ENFORCED,
+            LifecycleRules = [new LifecycleRule { Id = "expire-90-days", Expiration = Duration.Days(90) }],
+            RemovalPolicy = isDev ? RemovalPolicy.DESTROY : RemovalPolicy.RETAIN,
+            AutoDeleteObjects = isDev,
+        });
+
+        var trail = new Trail(this, "EvidenceTrail", new TrailProps
+        {
+            TrailName = Naming.Resource(stage, "trail"),
+            Bucket = logBucket,
+            EnableFileValidation = true,
+            IncludeGlobalServiceEvents = false,
+            IsMultiRegionTrail = false,
+            SendToCloudWatchLogs = false,
+        });
+        trail.AddS3EventSelector(
+            [new S3EventSelector { Bucket = Bucket.FromBucketName(this, "EvidenceBucketRef", evidenceBucketName) }],
+            new AddEventSelectorOptions { ReadWriteType = ReadWriteType.ALL });
+    }
+
+    /**
+     * GuardDuty với S3 Protection (phát hiện truy cập bất thường vào S3 từ CloudTrail data events).
+     * Mỗi account + region chỉ có một detector: nếu account đã bật GuardDuty thì deploy với -c createGuardDutyDetector=false
+     * (rồi bật S3 Protection trên detector sẵn có bằng tay).
+     */
+    private void AddGuardDuty()
+    {
+        if (string.Equals(ContextValue("createGuardDutyDetector"), "false", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = new CfnDetector(this, "GuardDutyDetector", new CfnDetectorProps
+        {
+            Enable = true,
+            // Thuộc tính kiểu object nên phải là mảng tường minh, không dùng collection expression
+            Features = new[]
+            {
+                new CfnDetector.CFNFeatureConfigurationProperty { Name = "S3_DATA_EVENTS", Status = "ENABLED" },
+            },
+        });
+    }
+
+    /**
+     * AWS Budgets: ngân sách chi phí hằng tháng (mặc định 100 USD, đổi bằng -c monthlyBudgetUsd=...), cảnh báo khi chi thực tế
+     * đạt 20% / 50% / 80% và khi dự báo vượt 100%. Cảnh báo vào topic SNS riêng (Budgets cần quyền publish);
+     * muốn nhận email thì truyền -c budgetAlertEmail=... (không ghi email trong code).
+     */
+    private void AddBudget(string stage)
+    {
+        var limit = double.TryParse(ContextValue("monthlyBudgetUsd"), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed) && parsed > 0 ? parsed : 100d;
+
+        var topic = new Topic(this, "BudgetTopic", new TopicProps
+        {
+            TopicName = Naming.Resource(stage, "budget-alerts"),
+            DisplayName = "RoomLedger budget alerts",
+        });
+        topic.AddToResourcePolicy(new PolicyStatement(new PolicyStatementProps
+        {
+            Sid = "AllowBudgetsToPublish",
+            Effect = Effect.ALLOW,
+            Principals = [new ServicePrincipal("budgets.amazonaws.com")],
+            Actions = ["sns:Publish"],
+            Resources = [topic.TopicArn],
+            Conditions = new Dictionary<string, object>
+            {
+                ["StringEquals"] = new Dictionary<string, object> { ["aws:SourceAccount"] = Account },
+            },
+        }));
+        if (ContextValue("budgetAlertEmail") is { } email)
+        {
+            topic.AddSubscription(new EmailSubscription(email));
+        }
+
+        CfnBudget.NotificationWithSubscribersProperty Notify(string type, double threshold) => new()
+        {
+            Notification = new CfnBudget.NotificationProperty
+            {
+                NotificationType = type,
+                ComparisonOperator = "GREATER_THAN",
+                Threshold = threshold,
+                ThresholdType = "PERCENTAGE",
+            },
+            Subscribers = new[] { new CfnBudget.SubscriberProperty { SubscriptionType = "SNS", Address = topic.TopicArn } },
+        };
+
+        _ = new CfnBudget(this, "MonthlyBudget", new CfnBudgetProps
+        {
+            Budget = new CfnBudget.BudgetDataProperty
+            {
+                BudgetName = Naming.Resource(stage, "monthly"),
+                BudgetType = "COST",
+                TimeUnit = "MONTHLY",
+                BudgetLimit = new CfnBudget.SpendProperty { Amount = limit, Unit = "USD" },
+            },
+            NotificationsWithSubscribers = new[] { Notify("ACTUAL", 20), Notify("ACTUAL", 50), Notify("ACTUAL", 80), Notify("FORECASTED", 100) },
+        });
     }
 
     private string? ContextValue(string key) => Node.TryGetContext(key) as string is { Length: > 0 } v ? v : null;
