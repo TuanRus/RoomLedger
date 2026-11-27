@@ -237,4 +237,26 @@ public class SecurityStackTests
             Env = new Amazon.CDK.Environment { Account = "123456789012", Region = Region },
         }));
     }
+
+    [Fact]
+    public void GuardDuty_IsEnabled_WithS3Protection()
+    {
+        var t = Build();
+        t.ResourceCountIs("AWS::GuardDuty::Detector", 1);
+        t.HasResourceProperties("AWS::GuardDuty::Detector", new Dictionary<string, object>
+        {
+            ["Enable"] = true,
+            ["Features"] = new object[]
+            {
+                Match.ObjectLike(new Dictionary<string, object> { ["Name"] = "S3_DATA_EVENTS", ["Status"] = "ENABLED" }),
+            },
+        });
+    }
+
+    [Fact]
+    public void GuardDuty_CanBeSkipped_WhenTheAccountAlreadyHasADetector()
+    {
+        var t = Build(context: new Dictionary<string, object?> { ["createGuardDutyDetector"] = "false" });
+        t.ResourceCountIs("AWS::GuardDuty::Detector", 0);
+    }
 }

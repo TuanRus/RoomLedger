@@ -1,5 +1,6 @@
 using Amazon.CDK;
 using Amazon.CDK.AWS.CloudTrail;
+using Amazon.CDK.AWS.GuardDuty;
 using Amazon.CDK.AWS.IAM;
 using Amazon.CDK.AWS.S3;
 using Constructs;
@@ -125,6 +126,7 @@ public class SecurityStack : Stack
         }));
 
         AddEvidenceTrail(stage, props.EvidenceBucketName);
+        AddGuardDuty();
 
         _ = new CfnOutput(this, "GitHubDeployRoleArn", new CfnOutputProps { Value = GitHubDeployRole.RoleArn });
     }
@@ -166,6 +168,29 @@ public class SecurityStack : Stack
         trail.AddS3EventSelector(
             [new S3EventSelector { Bucket = Bucket.FromBucketName(this, "EvidenceBucketRef", evidenceBucketName) }],
             new AddEventSelectorOptions { ReadWriteType = ReadWriteType.ALL });
+    }
+
+    /**
+     * GuardDuty với S3 Protection (phát hiện truy cập bất thường vào S3 từ CloudTrail data events).
+     * Mỗi account + region chỉ có một detector: nếu account đã bật GuardDuty thì deploy với -c createGuardDutyDetector=false
+     * (rồi bật S3 Protection trên detector sẵn có bằng tay).
+     */
+    private void AddGuardDuty()
+    {
+        if (string.Equals(ContextValue("createGuardDutyDetector"), "false", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ = new CfnDetector(this, "GuardDutyDetector", new CfnDetectorProps
+        {
+            Enable = true,
+            // Thuộc tính kiểu object nên phải là mảng tường minh, không dùng collection expression
+            Features = new[]
+            {
+                new CfnDetector.CFNFeatureConfigurationProperty { Name = "S3_DATA_EVENTS", Status = "ENABLED" },
+            },
+        });
     }
 
     private string? ContextValue(string key) => Node.TryGetContext(key) as string is { Length: > 0 } v ? v : null;
