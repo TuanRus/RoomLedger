@@ -68,13 +68,19 @@ echo "== Resolved packages (incl. transitive) are 8.x"
 resolved=""
 raw=""
 for s in $SLNS; do
-  if dotnet restore "$s" >/dev/null 2>&1; then
-    out=$(dotnet list "$s" package --include-transitive 2>&1 | nocr)
-    raw="$raw
-$out"
+  # Some SDK builds reject a relative path in 'dotnet list package' (MSB0001 "... not a rooted path").
+  # $ROOT is already absolute, so this needs no realpath (missing on older macOS).
+  rooted_s="$ROOT/$s"
+  if dotnet restore "$rooted_s" >/dev/null 2>&1; then
+    out=$(dotnet list "$rooted_s" package --include-transitive 2>&1 | nocr)
+    [ -n "$raw" ] && raw="$raw"$'\n'
+    raw="${raw}${out}"
     # Lines look like "   > Npgsql   8.0.10   8.0.10" (direct) or "   > Npgsql   8.0.10" (transitive): keep name + last column.
-    resolved="$resolved
-$(printf '%s\n' "$out" | sed -nE 's/^[[:space:]]*>[[:space:]]+([^[:space:]]+)[[:space:]](.*[[:space:]])?([^[:space:]]+)[[:space:]]*$/\1 \3/p')"
+    parsed=$(printf '%s\n' "$out" | sed -nE 's/^[[:space:]]*>[[:space:]]+([^[:space:]]+)[[:space:]](.*[[:space:]])?([^[:space:]]+)[[:space:]]*$/\1 \3/p')
+    if [ -n "$parsed" ]; then
+      [ -n "$resolved" ] && resolved="$resolved"$'\n'
+      resolved="${resolved}${parsed}"
+    fi
   else
     fail "dotnet restore $s failed"
   fi
