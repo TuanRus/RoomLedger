@@ -61,25 +61,35 @@ if [ -z "$others" ]; then pass "all net8.0 only"; else fail "not net8.0-only:$ot
 echo "== Pinned packages are 8.x (inline Version= in csproj)"
 bad=$(grep -HEo '<PackageReference Include="[^"]+" Version="[^"]+"' "${PROJECTS[@]}" \
       | sed -E 's/^([^:]+):.*Include="([^"]+)" Version="([^"]+)"/\2 \3 \1/' \
-      | awk '$1 ~ ENVIRON["PINNED"] && $2 !~ /^8\./')
+      | grep -E "$PINNED" | grep -Ev '^[^ ]+ 8\.')
 if [ -z "$bad" ]; then pass "every direct EF/Npgsql/ASP.NET Core reference is 8.x"; else fail "not 8.x: $(echo "$bad" | tr '\n' ';')"; fi
 
 echo "== Resolved packages (incl. transitive) are 8.x"
 resolved=""
+raw=""
 for s in $SLNS; do
   if dotnet restore "$s" >/dev/null 2>&1; then
+    out=$(dotnet list "$s" package --include-transitive 2>&1 | nocr)
+    raw="$raw
+$out"
+    # Lines look like "   > Npgsql   8.0.10   8.0.10" (direct) or "   > Npgsql   8.0.10" (transitive): keep name + last column.
     resolved="$resolved
-$(dotnet list "$s" package --include-transitive 2>/dev/null | nocr | awk '$1 == ">" { print $2, $NF }')"
+$(printf '%s\n' "$out" | sed -nE 's/^[[:space:]]*>[[:space:]]+([^[:space:]]+)[[:space:]](.*[[:space:]])?([^[:space:]]+)[[:space:]]*$/\1 \3/p')"
   else
     fail "dotnet restore $s failed"
   fi
 done
-over=$(printf '%s\n' "$resolved" | sort -u | awk '$1 ~ ENVIRON["PINNED"] && $2 !~ /^8\./')
-n=$(printf '%s\n' "$resolved" | sort -u | awk '$1 ~ ENVIRON["PINNED"]' | wc -l | tr -d ' ')
+# grep -E instead of awk regex: the result is the same on GNU awk, mawk and the BSD awk of macOS.
+pinned=$(printf '%s\n' "$resolved" | sort -u | grep -E "$PINNED")
+over=$(printf '%s\n' "$pinned" | grep -Ev '^[^ ]+ 8\.' | sed '/^$/d')
+n=$(printf '%s\n' "$pinned" | sed '/^$/d' | wc -l | tr -d ' ')
 if [ "$n" -gt 0 ] && [ -z "$over" ]; then
   pass "all $n resolved EF/Npgsql/ASP.NET Core packages are 8.x"
+elif [ "$n" -eq 0 ]; then
+  fail "no EF/Npgsql/ASP.NET Core package found in 'dotnet list package' output. First lines:"
+  printf '%s\n' "$raw" | sed '/^$/d' | head -15 | sed 's/^/      /'
 else
-  fail "resolved packages not on 8.x (or none found): $(echo "$over" | tr '\n' ';')"
+  fail "resolved packages not on 8.x: $(echo "$over" | tr '\n' ';')"
 fi
 
 echo "== Machine tools (warn only; not needed in CI)"
